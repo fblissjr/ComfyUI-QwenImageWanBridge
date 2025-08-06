@@ -56,53 +56,6 @@ class QwenWANBridge:
         return ({"samples": samples},)
 
 
-class AlwaysUseWANVAE:
-    """Simple node that enforces the golden rule"""
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "latent": ("LATENT",),
-                "wan_vae": ("VAE",),
-                "decode_now": ("BOOLEAN", {"default": True}),
-            }
-        }
-    
-    RETURN_TYPES = ("IMAGE", "VAE")
-    RETURN_NAMES = ("image", "vae_to_use")
-    FUNCTION = "process"
-    CATEGORY = "QwenWAN/Bridge"
-    OUTPUT_NODE = True
-    
-    def process(self, latent, wan_vae, decode_now):
-        """Always use WAN VAE - the universal solution"""
-        
-        if decode_now:
-            # Decode with WAN VAE (works for both Qwen and WAN latents!)
-            samples = latent["samples"]
-            
-            # Handle both 4D and 5D tensors
-            if samples.dim() == 5:
-                # Video tensor - decode first frame for preview
-                first_frame = samples[:, :, 0, :, :]
-                image = wan_vae.decode(first_frame)
-            else:
-                # Image tensor
-                image = wan_vae.decode(samples)
-            
-            # Convert to ComfyUI image format (B, H, W, C)
-            if image.dim() == 4 and image.shape[1] == 3:
-                image = image.permute(0, 2, 3, 1)
-            
-            # Ensure [0, 1] range
-            image = torch.clamp(image, 0, 1)
-        else:
-            # Return placeholder
-            image = torch.zeros(1, 64, 64, 3)
-        
-        return (image, wan_vae)
-
 
 class LatentMixer:
     """Mix latents from different models"""
