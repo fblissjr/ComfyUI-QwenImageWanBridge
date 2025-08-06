@@ -18,7 +18,7 @@ Quick recommendations for different workflows
 - WAN to Qwen
 - Best practices
 
-### 🌉 Bridge Nodes
+### Bridge Nodes
 
 #### Qwen-WAN Bridge
 Bridges latents between models
