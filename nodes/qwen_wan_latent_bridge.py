@@ -59,7 +59,19 @@ class QwenImageToWANLatentBridge:
         
         # Extract Qwen latent
         qwen_samples = qwen_latent["samples"]
-        B, C, H_latent, W_latent = qwen_samples.shape
+        
+        # Handle both 4D (B, C, H, W) and 5D (B, C, F, H, W) inputs
+        if len(qwen_samples.shape) == 4:
+            B, C, H_latent, W_latent = qwen_samples.shape
+            has_frames = False
+        elif len(qwen_samples.shape) == 5:
+            B, C, F_input, H_latent, W_latent = qwen_samples.shape
+            has_frames = True
+            # Take first frame if already has temporal dimension
+            qwen_samples = qwen_samples[:, :, 0, :, :]
+            B, C, H_latent, W_latent = qwen_samples.shape
+        else:
+            raise ValueError(f"Expected 4D or 5D tensor, got shape {qwen_samples.shape}")
         
         # Verify it's 16-channel (both models use z_dim=16)
         assert C == 16, f"Expected 16 channels, got {C}"
@@ -90,31 +102,15 @@ class QwenImageToWANLatentBridge:
         # Place Qwen frame as first frame
         wan_samples[:, :, 0] = qwen_samples
         
-        # Create mask indicating which frames have content
-        # This is CRITICAL for WAN to understand I2V task
-        msk = torch.ones(B, num_frames, H_target, W_target, device=qwen_samples.device)
-        msk[:, 1:] = 0  # Only first frame has content
-        
-        # Apply WAN's temporal mask structure
-        # Based on DiffSynth lines 629-631
-        msk = torch.cat([
-            torch.repeat_interleave(msk[:, 0:1], repeats=4, dim=1), 
-            msk[:, 1:]
-        ], dim=1)
-        msk = msk.view(B, msk.shape[1] // 4, 4, H_target, W_target)
-        msk = msk.transpose(1, 2)  # (B, 4, temporal_frames, H, W)
-        
-        # WAN expects mask + latent concatenated
-        # First 4 channels are mask, next 16 are latent
-        combined = torch.cat([msk, wan_samples.unsqueeze(1)], dim=1)
+        # Debug info
+        print(f"[QwenToWAN Bridge] Input shape: {qwen_latent['samples'].shape}")
+        print(f"[QwenToWAN Bridge] Output shape: {wan_samples.shape}")
+        print(f"[QwenToWAN Bridge] Target frames: {num_frames}, Temporal frames: {temporal_frames}")
         
         # Return in ComfyUI format
-        # Note: Some WAN nodes may expect just the latent, others the combined
-        # We provide both for compatibility
+        # WAN expects (B, C, F, H, W) where F is temporal dimension
         wan_latent = {
-            "samples": wan_samples,  # Pure latent for sampling
-            "wan_combined": combined,  # Full format with mask
-            "wan_mask": msk,  # Mask alone if needed
+            "samples": wan_samples,  # Shape: (B, 16, F, H, W)
             "num_frames": num_frames,
             "temporal_frames": temporal_frames,
         }
