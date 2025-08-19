@@ -48,6 +48,8 @@ class QwenWANBridgeV2:
             "start_latent_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.001}),
             "end_latent_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.001}),
             "force_offload": ("BOOLEAN", {"default": True}),
+            "mode": (["i2v", "v2v_repeat", "v2v_noise"], {"default": "i2v"}),
+            "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             },
             "optional": {
                 "clip_embeds": ("WANVIDIMAGE_CLIPEMBEDS",),
@@ -60,13 +62,14 @@ class QwenWANBridgeV2:
             }
         }
 
-    RETURN_TYPES = ("WANVIDIMAGE_EMBEDS",)
-    RETURN_NAMES = ("image_embeds",)
+    RETURN_TYPES = ("WANVIDIMAGE_EMBEDS", "LATENT")
+    RETURN_NAMES = ("image_embeds", "samples")
     FUNCTION = "process"
     CATEGORY = "QwenWANBridge"
 
     def process(self, qwen_latent, width, height, num_frames, force_offload, 
-                noise_aug_strength, start_latent_strength, end_latent_strength, 
+                noise_aug_strength, start_latent_strength, end_latent_strength,
+                mode="i2v", noise_seed=0,
                 end_latent=None, control_embeds=None, fun_or_fl2v_model=False, 
                 temporal_mask=None, extra_latents=None, clip_embeds=None, 
                 add_cond_latents=None):
@@ -160,8 +163,22 @@ class QwenWANBridgeV2:
         # Initialize latent tensor
         y = torch.zeros(C, temporal_frames, lat_h, lat_w, device=device, dtype=start_latent.dtype)
         
-        # Place start frame
-        y[:, 0] = start_latent.to(device)
+        # Normalize Qwen latent to WAN's expected range
+        # These are the normalization values from WAN
+        mean = torch.tensor([
+            -0.7571, -0.7089, -0.9113, 0.1075, -0.1745, 0.9653, -0.1517, 1.5508,
+            0.4134, -0.0715, 0.5517, -0.3632, -0.1922, -0.9497, 0.2503, -0.2921
+        ]).view(C, 1, 1).to(device)
+        std = torch.tensor([
+            2.8184, 1.4541, 2.3275, 2.6558, 1.2196, 1.7708, 2.6052, 2.0743,
+            3.2687, 2.1526, 2.8652, 1.5579, 1.6382, 1.1253, 2.8251, 1.9160
+        ]).view(C, 1, 1).to(device)
+        
+        # Normalize the Qwen latent to WAN's distribution
+        start_latent_normalized = (start_latent.to(device) - mean) / std
+        
+        # Place normalized start frame
+        y[:, 0] = start_latent_normalized
         
         # Apply noise augmentation if requested
         if noise_aug_strength > 0:
@@ -224,12 +241,52 @@ class QwenWANBridgeV2:
             "target_shape": target_shape  # Include for compatibility
         }
         
+        # Handle V2V mode - create samples for video-to-video
+        samples_output = None
+        if mode != "i2v":
+            # For T2V models in V2V mode, create empty image_embeds
+            image_embeds = {
+                "target_shape": target_shape,
+                "num_frames": num_frames,
+                "lat_h": lat_h,
+                "lat_w": lat_w,
+                # No actual image_embeds data for T2V
+            }
+            # Calculate the full temporal dimension for pixel-space frames
+            full_temporal_frames = (num_frames - 1) // 4 + 1
+            
+            # Create samples tensor with batch dimension for ComfyUI
+            samples = torch.zeros(1, C, full_temporal_frames, lat_h, lat_w, 
+                                 device=device, dtype=start_latent.dtype)
+            
+            if mode == "v2v_repeat":
+                # Repeat the normalized first frame across all temporal positions
+                for t in range(full_temporal_frames):
+                    samples[0, :, t] = start_latent_normalized
+                    
+            elif mode == "v2v_noise":
+                # Fill with noise but keep normalized first frame
+                torch.manual_seed(noise_seed)
+                samples = torch.randn_like(samples)
+                samples[0, :, 0] = start_latent_normalized
+            
+            # Apply strength multiplier to all frames
+            samples *= start_latent_strength
+            
+            samples_output = {"samples": samples}
+            
+            print(f"[QwenWANBridgeV2] V2V mode: {mode}")
+            print(f"  Samples shape: {samples.shape}")
+        
         print(f"[QwenWANBridgeV2] Processed Qwen latent to WAN format:")
+        print(f"  Mode: {mode}")
         print(f"  Input shape: {qwen_latent['samples'].shape}")
         print(f"  Output image_embeds: {y.shape}")
         print(f"  Mask shape: {mask.shape}")
         print(f"  Num frames: {num_frames}, Temporal frames: {temporal_frames}")
         print(f"  Max seq len: {max_seq_len}")
         print(f"  Has ref: {has_ref}")
+        if samples_output is not None:
+            print(f"  V2V samples: {samples_output['samples'].shape}")
         
-        return (image_embeds,)
+        return (image_embeds, samples_output)
