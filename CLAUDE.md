@@ -16,125 +16,124 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `example_workflows/` - Example JSON workflows
 - `Documentation/` - Technical documentation and insights
 
+## Critical Architecture Understanding (UPDATED)
+
+### Qwen-Image Architecture
+- Uses **Qwen2.5 7B VLI** as text encoder (3584 dim embeddings)
+- **16-channel VAE latents** (confirmed)
+- Special vision tokens: `<|vision_start|><|image_pad|><|vision_end|>`
+- Joint attention between text and image streams (see `comfy/ldm/qwen_image/model.py`)
+
+### WAN Architecture - CRITICAL DISCOVERY
+- **WAN 2.1**: 16-channel latents (COMPATIBLE with Qwen!)
+  - Same channel count as Qwen-Image
+  - Uses specific normalization (mean/std per channel)
+  - Best option for Qwen→WAN bridge
+  
+- **WAN 2.2**: 48-channel latents (INCOMPATIBLE)
+  - 3x more channels than Qwen
+  - This explains pixelation in native ComfyUI
+  - Requires sophisticated channel expansion (16→48)
+  
+- Both use **UMT5-XXL** for text encoding (4096 dim)
+- Both have I2V and T2V cross-attention mechanisms
+
+### Tensor Format Differences
+- **Kijai's Wrapper**: `(C, T, H, W)` without batch dimension
+- **Native ComfyUI**: `(B, C, T, H, W)` with batch dimension
+- This requires different handling in each implementation
+
 ## Project Status: Partially Working
 
-**What we discovered:** The direct latent bridge DOES work, but with significant quality degradation. Videos are temporally coherent but "low res and crappy looking."
+### Testing Results Summary
 
-**Why:** Even though the VAEs are 99.98% similar, I2V models are extremely sensitive to exact latent distributions. The 0.02% difference causes noticeable quality loss.
+**Kijai's Wrapper (16ch assumed)**:
+- Single frame (num_frames=1): Recognizable but degraded
+- Multiple frames: Temporally coherent but low quality
+- Works because wrapper might handle 16ch internally
 
-## Critical Compatibility Note
+**Native ComfyUI**:
+- **I2V**: Pixelated output - likely due to 16ch→48ch mismatch
+- **T2V**: Text prompt drives 99% of generation
+- Qwen latent acts as weak "reference" at best
 
-**This ONLY works with Kijai's ComfyUI-WanVideoWrapper**
+### Root Cause Analysis
 
-NOT compatible with:
-- Native ComfyUI WAN (uses `(B, C, T, H, W)` with batch dimension)
-- Direct ldm/wan usage (different tensor formats)
+The pixelation and quality issues are now understood:
+1. **Channel Mismatch**: Feeding 16-channel Qwen to 48-channel WAN 2.2
+2. **Normalization**: WAN expects specific mean/std distributions
+3. **VAE Differences**: Even 99.98% similarity isn't enough for I2V
+4. **Text Encoder Mismatch**: Qwen uses Qwen2.5, WAN uses UMT5-XXL
 
-Kijai's wrapper uses `(C, T, H, W)` without batch dimension, which is what our bridge produces.
+## Current Nodes
 
-## Key Technical Insights
+### Production Ready (Native ComfyUI Only)
+- **QwenWANNativeBridge**: Native ComfyUI with noise modes
+- **QwenWANNativeProper**: NEW - Handles WAN 2.1 (16ch) vs 2.2 (48ch)
+- **QwenWANChannelAdapter**: NEW - Sophisticated 16→48 channel expansion
 
-### The Core Discovery
-1. **Single frame (num_frames=1)** returns recognizable Qwen image (degraded but visible)
-2. **Multiple frames (e.g., 41)** generate temporally coherent video (but low quality)
-3. **The issue is NOT complete failure** - it's quality degradation
+Note: All production nodes work with **native ComfyUI** implementation only. They return standard `LATENT` types compatible with ComfyUI's KSampler. Kijai's wrapper would require different tensor formats `(C, T, H, W)` and specific return types like `WANVIDIMAGE_EMBEDS`.
 
-### Why This Happens
-- Both models from Alibaba
-- Both use 16-channel VAE latents (confirmed)
-- WAN was trained on Qwen2.5-VL captioned datasets (semantic alignment)
-- VAEs are 99.98% spatially similar
-- BUT: Small latent distribution differences matter for I2V
+### Key Features of New Nodes
 
-### The Right Approach
-**NO NOISE IN BRIDGE** - Let the sampler handle everything via denoise parameter:
-- Frame 0: Clean Qwen latent (acts as V2V conditioning)
-- Frames 1+: Zeros (WAN generates these)
-- Denoise parameter controls how much to modify Frame 0
+**QwenWANNativeProper**:
+- Detects WAN version (2.1 vs 2.2)
+- Direct compatibility with WAN 2.1 (16 channels)
+- Multiple channel expansion modes for WAN 2.2
+- Proper WAN normalization applied
 
-### Critical Parameters
-```python
-# Low denoise preserves Qwen structure
-denoise = 0.1-0.5  # NOT 1.0!
-cfg = 3-5          # Lower is often better
-steps = 10-20
-sampler = "DPM-Solver++"
-```
+**QwenWANChannelAdapter**:
+- Frequency-based channel expansion
+- Multi-scale representations
+- Phase-shifted variations
+- Mixed adaptation strategies
 
-## Production Nodes (in `nodes/`)
+## Recommendations
 
-### QwenWANPureBridge
-- The correct, minimal implementation
-- NO noise addition
-- NO normalization
-- Just structural adaptation
-- Returns both I2V and V2V outputs with `mode="both"`
+1. **Use WAN 2.1 instead of WAN 2.2** for Qwen compatibility
+2. **For WAN 2.2**, use QwenWANChannelAdapter for proper 16→48 expansion
+3. **Low denoise (0.1-0.3)** preserves Qwen structure
+4. **Reference/VACE modes** treat Qwen as guidance rather than exact input
 
-### QwenWANSemanticBridge
-- Alternative with proper resizing
-- Aspect ratio preservation
-- Leverages Qwen2.5-VL semantic alignment
+## What Works (Kind Of)
 
-### Utilities
-- **QwenWANDimensionHelper** - Find optimal dimensions
-- **QwenWANMappingAnalyzer** - Diagnostic tool
-
-## Research Nodes (in `nodes/research/`)
-
-Enable by setting `LOAD_RESEARCH_NODES = True` in `__init__.py`
-
-Contains all experimental approaches we tried:
-- Various normalization attempts
-- T2V experiments
-- Noise injection strategies
-- Parameter sweep tools
+1. **WAN 2.1 with proper normalization** - Best compatibility
+2. **Reference mode** - Qwen as "phantom" influence
+3. **VACE-style** - Qwen as keyframe references
+4. **Low denoise** - Preserves some structure
 
 ## What Doesn't Work
 
-1. **Adding noise in the bridge** - Makes it worse
-2. **Normalization to WAN statistics** - Didn't help
-3. **T2V models with empty embeds** - Still produces noise
-4. **High denoise values** - Loses Qwen structure entirely
-
-## What Kind of Works
-
-1. **Low denoise (0.1-0.3)** - Preserves some Qwen structure
-2. **Single frames** - Best quality (still degraded)
-3. **V2V mode** - Treating Frame 0 as clean conditioning
+1. **Direct 16→48 channel feeding** - Causes pixelation
+2. **High denoise** - Loses all Qwen structure
+3. **Pure T2V** - Ignores latent, uses text only
+4. **Expecting pixel-perfect** - VAE differences prevent this
 
 ## The Bottom Line
 
-**The direct latent bridge is technically functional but not production-ready due to quality degradation.**
-
-For production use:
+**For production quality**, use the traditional VAE route:
 ```
 Qwen → VAE Decode → Image → WAN VAE Encode → WAN
 ```
 
-Yes, this defeats the purpose, but it's the only way to get acceptable quality currently.
+**For experimentation**:
+- Try WAN 2.1 (16 channels) with QwenWANNativeProper
+- Use channel adapter for WAN 2.2
+- Treat Qwen as reference/guidance, not exact input
 
-## Future Work Needed
+## Key Code Locations
 
-1. **Adapter network** - Train small network to map between latent distributions
-2. **Native ComfyUI support** - Add batch dimension handling
-3. **Find optimal parameters** - Systematic testing might find better settings
-4. **Try other video models** - Some might be more compatible with Qwen latents
-
-## Why We Made So Many Nodes
-
-We explored many hypotheses:
-- Maybe it needs normalization? (No)
-- Maybe T2V works better? (No)
-- Maybe we need to add noise? (No, makes it worse)
-- Maybe it's a dimension issue? (Partially)
-- Maybe text embedding alignment helps? (Not really)
-
-The final answer: **The sampler's denoise parameter is the key control**, and the bridge should do minimal modification.
+- `comfy/text_encoders/qwen_image.py` - Qwen text encoder
+- `comfy/ldm/qwen_image/model.py` - Qwen model architecture
+- `comfy/ldm/wan/model.py` - WAN model with I2V/T2V attention
+- `comfy/latent_formats.py` - WAN 2.1 (16ch) and 2.2 (48ch) definitions
+- `comfy/text_encoders/wan.py` - WAN UMT5-XXL encoder
 
 ## Testing Checklist
 
-- [ ] Start with num_frames=1
-- [ ] Use denoise=0.3 or lower
-- [ ] Try both I2V and V2V modes
-- [ ] Check output - is it recognizable but low quality? That's "working"
-- [ ] Don't expect production quality - VAE differences prevent that
+- [ ] Try WAN 2.1 models (16 channels)
+- [ ] Use QwenWANNativeProper with wan_version="wan21"
+- [ ] Test channel adapter for WAN 2.2
+- [ ] Use reference/VACE modes for guidance approach
+- [ ] Keep denoise low (0.1-0.3)
+- [ ] Don't expect pixel-perfect results
