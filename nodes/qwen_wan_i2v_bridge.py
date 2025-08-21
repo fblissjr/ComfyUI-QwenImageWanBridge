@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 import comfy.model_management
 import comfy.utils
-from comfy.nodes import node_helpers
+import node_helpers
 
 class QwenWANI2VBridge:
     """
