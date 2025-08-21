@@ -2,19 +2,8 @@
 
 Direct latent bridge from Qwen-Image to WAN video generation.
 
-## Implementation Compatibility
-
-This bridge works with **Native ComfyUI** implementation only, NOT with Kijai's ComfyUI-WanVideoWrapper.
-
-- **Native ComfyUI**: ✅ Supported - Use the production nodes in this repo
-- **Kijai's Wrapper**: ❌ Not supported - Would require different tensor formats and return types
-
-## Critical Discovery: WAN 2.1 vs 2.2 Channel Mismatch
-
 **WAN 2.1**: 16 channels (Compatible with Qwen-Image!)
 **WAN 2.2**: 48 channels (Causes pixelation - 16ch→48ch mismatch)
-
-## Status: Partially Working
 
 Despite 99.98% VAE similarity and semantic alignment (both Alibaba, WAN trained on Qwen2.5-VL), the small latent distribution differences cause quality loss. I2V models are extremely sensitive to exact latent characteristics.
 
