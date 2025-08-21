@@ -52,6 +52,14 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load I2V nodes: {e}")
 
+try:
+    from .nodes.qwen_wan_unified_i2v import QwenWANUnifiedI2V
+    NODE_CLASS_MAPPINGS["QwenWANUnifiedI2V"] = QwenWANUnifiedI2V
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANUnifiedI2V"] = "Qwen→WAN Unified I2V (All-in-One)"
+    print("[QwenImageWanBridge] Loaded Unified I2V node")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Unified I2V: {e}")
+
 # ============================================================================
 # ARCHIVED NODES (Broken/Superseded - kept for reference)
 # ============================================================================
