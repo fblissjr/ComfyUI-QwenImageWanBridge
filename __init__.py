@@ -48,6 +48,25 @@ except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Unified T2V: {e}")
 
 # ============================================================================
+# DEBUG NODES
+# ============================================================================
+
+try:
+    from .nodes.qwen_wan_debug import QwenWANLatentDebug, QwenWANConditioningDebug, QwenWANCompareLatents
+    NODE_CLASS_MAPPINGS["QwenWANLatentDebug"] = QwenWANLatentDebug
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANLatentDebug"] = "Latent Debug"
+    
+    NODE_CLASS_MAPPINGS["QwenWANConditioningDebug"] = QwenWANConditioningDebug
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANConditioningDebug"] = "Conditioning Debug"
+    
+    NODE_CLASS_MAPPINGS["QwenWANCompareLatents"] = QwenWANCompareLatents
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANCompareLatents"] = "Compare Latents"
+    
+    print("[QwenImageWanBridge] Loaded Debug nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Debug nodes: {e}")
+
+# ============================================================================
 # ARCHIVED NODES (Broken/Superseded - kept for reference)
 # ============================================================================
 
