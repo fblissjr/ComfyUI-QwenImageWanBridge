@@ -66,6 +66,21 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Debug nodes: {e}")
 
+try:
+    from .nodes.qwen_wan_latent_io import LoadLatentFromFile, SaveLatentToFile, CreateTestLatent
+    NODE_CLASS_MAPPINGS["LoadLatentFromFile"] = LoadLatentFromFile
+    NODE_DISPLAY_NAME_MAPPINGS["LoadLatentFromFile"] = "Load Latent"
+    
+    NODE_CLASS_MAPPINGS["SaveLatentToFile"] = SaveLatentToFile
+    NODE_DISPLAY_NAME_MAPPINGS["SaveLatentToFile"] = "Save Latent"
+    
+    NODE_CLASS_MAPPINGS["CreateTestLatent"] = CreateTestLatent
+    NODE_DISPLAY_NAME_MAPPINGS["CreateTestLatent"] = "Create Test Latent"
+    
+    print("[QwenImageWanBridge] Loaded I/O nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load I/O nodes: {e}")
+
 # ============================================================================
 # ARCHIVED NODES (Broken/Superseded - kept for reference)
 # ============================================================================
