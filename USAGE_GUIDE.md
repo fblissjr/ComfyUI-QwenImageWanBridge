@@ -1,23 +1,33 @@
 # Usage Guide for QwenImageWanBridge
+basic usage guide, ymmv since in active dev/research
 
-## Basic Workflow Setup
-
-### 1. I2V with Native WanImageToVideo (Simplest)
+### 1. Recommended: QwenWANUnifiedI2V (All-in-One)
 
 ```
 [Load Image]
     ↓
 [Qwen2VLFlux Encode]
     ↓
-[QwenToImage]  ← Decodes Qwen latent to image
-    ├─ vae: WAN VAE
+[Text Encode] → positive/negative
     ↓
-[WanImageToVideo]  ← Native ComfyUI node
-    ├─ start_image: from QwenToImage
-    ├─ positive/negative: conditioning
-    └─ dimensions and frames
+[QwenWANUnifiedI2V]  ← The Swiss Army Knife
+    Connect:
+    - qwen_latent (from Qwen encoder)
+    - positive (from text encode)
+    - negative (from text encode)
+
+    Key Settings:
+    - i2v_mode: "standard"
+    - noise_mode: "no_noise"
+    - wan_version: "auto"
+    - width: 832, height: 480
+    - num_frames: 81
     ↓
-[KSampler]
+[KSampler]  ← Connect ALL THREE outputs!
+    - positive (from unified node)
+    - negative (from unified node)
+    - latent_image (from unified node)
+    - model: Your WAN model
     ↓
 [VAE Decode]
     ↓
@@ -206,7 +216,7 @@ Use WAN 2.1 model
 3. Lower denoise in KSampler (0.7-0.9)
 
 ### Issue: Tensor Shape Errors
-**Solution:** Make sure you're using native ComfyUI, not Kijai's wrapper
+**Solution:** If using kijai's wrapper, convert from native comfyui, but currently only testing with native comfy for now
 
 ## Advanced Workflows
 

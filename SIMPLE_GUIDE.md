@@ -1,8 +1,15 @@
 # Simple Usage Guide - Qwen to WAN I2V Bridge
 
-## Just Use This One Node: QwenWANUnifiedI2V
+## Production Nodes Summary
 
-The **Unified I2V** node is all you need. It's the Swiss Army knife that does everything.
+**Main Nodes:**
+1. **QwenWANUnifiedI2V** - Complete I2V solution (USE THIS ONE!)
+2. **QwenWANUnifiedT2V** - T2V/V2V with optional Qwen guidance
+
+**Helper Nodes:**
+3. **QwenToImage** - Converts Qwen latent to image
+4. **QwenWANI2VBridge** - Basic I2V conditioning
+5. **QwenWANI2VDirect** - Direct latent experiments
 
 ## Basic Setup (90% of use cases)
 

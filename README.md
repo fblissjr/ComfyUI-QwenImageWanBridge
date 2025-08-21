@@ -1,6 +1,6 @@
 # ComfyUI-QwenImageWanBridge
 
-Direct latent bridge from Qwen-Image to WAN video generation.
+Direct latent bridge from Qwen-Image to WAN video generation. Currently only testing with native comfyui.
 
 **WAN 2.1**: 16 channels (Compatible with Qwen-Image!)
 **WAN 2.2**: 48 channels (Causes pixelation - 16ch→48ch mismatch)
@@ -16,5 +16,5 @@ Despite 99.98% VAE similarity and semantic alignment (both Alibaba, WAN trained 
 
 ## Credits
 
-- Qwen-Image and WAN 2.2 by Alibaba
-- ComfyUI-WanVideoWrapper by Kijai
+- Bandoco for creating an amazing community and supporting open-source projects.
+- ComfyUI-WanVideoWrapper by Kijai for pushing the frontier every single day
