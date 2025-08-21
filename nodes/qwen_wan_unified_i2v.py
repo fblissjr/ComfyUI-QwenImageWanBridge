@@ -53,6 +53,16 @@ class QwenWANUnifiedI2V:
                 
                 # WAN version handling
                 "wan_version": (["auto", "wan21", "wan22"], {"default": "auto"}),
+                
+                # Channel expansion method for WAN 2.2
+                "channel_mode": ([
+                    "frequency",  # Frequency-based expansion
+                    "repeat",     # Simple 3x repeat
+                    "zero_pad",   # Pad with zeros
+                ], {"default": "frequency"}),
+                
+                # Normalization
+                "apply_wan_norm": ("BOOLEAN", {"default": True}),
             },
             "optional": {
                 # Multiple input options
@@ -71,7 +81,7 @@ class QwenWANUnifiedI2V:
     
     def process(self, positive, negative, width, height, num_frames, batch_size,
                 i2v_mode, noise_mode, noise_strength, seed, 
-                start_frames, frame_blend, wan_version,
+                start_frames, frame_blend, wan_version, channel_mode, apply_wan_norm,
                 qwen_latent=None, bridge_latent=None, start_image=None, 
                 vae=None, clip_vision_output=None):
         
@@ -101,7 +111,7 @@ class QwenWANUnifiedI2V:
         
         # Process input latent
         processed_latent = self._process_latent(
-            input_latent, target_H, target_W, channels, info
+            input_latent, target_H, target_W, channels, channel_mode, apply_wan_norm, info
         )
         
         # Create video latent based on mode
@@ -201,8 +211,8 @@ class QwenWANUnifiedI2V:
         info.append(f"Input shape: {latent.shape}")
         return latent
     
-    def _process_latent(self, latent, target_H, target_W, target_C, info):
-        """Process latent to match target dimensions"""
+    def _process_latent(self, latent, target_H, target_W, target_C, channel_mode, apply_norm, info):
+        """Process latent to match target dimensions with WAN normalization"""
         
         B, C, H, W = latent.shape
         
@@ -221,11 +231,23 @@ class QwenWANUnifiedI2V:
             if C < target_C:
                 # Expand channels
                 if target_C == 48 and C == 16:
-                    # Special case: 16→48 for WAN 2.2
-                    latent = latent.repeat(1, 3, 1, 1)
-                    info.append("Expanded: 16→48 channels (3x repeat)")
+                    if channel_mode == "frequency":
+                        # Frequency-based expansion
+                        high_freq = latent - F.avg_pool2d(F.avg_pool2d(latent, 3, 1, 1), 3, 1, 1)
+                        low_freq = F.avg_pool2d(latent, 5, 1, 2)
+                        latent = torch.cat([latent, high_freq, low_freq], dim=1)
+                        info.append("Expanded: 16→48 channels (frequency-based)")
+                    elif channel_mode == "repeat":
+                        # Simple 3x repeat
+                        latent = latent.repeat(1, 3, 1, 1)
+                        info.append("Expanded: 16→48 channels (3x repeat)")
+                    else:  # zero_pad
+                        # Pad with zeros
+                        padding = torch.zeros(B, 32, target_H, target_W, device=latent.device)
+                        latent = torch.cat([latent, padding], dim=1)
+                        info.append("Expanded: 16→48 channels (zero padding)")
                 else:
-                    # Pad with zeros
+                    # Generic padding
                     padding = torch.zeros(B, target_C - C, target_H, target_W, device=latent.device)
                     latent = torch.cat([latent, padding], dim=1)
                     info.append(f"Padded: {C}→{target_C} channels")
@@ -233,6 +255,18 @@ class QwenWANUnifiedI2V:
                 # Truncate
                 latent = latent[:, :target_C]
                 info.append(f"Truncated: {C}→{target_C} channels")
+        
+        # Apply WAN normalization if requested
+        if apply_norm:
+            wan_mean = 0.0
+            wan_std = 0.5
+            current_mean = latent.mean()
+            current_std = latent.std()
+            
+            if abs(current_mean - wan_mean) > 0.1 or abs(current_std - wan_std) > 0.1:
+                latent = (latent - current_mean) / (current_std + 1e-8)
+                latent = latent * wan_std + wan_mean
+                info.append(f"Normalized: mean={wan_mean:.2f}, std={wan_std:.2f}")
         
         return latent
     
