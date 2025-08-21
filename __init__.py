@@ -37,6 +37,21 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Native Proper nodes: {e}")
 
+try:
+    from .nodes.qwen_wan_i2v_bridge import QwenWANI2VBridge, QwenToImage, QwenWANI2VDirect
+    NODE_CLASS_MAPPINGS["QwenWANI2VBridge"] = QwenWANI2VBridge
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANI2VBridge"] = "Qwen→WAN I2V Conditioning"
+    
+    NODE_CLASS_MAPPINGS["QwenToImage"] = QwenToImage
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToImage"] = "Qwen Latent→Image"
+    
+    NODE_CLASS_MAPPINGS["QwenWANI2VDirect"] = QwenWANI2VDirect
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANI2VDirect"] = "Qwen→WAN I2V Direct"
+    
+    print("[QwenImageWanBridge] Loaded I2V specific nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load I2V nodes: {e}")
+
 # ============================================================================
 # ARCHIVED NODES (Broken/Superseded - kept for reference)
 # ============================================================================
