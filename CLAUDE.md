@@ -56,9 +56,16 @@ ComfyUI has native support for Qwen-Image models. Key components:
 Example workflow: `Documentation/0822_qe_2.json`
 
 ### Our Custom Implementation
-Alternative nodes with more flexibility:
-- **QwenVLLoader**: Proper Qwen2.5-VL model loader using transformers
-- **QwenVLTextEncoder**: Real multimodal text encoder with vision processing
+
+#### FIXED Nodes (Use These!)
+- **QwenVLCLIPLoader**: Loads Qwen2.5-VL via ComfyUI's CLIP infrastructure (actually works!)
+- **QwenVLTextEncoderFixed**: Uses ComfyUI encoding with DiffSynth-Studio templates
+
+#### Legacy Nodes (Issues when using safetensors only)
+- **QwenVLLoader**: Attempts transformers loading (returns random noise with safetensors)
+- **QwenVLTextEncoder**: Original encoder (broken with safetensors files)
+
+#### Helper Nodes
 - **QwenVLEmptyLatent**: Generate 16-channel latents with proper normalization
 - **QwenVLImageToLatent**: Encode images to Qwen's 16-channel latent space
 - **QwenWANNativeBridge**: Native ComfyUI with noise modes
@@ -97,9 +104,23 @@ Alternative nodes with more flexibility:
 - Multiple expansion modes for WAN 2.2 (48 channels)
 - Proper WAN normalization applied
 
+## Quick Start Guide
+
+### For Working Qwen2.5-VL with Custom Templates:
+1. Use **QwenVLCLIPLoader** to load `qwen_2.5_vl_7b.safetensors`
+2. Use **QwenVLTextEncoderFixed** with `use_diffsynth_template=True`
+3. Connect to standard KSampler pipeline
+4. See `example_workflows/qwen_vl_fixed_workflow.json`
+
+### Why These Nodes?
+- They wrap ComfyUI's working CLIP infrastructure (no random tensors!)
+- Override templates with DiffSynth-Studio versions
+- Maintain exact system prompts for consistency
+- Actually encode text properly!
+
 ## Recommendations
 
-1. **Install transformers library**: `pip install transformers` (required for custom nodes)
+1. **Install transformers library**: `pip install transformers` (optional for advanced features)
 2. **Model Precision**: Use fp8_e4m3fn models for lower VRAM usage
 3. **Speed Optimization**: Use Lightning LoRAs (4-step or 8-step variants)
 4. **Resolution**: Use preferred Qwen resolutions for best results:
@@ -147,16 +168,22 @@ Alternative nodes with more flexibility:
 
 ## Recent Fixes (2025-08-23)
 
+### Latest Fix: CLIP Wrapper Implementation
+- **QwenVLCLIPLoader + QwenVLTextEncoderFixed**: Wraps ComfyUI's working CLIP loader
+- Uses ComfyUI's proven infrastructure (no more random tensors!)
+- Overrides templates with DiffSynth-Studio versions for consistency
+- Maintains exact system prompts from reference implementation
+
 ### Fixed Critical Issues
 1. **Vision tokens now actually work** - Images processed through vision tower
 2. **Proper multimodal model loading** - Using transformers Qwen2VLForConditionalGeneration
 3. **Exact system prompts** - Matches DiffSynth-Studio reference for autoregressive consistency
-4. **No more CLIP hacks** - Direct transformers integration instead of forcing through CLIP
+4. **No more random noise** - Fixed safetensors loading that returned torch.randn()
 5. **Proper 16-channel VAE support** - Correct normalization values from reference
 
 ### What Was Wrong Before
+- QwenVLModelWrapper returned random tensors when loading from safetensors
 - Vision tokens were just text strings, no actual vision processing
-- Used ComfyUI's CLIP infrastructure for a vision-language model
 - Wrong system prompts affecting autoregressive generation
 - Missing pixel_values and image_grid_thw inputs
 - Vision features never injected at IMAGE_PAD positions

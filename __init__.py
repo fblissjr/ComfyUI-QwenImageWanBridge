@@ -20,14 +20,30 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] ✗ Failed to load Qwen2.5-VL Loader: {e}")
 
+# Proper CLIP-based implementation that actually works
+try:
+    from .nodes.qwen_vl_encoder import QwenVLCLIPLoader, QwenVLTextEncoderProper
+    NODE_CLASS_MAPPINGS["QwenVLCLIPLoader"] = QwenVLCLIPLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLCLIPLoader"] = "Qwen2.5-VL CLIP Loader"
+    
+    NODE_CLASS_MAPPINGS["QwenVLTextEncoderProper"] = QwenVLTextEncoderProper
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoderProper"] = "Qwen2.5-VL Text Encoder"
+    
+    print("[QwenImageWanBridge] ✓ Loaded proper Qwen2.5-VL nodes using ComfyUI's CLIP")
+except Exception as e:
+    print(f"[QwenImageWanBridge] ✗ Failed to load proper encoder nodes: {e}")
+
+# Legacy text encoder (has issues with safetensors - returns random noise)
+# Keeping for compatibility but use QwenVLTextEncoderProper instead
 try:
     from .nodes.qwen_vl_text_encoder import (
         QwenVLTextEncoder,
         QwenVLEmptyLatent,
         QwenVLImageToLatent
     )
-    NODE_CLASS_MAPPINGS["QwenVLTextEncoder"] = QwenVLTextEncoder
-    NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoder"] = "Qwen2.5-VL Text Encoder"
+    # Commenting out the broken encoder - use QwenVLTextEncoderProper instead
+    # NODE_CLASS_MAPPINGS["QwenVLTextEncoder"] = QwenVLTextEncoder
+    # NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoder"] = "Qwen2.5-VL Text Encoder (Legacy)"
     
     NODE_CLASS_MAPPINGS["QwenVLEmptyLatent"] = QwenVLEmptyLatent
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLEmptyLatent"] = "Qwen Empty Latent (16ch)"
@@ -35,9 +51,9 @@ try:
     NODE_CLASS_MAPPINGS["QwenVLImageToLatent"] = QwenVLImageToLatent
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLImageToLatent"] = "Qwen Image to Latent (16ch)"
     
-    print("[QwenImageWanBridge] ✓ Loaded Qwen2.5-VL text encoder with real vision processing")
+    print("[QwenImageWanBridge] ✓ Loaded Qwen helper nodes")
 except Exception as e:
-    print(f"[QwenImageWanBridge] ✗ Failed to load Qwen2.5-VL text encoder: {e}")
+    print(f"[QwenImageWanBridge] ✗ Failed to load Qwen helper nodes: {e}")
 
 # ============================================================================
 # OPTIONAL NODES - Comment out if they cause issues
