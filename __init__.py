@@ -1,54 +1,74 @@
 """
 ComfyUI-QwenImageWanBridge
-Direct latent bridge from Qwen-Image to WAN video generation
-
-STATUS: Partially functional - quality degradation due to VAE differences
-RECOMMENDATION: Use WAN 2.1 (16ch) instead of WAN 2.2 (48ch) for better compatibility
+Qwen2.5-VL implementation with proper vision support
 """
 
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 
 # ============================================================================
-# PRODUCTION NODES - Native ComfyUI
+# CORE NODES - Qwen2.5-VL with proper vision support
 # ============================================================================
 
-# Note: Research nodes moved to nodes/research/ folder
-# Only loading production-ready unified nodes
+# Main Qwen2.5-VL Loader and Text Encoder
+try:
+    from .nodes.qwen_vl_loader import QwenVLLoader
+    NODE_CLASS_MAPPINGS["QwenVLLoader"] = QwenVLLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLLoader"] = "Qwen2.5-VL Model Loader"
+    
+    print("[QwenImageWanBridge] ✓ Loaded Qwen2.5-VL Loader with transformers support")
+except Exception as e:
+    print(f"[QwenImageWanBridge] ✗ Failed to load Qwen2.5-VL Loader: {e}")
 
 try:
-    from .nodes.qwen_wan_i2v_bridge import QwenWANI2VBridge, QwenToImage, QwenWANI2VDirect
-    NODE_CLASS_MAPPINGS["QwenWANI2VBridge"] = QwenWANI2VBridge
-    NODE_DISPLAY_NAME_MAPPINGS["QwenWANI2VBridge"] = "Qwen WAN I2V Conditioning"
+    from .nodes.qwen_vl_text_encoder import (
+        QwenVLTextEncoder,
+        QwenVLEmptyLatent,
+        QwenVLImageToLatent
+    )
+    NODE_CLASS_MAPPINGS["QwenVLTextEncoder"] = QwenVLTextEncoder
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoder"] = "Qwen2.5-VL Text Encoder"
     
-    NODE_CLASS_MAPPINGS["QwenToImage"] = QwenToImage
-    NODE_DISPLAY_NAME_MAPPINGS["QwenToImage"] = "Qwen Latent to Image"
+    NODE_CLASS_MAPPINGS["QwenVLEmptyLatent"] = QwenVLEmptyLatent
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLEmptyLatent"] = "Qwen Empty Latent (16ch)"
     
-    NODE_CLASS_MAPPINGS["QwenWANI2VDirect"] = QwenWANI2VDirect
-    NODE_DISPLAY_NAME_MAPPINGS["QwenWANI2VDirect"] = "Qwen WAN I2V Direct"
+    NODE_CLASS_MAPPINGS["QwenVLImageToLatent"] = QwenVLImageToLatent
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLImageToLatent"] = "Qwen Image to Latent (16ch)"
     
-    print("[QwenImageWanBridge] Loaded I2V specific nodes")
+    print("[QwenImageWanBridge] ✓ Loaded Qwen2.5-VL text encoder with real vision processing")
 except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load I2V nodes: {e}")
-
-try:
-    from .nodes.qwen_wan_unified_i2v import QwenWANUnifiedI2V
-    NODE_CLASS_MAPPINGS["QwenWANUnifiedI2V"] = QwenWANUnifiedI2V
-    NODE_DISPLAY_NAME_MAPPINGS["QwenWANUnifiedI2V"] = "Qwen WAN Unified I2V"
-    print("[QwenImageWanBridge] Loaded Unified I2V node")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Unified I2V: {e}")
-
-try:
-    from .nodes.qwen_wan_unified_t2v import QwenWANUnifiedT2V
-    NODE_CLASS_MAPPINGS["QwenWANUnifiedT2V"] = QwenWANUnifiedT2V
-    NODE_DISPLAY_NAME_MAPPINGS["QwenWANUnifiedT2V"] = "Qwen WAN Unified T2V"
-    print("[QwenImageWanBridge] Loaded Unified T2V node")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Unified T2V: {e}")
+    print(f"[QwenImageWanBridge] ✗ Failed to load Qwen2.5-VL text encoder: {e}")
 
 # ============================================================================
-# DEBUG NODES
+# OPTIONAL NODES - Comment out if they cause issues
+# ============================================================================
+
+# Simplified Qwen Loaders (for backward compatibility)
+try:
+    from .nodes.qwen_text_encoder_loader import (
+        QwenTextEncoderLoader,
+        QwenDiffusionModelLoader,
+        QwenVAELoader,
+        QwenCheckpointLoaderSimple
+    )
+    NODE_CLASS_MAPPINGS["QwenTextEncoderLoader"] = QwenTextEncoderLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenTextEncoderLoader"] = "Load Qwen Text Encoder (Legacy)"
+    
+    NODE_CLASS_MAPPINGS["QwenDiffusionModelLoader"] = QwenDiffusionModelLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenDiffusionModelLoader"] = "Load Qwen Diffusion Model"
+    
+    NODE_CLASS_MAPPINGS["QwenVAELoader"] = QwenVAELoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVAELoader"] = "Load Qwen VAE"
+    
+    NODE_CLASS_MAPPINGS["QwenCheckpointLoaderSimple"] = QwenCheckpointLoaderSimple
+    NODE_DISPLAY_NAME_MAPPINGS["QwenCheckpointLoaderSimple"] = "Load Qwen Checkpoint"
+    
+    print("[QwenImageWanBridge] ✓ Loaded legacy loader nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] ⚠ Legacy loaders not loaded: {e}")
+
+# ============================================================================
+# DEBUG NODES (Optional)
 # ============================================================================
 
 try:
@@ -62,61 +82,9 @@ try:
     NODE_CLASS_MAPPINGS["QwenWANCompareLatents"] = QwenWANCompareLatents
     NODE_DISPLAY_NAME_MAPPINGS["QwenWANCompareLatents"] = "Compare Latents"
     
-    print("[QwenImageWanBridge] Loaded Debug nodes")
+    print("[QwenImageWanBridge] ✓ Loaded debug nodes")
 except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Debug nodes: {e}")
-
-try:
-    from .nodes.qwen_wan_latent_io import LoadLatentFromFile, SaveLatentToFile, CreateTestLatent
-    NODE_CLASS_MAPPINGS["LoadLatentFromFile"] = LoadLatentFromFile
-    NODE_DISPLAY_NAME_MAPPINGS["LoadLatentFromFile"] = "Load Latent"
-    
-    NODE_CLASS_MAPPINGS["SaveLatentToFile"] = SaveLatentToFile
-    NODE_DISPLAY_NAME_MAPPINGS["SaveLatentToFile"] = "Save Latent"
-    
-    NODE_CLASS_MAPPINGS["CreateTestLatent"] = CreateTestLatent
-    NODE_DISPLAY_NAME_MAPPINGS["CreateTestLatent"] = "Create Test Latent"
-    
-    print("[QwenImageWanBridge] Loaded I/O nodes")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load I/O nodes: {e}")
-
-# ============================================================================
-# ARCHIVED NODES (Broken/Superseded - kept for reference)
-# ============================================================================
-
-LOAD_ARCHIVED_NODES = False  # Set to True to load archived nodes
-
-if LOAD_ARCHIVED_NODES:
-    try:
-        from .nodes.archive.qwen_wan_pure_bridge import QwenWANPureBridge, QwenWANMappingAnalyzer
-        NODE_CLASS_MAPPINGS["QwenWANPureBridge"] = QwenWANPureBridge
-        NODE_DISPLAY_NAME_MAPPINGS["QwenWANPureBridge"] = "[ARCHIVED] Pure Bridge"
-        NODE_CLASS_MAPPINGS["QwenWANMappingAnalyzer"] = QwenWANMappingAnalyzer
-        NODE_DISPLAY_NAME_MAPPINGS["QwenWANMappingAnalyzer"] = "[ARCHIVED] Mapping Analyzer"
-        print("[QwenImageWanBridge] Loaded archived nodes")
-    except Exception as e:
-        print(f"[QwenImageWanBridge] Failed to load archived nodes: {e}")
-
-# ============================================================================
-# RESEARCH NODES (Experimental - for testing only)
-# ============================================================================
-
-LOAD_RESEARCH_NODES = False  # Set to True to load research nodes
-
-if LOAD_RESEARCH_NODES:
-    try:
-        from .nodes.research.qwen_wan_parameter_sweep import (
-            QwenWANParameterSweep, 
-            QwenWANBestSettings,
-        )
-        NODE_CLASS_MAPPINGS["QwenWANParameterSweep"] = QwenWANParameterSweep
-        NODE_DISPLAY_NAME_MAPPINGS["QwenWANParameterSweep"] = "[RESEARCH] Parameter Sweep"
-        NODE_CLASS_MAPPINGS["QwenWANBestSettings"] = QwenWANBestSettings
-        NODE_DISPLAY_NAME_MAPPINGS["QwenWANBestSettings"] = "[RESEARCH] Best Settings"
-        print("[QwenImageWanBridge] Loaded research nodes")
-    except Exception as e:
-        print(f"[QwenImageWanBridge] Failed to load research nodes: {e}")
+    print(f"[QwenImageWanBridge] ⚠ Debug nodes not loaded: {e}")
 
 # ============================================================================
 # EXPORTS
@@ -124,6 +92,14 @@ if LOAD_RESEARCH_NODES:
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
 
-print(f"[QwenImageWanBridge] {len(NODE_CLASS_MAPPINGS)} active nodes")
-print("[QwenImageWanBridge] Key discovery: WAN 2.1 (16ch) compatible, WAN 2.2 (48ch) needs channel adapter")
-print("[QwenImageWanBridge] Set LOAD_ARCHIVED_NODES=True or LOAD_RESEARCH_NODES=True to access experimental nodes")
+print(f"[QwenImageWanBridge] Total nodes loaded: {len(NODE_CLASS_MAPPINGS)}")
+print("[QwenImageWanBridge] ============================================")
+print("[QwenImageWanBridge] IMPORTANT: Install transformers library:")
+print("[QwenImageWanBridge]   pip install transformers")
+print("[QwenImageWanBridge] ============================================")
+print("[QwenImageWanBridge] Key improvements:")
+print("[QwenImageWanBridge] • Vision tokens now actually work")
+print("[QwenImageWanBridge] • Proper multimodal model loading")
+print("[QwenImageWanBridge] • Exact system prompts from DiffSynth-Studio")
+print("[QwenImageWanBridge] • Direct transformers integration")
+print("[QwenImageWanBridge] ============================================")

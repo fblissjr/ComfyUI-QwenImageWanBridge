@@ -268,3 +268,16 @@ class QwenWANCompareLatents:
         print(comparison)
         
         return (comparison,)
+
+# Node registration
+NODE_CLASS_MAPPINGS = {
+    "QwenWANLatentDebug": QwenWANLatentDebug,
+    "QwenWANConditioningDebug": QwenWANConditioningDebug,
+    "QwenWANCompareLatents": QwenWANCompareLatents,
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "QwenWANLatentDebug": "Qwen/WAN Latent Debug",
+    "QwenWANConditioningDebug": "Qwen/WAN Conditioning Debug",
+    "QwenWANCompareLatents": "Qwen/WAN Compare Latents",
+}
