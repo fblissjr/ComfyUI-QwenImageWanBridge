@@ -92,10 +92,6 @@ class QwenVLTextEncoderProper:
             },
             "optional": {
                 "edit_image": ("IMAGE",),
-                "use_diffsynth_template": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Use DiffSynth-Studio templates for consistency"
-                }),
             }
         }
     
@@ -107,8 +103,7 @@ class QwenVLTextEncoderProper:
     DESCRIPTION = "Encode text using ComfyUI's CLIP with DiffSynth-Studio templates"
     
     def encode(self, clip, text: str, mode: str = "text_to_image",
-              edit_image: Optional[torch.Tensor] = None,
-              use_diffsynth_template: bool = True) -> Tuple[Any]:
+              edit_image: Optional[torch.Tensor] = None) -> Tuple[Any]:
         """
         Encode text using ComfyUI's CLIP but with optional DiffSynth templates
         """
@@ -137,48 +132,20 @@ class QwenVLTextEncoderProper:
             # Extract RGB channels (drop alpha if present)
             images = [image[:, :, :, :3]]
         
-        # Choose template
-        if use_diffsynth_template:
-            if mode == "image_edit" and images:
-                # DiffSynth-Studio template for image editing
-                template = (
-                    "<|im_start|>system\n"
-                    "Describe the key features of the input image (color, shape, size, texture, objects, background), "
-                    "then explain how the user's text instruction should alter or modify the image. "
-                    "Generate a new image that meets the user's requirements while maintaining consistency "
-                    "with the original input where appropriate.<|im_end|>\n"
-                    "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{}<|im_end|>\n"
-                    "<|im_start|>assistant\n"
-                )
-            else:
-                # DiffSynth-Studio template for text-to-image
-                template = (
-                    "<|im_start|>system\n"
-                    "You are a helpful assistant.<|im_end|>\n"
-                    "<|im_start|>user\n{}<|im_end|>\n"
-                    "<|im_start|>assistant\n"
-                )
-            
-            prompt = template.format(text)
-            
-            # Override ComfyUI's template by tokenizing with our prompt
-            if images:
-                # For image edit, pass the template directly
-                # ComfyUI will handle the vision tokens
-                tokens = clip.tokenize(prompt, images=images)
-            else:
-                tokens = clip.tokenize(prompt)
+        # Important: ComfyUI ALREADY applies the correct DiffSynth template internally!
+        # The qwen_image.py tokenizer uses the exact same template we want
+        # We should NOT apply the template ourselves - that causes double templating
+        
+        # Just pass the text and images directly - ComfyUI handles the rest
+        if images:
+            tokens = clip.tokenize(text, images=images)
         else:
-            # Use ComfyUI's default templates
-            if images:
-                tokens = clip.tokenize(text, images=images)
-            else:
-                tokens = clip.tokenize(text)
+            tokens = clip.tokenize(text)
         
         # Encode tokens using ComfyUI's method
         conditioning = clip.encode_from_tokens_scheduled(tokens)
         
-        logger.info(f"Encoded text in {mode} mode with DiffSynth={use_diffsynth_template}")
+        logger.info(f"Encoded text in {mode} mode")
         
         return (conditioning,)
 
