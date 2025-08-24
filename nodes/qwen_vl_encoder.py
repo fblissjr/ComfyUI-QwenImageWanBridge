@@ -115,20 +115,27 @@ class QwenVLTextEncoderProper:
         
         images = []
         
-        # Prepare image if in edit mode
+        # Prepare image if in edit mode - following ComfyUI's TextEncodeQwenImageEdit pattern
         if mode == "image_edit" and edit_image is not None:
-            # Convert tensor to PIL
-            import numpy as np
-            from PIL import Image
+            # Process image tensor like the official node does
+            import math
+            import comfy.utils
             
-            if isinstance(edit_image, torch.Tensor):
-                if edit_image.dim() == 4:
-                    edit_image = edit_image[0]
-                image_np = (edit_image.cpu().numpy() * 255).astype(np.uint8)
-                if image_np.shape[0] == 3:  # CHW to HWC
-                    image_np = np.transpose(image_np, (1, 2, 0))
-                image_pil = Image.fromarray(image_np)
-                images = [image_pil]
+            # ComfyUI IMAGE is [B, H, W, C], we need to process it
+            samples = edit_image.movedim(-1, 1)  # [B, H, W, C] -> [B, C, H, W]
+            
+            # Scale to target resolution (1024x1024 total pixels like official)
+            total = int(1024 * 1024)
+            scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
+            width = round(samples.shape[3] * scale_by)
+            height = round(samples.shape[2] * scale_by)
+            
+            # Resize using ComfyUI's common_upscale
+            s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
+            image = s.movedim(1, -1)  # [B, C, H, W] -> [B, H, W, C]
+            
+            # Extract RGB channels (drop alpha if present)
+            images = [image[:, :, :, :3]]
         
         # Choose template
         if use_diffsynth_template:
