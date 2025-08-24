@@ -32,9 +32,11 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - [ISSUES.md](Documentation/ISSUES.md) - Comprehensive issue tracking with solutions
 
 **Implementation Guides:**
+- [CUSTOM_VS_NATIVE_RATIONALE.md](Documentation/CUSTOM_VS_NATIVE_RATIONALE.md) - When to use our nodes vs native
 - [Implementation Comparison](Documentation/IMPLEMENTATION_COMPARISON.md) - Feature comparison
 - [Complete Node Tutorial](Documentation/COMPLETE_NODE_TUTORIAL.md) - Node usage guide
 - [Reference Latents Explained](Documentation/REFERENCE_LATENTS_EXPLAINED.md) - Edit mode details
+- [FUTURE_ENHANCEMENTS.md](Documentation/FUTURE_ENHANCEMENTS.md) - Potential improvements from DiffSynth
 
 ## Current Implementation (Simplified)
 
@@ -51,6 +53,10 @@ ComfyUI nodes for the Qwen Image Edit model and Qwen2.5-VL text encoder. Does *N
 **Helper Nodes:**
 - `QwenVLEmptyLatent` - Creates empty 16-channel latents
 - `QwenVLImageToLatent` - Converts images to 16-channel latents
+
+**Resolution Utilities:**
+- `QwenOptimalResolution` - Auto-resize images to nearest Qwen resolution
+- `QwenResolutionSelector` - Dropdown selector for Qwen resolutions
 
 #### Workflow Usage
 1. Place Qwen2.5-VL model in `models/text_encoders/`

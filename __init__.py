@@ -40,6 +40,23 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Qwen helper nodes: {e}")
 
+# Resolution helper nodes
+try:
+    from .nodes.qwen_resolution_helper import (
+        QwenOptimalResolution,
+        QwenResolutionSelector
+    )
+    
+    NODE_CLASS_MAPPINGS["QwenOptimalResolution"] = QwenOptimalResolution
+    NODE_DISPLAY_NAME_MAPPINGS["QwenOptimalResolution"] = "Qwen Optimal Resolution"
+    
+    NODE_CLASS_MAPPINGS["QwenResolutionSelector"] = QwenResolutionSelector
+    NODE_DISPLAY_NAME_MAPPINGS["QwenResolutionSelector"] = "Qwen Resolution Selector"
+    
+    print("[QwenImageWanBridge] Loaded resolution helper nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load resolution nodes: {e}")
+
 # ============================================================================
 # EXPORTS
 # ============================================================================
