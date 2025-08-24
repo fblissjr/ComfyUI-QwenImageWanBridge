@@ -15,31 +15,33 @@ class QwenOptimalResolution:
     """
     
     # Qwen-preferred resolutions (width, height)
-    # Based on DiffSynth-Studio and official Qwen documentation
+    # From DiffSynth-Studio official implementation
     QWEN_RESOLUTIONS = [
-        # Square resolutions
+        # Square
         (1024, 1024),
-        (1328, 1328),
         
-        # Landscape resolutions
-        (1328, 800),
-        (1456, 720),
-        (1584, 1056),
-        (1920, 1080),  # 16:9
-        (2048, 1024),  # 2:1
-        
-        # Portrait resolutions  
-        (800, 1328),
+        # All aspect ratios from DiffSynth
+        (672, 1568),
+        (688, 1504), 
         (720, 1456),
-        (1056, 1584),
-        (1080, 1920),  # 9:16
-        (1024, 2048),  # 1:2
+        (752, 1392),
+        (800, 1328),
+        (832, 1248),
+        (880, 1184),
+        (944, 1104),
+        (1104, 944),
+        (1184, 880),
+        (1248, 832),
+        (1328, 800),
+        (1392, 752),
+        (1456, 720),
+        (1504, 688),
+        (1568, 672),
         
-        # Additional common resolutions
-        (1344, 768),   # 7:4
-        (768, 1344),   # 4:7
-        (1536, 640),   # 12:5
-        (640, 1536),   # 5:12
+        # Additional larger resolutions
+        (1328, 1328),
+        (1920, 1080),  # 16:9
+        (1080, 1920),  # 9:16
     ]
     
     @classmethod
