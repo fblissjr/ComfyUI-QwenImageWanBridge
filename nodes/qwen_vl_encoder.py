@@ -84,17 +84,26 @@ class QwenVLTextEncoder:
                 "clip": ("CLIP",),
                 "text": ("STRING", {
                     "multiline": True,
-                    "default": "A beautiful landscape"
+                    "default": "A beautiful landscape",
+                    "tooltip": "For custom prompts with apply_template=False, include full format with <|im_start|> tokens"
                 }),
                 "mode": (["text_to_image", "image_edit"], {
-                    "default": "text_to_image"
+                    "default": "image_edit"
                 }),
             },
             "optional": {
                 "edit_image": ("IMAGE",),
                 "vae": ("VAE",),  # Optional VAE for reference latents like official
-                "debug_mode": ("BOOLEAN", {
+                "apply_template": ("BOOLEAN", {
                     "default": True,
+                    "tooltip": "Apply Qwen's system prompt template (disable for custom prompts)"
+                }),
+                "token_removal": (["auto", "diffsynth", "none"], {
+                    "default": "auto",
+                    "tooltip": "auto: ComfyUI's smart search, diffsynth: fixed 34/64 tokens, none: keep all"
+                }),
+                "debug_mode": ("BOOLEAN", {
+                    "default": False,
                     "tooltip": "Enable debug logging"
                 }),
             }
@@ -105,16 +114,29 @@ class QwenVLTextEncoder:
     FUNCTION = "encode"
     CATEGORY = "QwenImage/Encoding"
     TITLE = "Qwen2.5-VL Text Encoder"
-    DESCRIPTION = "Encode text using ComfyUI's CLIP with DiffSynth-Studio templates"
+    DESCRIPTION = "Advanced text encoder with flexible template control and token removal options"
     
     def encode(self, clip, text: str, mode: str = "text_to_image",
-              edit_image: Optional[torch.Tensor] = None, vae=None, debug_mode: bool = True) -> Tuple[Any]:
+              edit_image: Optional[torch.Tensor] = None, vae=None, 
+              apply_template: bool = True, token_removal: str = "auto",
+              debug_mode: bool = False) -> Tuple[Any]:
         """
-        Encode text using ComfyUI's CLIP but with optional DiffSynth templates
+        Encode text using ComfyUI's CLIP with flexible template and token removal options
+        
+        Args:
+            clip: ComfyUI CLIP model
+            text: Input prompt text
+            mode: Either "text_to_image" or "image_edit"
+            edit_image: Optional image tensor for edit mode
+            vae: Optional VAE for reference latents
+            apply_template: Whether to apply Qwen's system templates
+            token_removal: How to remove template tokens ("auto", "diffsynth", "none")
+            debug_mode: Enable debug logging
         """
         
         images = []
         ref_latent = None  # Initialize here so it's in scope later
+        original_text = text  # Store original for custom prompting
         
         # Prepare image if in edit mode - following ComfyUI's TextEncodeQwenImageEdit pattern
         if mode == "image_edit" and edit_image is not None:
@@ -166,11 +188,41 @@ class QwenVLTextEncoder:
                     logger.info(f"[DEBUG] Encoded reference latent shape: {ref_latent.shape}")
                     logger.info(f"[DEBUG] Reference latent min/max: {ref_latent.min():.4f}/{ref_latent.max():.4f}")
         
-        # Important: ComfyUI ALREADY applies the correct DiffSynth template internally!
-        # The qwen_image.py tokenizer uses the exact same template we want
-        # We should NOT apply the template ourselves - that causes double templating
+        # Handle template application
+        if not apply_template:
+            # User wants to use custom prompting - pass text as-is
+            if debug_mode:
+                logger.info(f"[DEBUG] Template disabled, using raw text")
+        else:
+            # Apply template manually if we need special token removal
+            if token_removal == "diffsynth":
+                # Apply DiffSynth-style templates for exact compatibility
+                if mode == "text_to_image":
+                    template = (
+                        "<|im_start|>system\n"
+                        "Describe the image by detailing the color, shape, size, texture, "
+                        "quantity, text, spatial relationships of the objects and background:<|im_end|>\n"
+                        "<|im_start|>user\n{}<|im_end|>\n"
+                        "<|im_start|>assistant\n"
+                    )
+                    text = template.format(original_text)
+                elif mode == "image_edit" and edit_image is not None:
+                    template = (
+                        "<|im_start|>system\n"
+                        "Describe the key features of the input image (color, shape, size, texture, objects, background), "
+                        "then explain how the user's text instruction should alter or modify the image. "
+                        "Generate a new image that meets the user's requirements while maintaining consistency "
+                        "with the original input where appropriate.<|im_end|>\n"
+                        "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{}<|im_end|>\n"
+                        "<|im_start|>assistant\n"
+                    )
+                    text = template.format(original_text)
+                
+                if debug_mode:
+                    logger.info(f"[DEBUG] Applied DiffSynth template for {mode}")
+            # For "auto" mode, ComfyUI applies templates internally
         
-        # Just pass the text and images directly - ComfyUI handles the rest
+        # Tokenize
         if debug_mode:
             logger.info(f"[DEBUG] Tokenizing with text: '{text[:50]}...' and {len(images)} images")
         
@@ -184,6 +236,28 @@ class QwenVLTextEncoder:
             for key in tokens:
                 if isinstance(tokens[key], list) and len(tokens[key]) > 0:
                     logger.info(f"[DEBUG] Token key '{key}' has {len(tokens[key][0])} tokens")
+        
+        # Handle token removal based on mode
+        if token_removal == "diffsynth" and apply_template:
+            # DiffSynth-style fixed removal
+            drop_count = 34 if mode == "text_to_image" else 64
+            
+            # Manually remove tokens before encoding
+            for key in tokens:
+                if isinstance(tokens[key], list) and len(tokens[key]) > 0:
+                    for i in range(len(tokens[key])):
+                        token_list = tokens[key][i]
+                        if len(token_list) > drop_count:
+                            tokens[key][i] = token_list[drop_count:]
+                            if debug_mode:
+                                logger.info(f"[DEBUG] Dropped first {drop_count} tokens (DiffSynth style)")
+        
+        elif token_removal == "none":
+            # Keep all tokens
+            if debug_mode:
+                logger.info(f"[DEBUG] Keeping all tokens (no removal)")
+        
+        # For "auto" mode, ComfyUI's encode_from_tokens_scheduled handles it
         
         # Encode tokens using ComfyUI's method
         conditioning = clip.encode_from_tokens_scheduled(tokens)

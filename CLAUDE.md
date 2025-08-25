@@ -21,6 +21,9 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - `nodes/` - Production-ready nodes only
 - `nodes/archive/` - Legacy and experimental nodes
 - `example_workflows/` - Example JSON workflows
+  - `qwen_text_to_image.json` - Pure text-to-image generation
+  - `qwen_image_edit_semantic.json` - Semantic-aware editing (high denoise)
+  - `qwen_image_edit_structure.json` - Structure-preserving edit (low denoise)
 - `Documentation/` - Technical documentation and insights
   - [ISSUES.md](Documentation/ISSUES.md) - Detailed issue tracking with root causes and solutions
 
@@ -32,6 +35,7 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - [ISSUES.md](Documentation/ISSUES.md) - Comprehensive issue tracking with solutions
 
 **Implementation Guides:**
+- [WORKFLOW_EXPLANATION.md](Documentation/WORKFLOW_EXPLANATION.md) - Understanding image edit workflows
 - [CUSTOM_VS_NATIVE_RATIONALE.md](Documentation/CUSTOM_VS_NATIVE_RATIONALE.md) - When to use our nodes vs native
 - [Implementation Comparison](Documentation/IMPLEMENTATION_COMPARISON.md) - Feature comparison
 - [Complete Node Tutorial](Documentation/COMPLETE_NODE_TUTORIAL.md) - Node usage guide
@@ -55,15 +59,24 @@ ComfyUI nodes for the Qwen Image Edit model and Qwen2.5-VL text encoder. Does *N
 - `QwenVLImageToLatent` - Converts images to 16-channel latents
 
 **Resolution Utilities:**
-- `QwenOptimalResolution` - Auto-resize images to nearest Qwen resolution
-- `QwenResolutionSelector` - Dropdown selector for Qwen resolutions
+- `QwenOptimalResolution` - Auto-resize images to nearest Qwen resolution (uses DiffSynth-Studio's exact resolution list)
+- `QwenResolutionSelector` - Dropdown selector for Qwen resolutions with custom override
 
 #### Workflow Usage
-1. Place Qwen2.5-VL model in `models/text_encoders/`
-2. Use `QwenVLCLIPLoader` to load the model
-3. Use `QwenVLTextEncoder` with:
-   - `text_to_image` mode for text-only generation
-   - `image_edit` mode with an input image for editing
+
+**Text-to-Image:**
+1. `QwenVLCLIPLoader` → `QwenVLTextEncoder` (mode: text_to_image) → KSampler
+2. Use `QwenVLEmptyLatent` or `EmptyLatentImage` for latent input
+3. Denoise: 1.0
+
+**Image Editing (Correct Approach):**
+1. `LoadImage` → `QwenOptimalResolution` → `QwenVLTextEncoder` (edit_image input)
+2. Set mode to `image_edit` 
+3. Image information passes through **conditioning**, not latent
+4. For latent input to KSampler, either:
+   - `VAEEncode` the resized image (low denoise 0.3-0.7 for structure preservation)
+   - `QwenVLEmptyLatent` (high denoise 0.9-1.0 for semantic-aware generation)
+5. **Important**: High denoise (0.9-1.0) lets the model use its vision understanding. Low denoise defeats the purpose of vision tokens.
 
 ### Qwen Image Edit Architecture
 - Uses **Qwen2.5-VL 7B** as text encoder (3584 dim embeddings)

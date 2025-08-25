@@ -27,7 +27,7 @@ class QwenVLTextEncoder:
                     "default": "A beautiful landscape"
                 }),
                 "mode": (["text_to_image", "image_edit"], {
-                    "default": "text_to_image"
+                    "default": "image_edit"
                 }),
             },
             "optional": {
