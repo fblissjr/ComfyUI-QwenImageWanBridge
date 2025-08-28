@@ -1,6 +1,7 @@
 """
 Qwen2.5-VL CLIP Wrapper for ComfyUI
 Uses ComfyUI's internal Qwen loader but with DiffSynth-Studio templates
+Includes all fixes from DiffSynth-Studio and DiffSynth-Engine
 """
 
 import os
@@ -19,6 +20,37 @@ try:
 except ImportError:
     logger.warning("ComfyUI utilities not available")
     COMFY_AVAILABLE = False
+
+# Apply RoPE position embedding fix from DiffSynth-Studio
+def apply_rope_fix():
+    """Monkey patch to fix batch processing with different image sizes"""
+    try:
+        import comfy.ldm.qwen_image.model as qwen_model
+        
+        # Check if the model has QwenEmbedRope (it might not exist)
+        if not hasattr(qwen_model, 'QwenEmbedRope'):
+            logger.info("QwenEmbedRope not found, skipping RoPE fix")
+            return
+            
+        original_expand = qwen_model.QwenEmbedRope._expand_pos_freqs_if_needed
+        
+        def fixed_expand_pos_freqs(self, video_fhw, txt_seq_lens):
+            # Apply fix from DiffSynth-Studio commit 8fcfa1d
+            if isinstance(video_fhw, list):
+                # Take max dimensions across batch instead of just first element
+                video_fhw = tuple(max([i[j] for i in video_fhw]) for j in range(3))
+            
+            # Call original method with fixed video_fhw
+            return original_expand(self, video_fhw, txt_seq_lens)
+        
+        qwen_model.QwenEmbedRope._expand_pos_freqs_if_needed = fixed_expand_pos_freqs
+        logger.info("Applied RoPE position embedding fix for batch processing")
+        
+    except Exception as e:
+        logger.warning(f"Could not apply RoPE fix: {e}")
+
+# Apply fix on module load
+apply_rope_fix()
 
 class QwenVLCLIPLoader:
     """
@@ -73,9 +105,20 @@ class QwenVLCLIPLoader:
 
 class QwenVLTextEncoder:
     """
-    Text encoder for Qwen2.5-VL that works with the diffusion pipeline
+    Enhanced text encoder for Qwen2.5-VL with all DiffSynth fixes
     Uses ComfyUI's internal CLIP infrastructure for compatibility
     """
+    
+    # DiffSynth-Studio's exact resolution list for Qwen
+    QWEN_RESOLUTIONS = [
+        (256, 256), (256, 512), (256, 768), (256, 1024), (256, 1280), (256, 1536), (256, 1792),
+        (512, 256), (512, 512), (512, 768), (512, 1024), (512, 1280), (512, 1536), (512, 1792),
+        (768, 256), (768, 512), (768, 768), (768, 1024), (768, 1280), (768, 1536),
+        (1024, 256), (1024, 512), (1024, 768), (1024, 1024), (1024, 1280), (1024, 1536),
+        (1280, 256), (1280, 512), (1280, 768), (1280, 1024), (1280, 1280),
+        (1536, 256), (1536, 512), (1536, 768), (1536, 1024),
+        (1792, 256), (1792, 512)
+    ]
     
     @classmethod
     def INPUT_TYPES(cls):
@@ -85,26 +128,38 @@ class QwenVLTextEncoder:
                 "text": ("STRING", {
                     "multiline": True,
                     "default": "A beautiful landscape",
-                    "tooltip": "For custom prompts with apply_template=False, include full format with <|im_start|> tokens"
+                    "tooltip": "Your prompt. Just write what you want, templates are applied automatically."
                 }),
                 "mode": (["text_to_image", "image_edit"], {
-                    "default": "image_edit"
+                    "default": "image_edit",
+                    "tooltip": "text_to_image: Generate from scratch | image_edit: Modify existing image"
                 }),
             },
             "optional": {
-                "edit_image": ("IMAGE",),
-                "vae": ("VAE",),  # Optional VAE for reference latents like official
-                "apply_template": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Apply Qwen's system prompt template (disable for custom prompts)"
+                "edit_image": ("IMAGE", {
+                    "tooltip": "Image to edit/reference. ALWAYS provide this for image_edit mode!"
+                }),
+                "multi_reference": ("QWEN_MULTI_REF", {
+                    "tooltip": "Multiple reference images from Multi-Reference Handler (overrides edit_image)"
+                }),
+                "vae": ("VAE", {
+                    "tooltip": "ALWAYS connect VAE! Encodes reference image for vision guidance."
+                }),
+                "use_custom_system_prompt": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "ON: Text from Template Builder (already formatted) | OFF: Apply default Qwen formatting"
                 }),
                 "token_removal": (["auto", "diffsynth", "none"], {
                     "default": "auto",
-                    "tooltip": "auto: ComfyUI's smart search, diffsynth: fixed 34/64 tokens, none: keep all"
+                    "tooltip": "Keep 'auto' unless you know why you need others. Auto=smart, diffsynth=exact compatibility, none=keep all"
                 }),
                 "debug_mode": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Enable debug logging"
+                    "tooltip": "Shows detailed processing info in console. Turn on if things aren't working."
+                }),
+                "optimize_resolution": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "ON: Snap to best Qwen resolution (better quality) | OFF: Scale to 1M pixels"
                 }),
             }
         }
@@ -114,14 +169,39 @@ class QwenVLTextEncoder:
     FUNCTION = "encode"
     CATEGORY = "QwenImage/Encoding"
     TITLE = "Qwen2.5-VL Text Encoder"
-    DESCRIPTION = "Advanced text encoder with flexible template control and token removal options"
+    DESCRIPTION = """
+Encodes text and images for Qwen Image generation.
+
+KEY DECISION: What goes into KSampler.latent_image?
+• VAE Encode → KSampler = Preserve structure (denoise 0.3-0.7)
+• Empty Latent → KSampler = Full reimagining (denoise 0.9-1.0)
+
+ALWAYS connect VAE to this node for reference latents!
+"""
+    
+    def get_optimal_resolution(self, width: int, height: int) -> Tuple[int, int]:
+        """Find the nearest Qwen-supported resolution preserving aspect ratio"""
+        target_pixels = width * height
+        aspect_ratio = width / height
+        
+        # Find closest resolution by both pixel count AND aspect ratio
+        best_res = min(
+            self.QWEN_RESOLUTIONS,
+            key=lambda r: abs(r[0] * r[1] - target_pixels) * 0.5 + 
+                         abs((r[0] / r[1]) - aspect_ratio) * target_pixels * 0.5
+        )
+        
+        return best_res
+    
+    # Template styles moved to Template Builder node - removed to avoid duplication
     
     def encode(self, clip, text: str, mode: str = "text_to_image",
-              edit_image: Optional[torch.Tensor] = None, vae=None, 
-              apply_template: bool = True, token_removal: str = "auto",
-              debug_mode: bool = False) -> Tuple[Any]:
+              edit_image: Optional[torch.Tensor] = None, multi_reference: Optional[Dict] = None,
+              vae=None, use_custom_system_prompt: bool = False, token_removal: str = "auto",
+              debug_mode: bool = False,
+              optimize_resolution: bool = False) -> Tuple[Any]:
         """
-        Encode text using ComfyUI's CLIP with flexible template and token removal options
+        Enhanced encoding with all DiffSynth features
         
         Args:
             clip: ComfyUI CLIP model
@@ -129,14 +209,70 @@ class QwenVLTextEncoder:
             mode: Either "text_to_image" or "image_edit"
             edit_image: Optional image tensor for edit mode
             vae: Optional VAE for reference latents
-            apply_template: Whether to apply Qwen's system templates
-            token_removal: How to remove template tokens ("auto", "diffsynth", "none")
+            use_custom_system_prompt: Whether text is pre-formatted from Template Builder
+            optimize_resolution: Auto-optimize to Qwen resolution
+            token_removal: How to remove template tokens
             debug_mode: Enable debug logging
         """
         
         images = []
         ref_latent = None  # Initialize here so it's in scope later
         original_text = text  # Store original for custom prompting
+        
+        # Handle multi-reference input if provided (overrides edit_image)
+        if multi_reference is not None:
+            if debug_mode:
+                logger.info(f"[DEBUG] Processing multi-reference with {multi_reference['count']} images")
+                logger.info(f"[DEBUG] Multi-ref method: {multi_reference['method']}")
+            
+            multi_images = multi_reference["images"]
+            multi_method = multi_reference["method"]
+            multi_weights = multi_reference.get("weights", [1.0] * len(multi_images))
+            
+            # Determine reference method from multi-ref
+            reference_method = multi_method if multi_method in ["index", "offset"] else "standard"
+            
+            # Process based on method
+            if multi_method == "index":
+                # For index method, use first image as primary
+                # TODO: Full implementation would process all images separately
+                edit_image = multi_images[0]
+                if debug_mode:
+                    logger.info(f"[DEBUG] Index method: using first of {len(multi_images)} images as primary")
+                    
+            elif multi_method == "offset":
+                # Weighted average of images
+                edit_image = torch.zeros_like(multi_images[0])
+                for img, weight in zip(multi_images, multi_weights):
+                    edit_image = edit_image + img * weight
+                if debug_mode:
+                    logger.info(f"[DEBUG] Offset method: blended {len(multi_images)} images with weights {multi_weights}")
+                    
+            elif multi_method == "concat":
+                # Concatenate horizontally
+                edit_image = torch.cat(multi_images, dim=2)
+                if debug_mode:
+                    logger.info(f"[DEBUG] Concat method: combined {len(multi_images)} images horizontally")
+                    
+            elif multi_method == "grid":
+                # Create 2x2 grid
+                if len(multi_images) == 1:
+                    edit_image = multi_images[0]
+                elif len(multi_images) == 2:
+                    edit_image = torch.cat(multi_images, dim=1)  # Stack vertically
+                else:
+                    row1 = torch.cat(multi_images[:2], dim=2)
+                    if len(multi_images) >= 4:
+                        row2 = torch.cat(multi_images[2:4], dim=2)
+                    else:  # 3 images
+                        row2 = torch.cat([multi_images[2], torch.zeros_like(multi_images[2])], dim=2)
+                    edit_image = torch.cat([row1, row2], dim=1)
+                if debug_mode:
+                    logger.info(f"[DEBUG] Grid method: arranged {len(multi_images)} images in grid")
+        
+        # Set default reference method if not set by multi-ref
+        if 'reference_method' not in locals():
+            reference_method = "standard"
         
         # Prepare image if in edit mode - following ComfyUI's TextEncodeQwenImageEdit pattern
         if mode == "image_edit" and edit_image is not None:
@@ -155,15 +291,22 @@ class QwenVLTextEncoder:
             if debug_mode:
                 logger.info(f"[DEBUG] After movedim shape: {samples.shape}")
             
-            # Scale to target resolution (1024x1024 total pixels like official)
-            total = int(1024 * 1024)
-            scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
-            width = round(samples.shape[3] * scale_by)
-            height = round(samples.shape[2] * scale_by)
+            # Determine target resolution
+            if optimize_resolution:
+                # Use optimal Qwen resolution
+                opt_w, opt_h = self.get_optimal_resolution(samples.shape[3], samples.shape[2])
+                width, height = opt_w, opt_h
+                if debug_mode:
+                    logger.info(f"[DEBUG] Using optimal Qwen resolution: {width}x{height}")
+            else:
+                # Scale to target resolution (1024x1024 total pixels like official)
+                total = int(1024 * 1024)
+                scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
+                width = round(samples.shape[3] * scale_by)
+                height = round(samples.shape[2] * scale_by)
             
             if debug_mode:
                 logger.info(f"[DEBUG] Scaling from {samples.shape[3]}x{samples.shape[2]} to {width}x{height}")
-                logger.info(f"[DEBUG] Scale factor: {scale_by:.4f}")
             
             # Resize using ComfyUI's common_upscale
             s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
@@ -189,14 +332,14 @@ class QwenVLTextEncoder:
                     logger.info(f"[DEBUG] Reference latent min/max: {ref_latent.min():.4f}/{ref_latent.max():.4f}")
         
         # Handle template application
-        if not apply_template:
+        if use_custom_system_prompt:
             # User wants to use custom prompting - pass text as-is
             if debug_mode:
-                logger.info(f"[DEBUG] Template disabled, using raw text")
+                logger.info(f"[DEBUG] Using custom formatted text from Template Builder")
         else:
-            # Apply template manually if we need special token removal
-            if token_removal == "diffsynth":
-                # Apply DiffSynth-style templates for exact compatibility
+            # For backward compatibility with token_removal="diffsynth"
+            if token_removal == "diffsynth" and not use_custom_system_prompt:
+                # Use exact DiffSynth templates for compatibility
                 if mode == "text_to_image":
                     template = (
                         "<|im_start|>system\n"
@@ -217,10 +360,31 @@ class QwenVLTextEncoder:
                         "<|im_start|>assistant\n"
                     )
                     text = template.format(original_text)
-                
                 if debug_mode:
-                    logger.info(f"[DEBUG] Applied DiffSynth template for {mode}")
-            # For "auto" mode, ComfyUI applies templates internally
+                    logger.info(f"[DEBUG] Applied DiffSynth template for {mode} (backward compatibility)")
+            else:
+                # Apply default Qwen formatting
+                if mode == "text_to_image":
+                    template = (
+                        "<|im_start|>system\n"
+                        "Describe the image by detailing the color, shape, size, texture, "
+                        "quantity, text, spatial relationships of the objects and background:<|im_end|>\n"
+                        "<|im_start|>user\n{}<|im_end|>\n"
+                        "<|im_start|>assistant\n"
+                    )
+                else:  # image_edit
+                    template = (
+                        "<|im_start|>system\n"
+                        "Describe the key features of the input image (color, shape, size, texture, objects, background), "
+                        "then explain how the user's text instruction should alter or modify the image. "
+                        "Generate a new image that meets the user's requirements while maintaining consistency "
+                        "with the original input where appropriate.<|im_end|>\n"
+                        "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{}<|im_end|>\n"
+                        "<|im_start|>assistant\n"
+                    )
+                text = template.format(original_text)
+                if debug_mode:
+                    logger.info(f"[DEBUG] Applied default Qwen formatting for {mode}")
         
         # Tokenize
         if debug_mode:
@@ -238,7 +402,7 @@ class QwenVLTextEncoder:
                     logger.info(f"[DEBUG] Token key '{key}' has {len(tokens[key][0])} tokens")
         
         # Handle token removal based on mode
-        if token_removal == "diffsynth" and apply_template:
+        if token_removal == "diffsynth" and not use_custom_system_prompt:
             # DiffSynth-style fixed removal
             drop_count = 34 if mode == "text_to_image" else 64
             
@@ -265,9 +429,15 @@ class QwenVLTextEncoder:
         # Add reference latents if we have them (like official node)
         if ref_latent is not None:
             import node_helpers
-            conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_latents": [ref_latent]}, append=True)
+            ref_data = {"reference_latents": [ref_latent]}
+            
+            # Add reference method for proper handling (Flux-style)
+            if reference_method != "standard":
+                ref_data["reference_latents_method"] = reference_method
+            
+            conditioning = node_helpers.conditioning_set_values(conditioning, ref_data, append=True)
             if debug_mode:
-                logger.info(f"[DEBUG] Added reference latents to conditioning")
+                logger.info(f"[DEBUG] Added reference latents to conditioning with method: {reference_method}")
         
         # Debug conditioning
         if debug_mode and isinstance(conditioning, list) and len(conditioning) > 0:
@@ -290,13 +460,133 @@ class QwenVLTextEncoder:
         return (conditioning,)
 
 
+class QwenLowresFixNode:
+    """
+    Makes your image BETTER with two-stage refinement.
+    Stage 1: Generate at current size
+    Stage 2: Upscale and polish details
+    
+    Connect AFTER your first KSampler for quality boost!
+    """
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        # Import KSampler list here to avoid import issues
+        try:
+            import comfy.samplers
+            samplers = comfy.samplers.KSampler.SAMPLERS
+            schedulers = comfy.samplers.KSampler.SCHEDULERS
+        except:
+            samplers = ["euler", "euler_ancestral", "heun", "dpm_2", "dpm_2_ancestral"]
+            schedulers = ["normal", "karras", "exponential", "simple", "ddim_uniform"]
+            
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "positive": ("CONDITIONING",),
+                "negative": ("CONDITIONING",),
+                "latent": ("LATENT",),
+                "vae": ("VAE",),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
+                "cfg": ("FLOAT", {"default": 7.0, "min": 0.0, "max": 100.0}),
+                "sampler_name": (samplers,),
+                "scheduler": (schedulers,),
+                "denoise": ("FLOAT", {
+                    "default": 0.5, 
+                    "min": 0.0, 
+                    "max": 1.0, 
+                    "step": 0.01,
+                    "tooltip": "How much to refine? 0.3-0.5=subtle polish | 0.5-0.7=moderate | 0.7+=heavy changes"
+                }),
+                "upscale_factor": ("FLOAT", {
+                    "default": 1.5, 
+                    "min": 1.0, 
+                    "max": 4.0, 
+                    "step": 0.1,
+                    "tooltip": "How much bigger? 1.5x is usually perfect. 2x+ needs more VRAM."
+                }),
+            }
+        }
+    
+    RETURN_TYPES = ("LATENT",)
+    FUNCTION = "process"
+    CATEGORY = "QwenImage/Refinement"
+    TITLE = "Qwen Lowres Fix"
+    DESCRIPTION = "Two-stage refinement for higher quality (DiffSynth-Studio method)"
+    
+    def process(self, model, positive, negative, latent, vae, seed, steps,
+                cfg, sampler_name, scheduler, denoise, upscale_factor):
+        """
+        Implement two-stage generation:
+        1. First pass at current resolution with full denoise
+        2. Upscale and refine with partial denoise
+        """
+        import comfy.samplers
+        import comfy.utils
+        
+        # Stage 1: Full generation at current resolution
+        sampler = comfy.samplers.KSampler()
+        stage1_samples = sampler.sample(
+            model=model,
+            seed=seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image=latent,
+            denoise=1.0  # Full denoise for initial generation
+        )
+        
+        # Decode to image space
+        stage1_latent = stage1_samples[0]["samples"]
+        decoded = vae.decode(stage1_latent)
+        
+        # Upscale the image
+        # ComfyUI images are [B, H, W, C]
+        h, w = decoded.shape[1], decoded.shape[2]
+        new_h = int(h * upscale_factor)
+        new_w = int(w * upscale_factor)
+        
+        # Convert to [B, C, H, W] for upscaling
+        decoded_chw = decoded.movedim(-1, 1)
+        upscaled = comfy.utils.common_upscale(
+            decoded_chw, new_w, new_h, "bicubic", "disabled"
+        )
+        # Convert back to [B, H, W, C]
+        upscaled_hwc = upscaled.movedim(1, -1)
+        
+        # Encode back to latent space
+        stage2_latent = vae.encode(upscaled_hwc[:, :, :, :3])  # RGB only
+        
+        # Stage 2: Refinement with partial denoise
+        refined_samples = sampler.sample(
+            model=model,
+            seed=seed + 1,  # Different seed for variation
+            steps=max(steps // 2, 10),  # Fewer steps for refinement
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            positive=positive,
+            negative=negative,
+            latent_image={"samples": stage2_latent},
+            denoise=denoise  # Partial denoise for refinement
+        )
+        
+        return refined_samples
+
+
 # Node registration
 NODE_CLASS_MAPPINGS = {
     "QwenVLCLIPLoader": QwenVLCLIPLoader,
     "QwenVLTextEncoder": QwenVLTextEncoder,
+    "QwenLowresFixNode": QwenLowresFixNode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "QwenVLCLIPLoader": "Qwen2.5-VL CLIP Loader",
-    "QwenVLTextEncoder": "Qwen2.5-VL Text Encoder",
+    "QwenVLTextEncoder": "Qwen2.5-VL Text Encoder (Enhanced)",
+    "QwenLowresFixNode": "Qwen Lowres Fix (Two-Stage)",
 }

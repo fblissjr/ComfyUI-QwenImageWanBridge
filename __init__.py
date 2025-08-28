@@ -97,6 +97,55 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load template V2 nodes: {e}")
 
+# Qwen to Wan Bridge Nodes
+try:
+    from .nodes.qwen_wan_keyframe_editor import (
+        QwenWANKeyframeEditor,
+        QwenWANKeyframeExtractor
+    )
+
+    NODE_CLASS_MAPPINGS["QwenWANKeyframeEditor"] = QwenWANKeyframeEditor
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANKeyframeEditor"] = "Qwen-WAN Keyframe Editor"
+    
+    NODE_CLASS_MAPPINGS["QwenWANKeyframeExtractor"] = QwenWANKeyframeExtractor
+    NODE_DISPLAY_NAME_MAPPINGS["QwenWANKeyframeExtractor"] = "Extract Keyframes for Editing"
+    
+    print("[QwenImageWanBridge] Loaded Qwen-WAN Bridge nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Qwen-WAN Bridge nodes: {e}")
+
+# Minimal Keyframe V2V nodes (Technical Parameters)
+try:
+    from .nodes.minimal_keyframe_v2v import (
+        MinimalKeyframeV2V,
+        DenoiseCurveVisualizer,
+        LatentStatisticsMonitor
+    )
+    
+    NODE_CLASS_MAPPINGS["MinimalKeyframeV2V"] = MinimalKeyframeV2V
+    NODE_DISPLAY_NAME_MAPPINGS["MinimalKeyframeV2V"] = "Minimal Keyframe V2V (Technical)"
+    
+    NODE_CLASS_MAPPINGS["DenoiseCurveVisualizer"] = DenoiseCurveVisualizer
+    NODE_DISPLAY_NAME_MAPPINGS["DenoiseCurveVisualizer"] = "Visualize Denoise Schedule"
+    
+    NODE_CLASS_MAPPINGS["LatentStatisticsMonitor"] = LatentStatisticsMonitor
+    NODE_DISPLAY_NAME_MAPPINGS["LatentStatisticsMonitor"] = "Monitor Latent Statistics"
+    
+    print("[QwenImageWanBridge] Loaded Minimal Keyframe V2V nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Minimal Keyframe V2V nodes: {e}")
+
+# Multi-Reference nodes
+try:
+    from .nodes.qwen_multi_reference import QwenMultiReferenceHandler
+    
+    NODE_CLASS_MAPPINGS["QwenMultiReferenceHandler"] = QwenMultiReferenceHandler
+    NODE_DISPLAY_NAME_MAPPINGS["QwenMultiReferenceHandler"] = "Multi-Reference Handler"
+    
+    print("[QwenImageWanBridge] Loaded Multi-Reference handler")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Multi-Reference handler: {e}")
+
 # ============================================================================
 # EXPORTS
 # ============================================================================

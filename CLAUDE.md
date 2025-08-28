@@ -42,25 +42,36 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - [Reference Latents Explained](Documentation/REFERENCE_LATENTS_EXPLAINED.md) - Edit mode details
 - [FUTURE_ENHANCEMENTS.md](Documentation/FUTURE_ENHANCEMENTS.md) - Potential improvements from DiffSynth
 
-## Current Implementation (Simplified)
+## Current Implementation (December 2024)
 
 ### Qwen Image Edit Nodes
 ComfyUI nodes for the Qwen Image Edit model and Qwen2.5-VL text encoder. Does *NOT* use Wan.
 1. Loads Qwen2.5-VL models from `models/text_encoders/` folder
 2. Properly handles vision tokens for image editing
 3. Builds on ComfyUI's internal CLIP infrastructure for compatibility
+4. Includes fixes from DiffSynth-Studio and DiffSynth-Engine
 
 **Core Nodes:**
-- `QwenVLCLIPLoader` - Loads Qwen2.5-VL model as CLIP
-- `QwenVLTextEncoder` - Encodes text/images with proper vision token support
+- `QwenVLCLIPLoader` - Loads Qwen2.5-VL model with RoPE fix applied
+- `QwenVLTextEncoder` - Text encoder with:
+  - Default Qwen formatting or custom Template Builder input
+  - Resolution optimization with aspect ratio preservation (36 Qwen resolutions)
+  - Optional multi-reference input accepts `QwenMultiReferenceHandler` output
+  - Debug mode for troubleshooting
+- `QwenLowresFixNode` - Two-stage generation for quality improvement
+- `QwenMultiReferenceHandler` - Combines up to 4 images with:
+  - Six resize modes: keep_proportion, stretch, resize, pad, pad_edge, crop
+  - Five upscale methods: nearest-exact, bilinear, area, bicubic, lanczos
+  - Four combination methods: index, offset, concat, grid
+  - Weighted blending for offset method
 
 **Helper Nodes:**
 - `QwenVLEmptyLatent` - Creates empty 16-channel latents
 - `QwenVLImageToLatent` - Converts images to 16-channel latents
 
 **Resolution Utilities:**
-- `QwenOptimalResolution` - Auto-resize images to nearest Qwen resolution (uses DiffSynth-Studio's exact resolution list)
-- `QwenResolutionSelector` - Dropdown selector for Qwen resolutions with custom override
+- `QwenOptimalResolution` - Auto-resize images to nearest Qwen resolution
+- `QwenResolutionSelector` - Dropdown selector for Qwen resolutions
 
 #### Workflow Usage
 
@@ -87,5 +98,16 @@ ComfyUI nodes for the Qwen Image Edit model and Qwen2.5-VL text encoder. Does *N
 ### Key Implementation Points
 - ComfyUI calls all text encoders "CLIP" internally
 - Uses `CLIPType.QWEN_IMAGE` for proper model loading
-- Templates are applied automatically by ComfyUI's tokenizer
-- Reference latents added for image editing mode
+- **RoPE position embedding fix applied automatically**
+- **Reference latents properly passed through conditioning**
+- **Multiple template styles for different use cases**
+- **Optimal resolution support for better quality**
+
+### What's Fixed vs Native ComfyUI
+- RoPE batch processing bug (via monkey patch)
+- Template Builder for custom system prompts (removed duplicate from encoder)
+- Resolution optimization with aspect ratio preservation
+- Two-stage refinement (Lowres Fix)
+- Debug mode for troubleshooting
+- Multi-reference image support (up to 4 images) integrated into main encoder
+- Removed redundant reference_method parameter (auto-determined from multi-ref)

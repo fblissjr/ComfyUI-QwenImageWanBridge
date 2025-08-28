@@ -1,1 +1,0 @@
-# Single node module - see qwen_wan_latent_bridge.py
