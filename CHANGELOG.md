@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.2 (December 28, 2024)
+
+### Added
+- Documentation for multi-reference spatial ordering (MULTI_REFERENCE_SPATIAL_ORDERING.md)
+  - Explains how Qwen interprets concatenated images spatially
+  - Provides clear guidance on prompt phrasing
+  - Visual layout references for concat and grid methods
+
+### Changed
+- Improved multi-reference handler tooltips
+  - Clarified that image1 appears LEFT in concat, TOP-LEFT in grid
+  - Updated reference_method tooltip to recommend index for "first/second" prompts
+  - Made spatial positioning explicit in all image input tooltips
+- Updated SCALE_IMAGE_VS_OPTIMIZE_RESOLUTION.md
+  - Explains why Scale Image node is now redundant
+  - Migration guide for existing workflows
+- Enhanced REFERENCE_METHODS_EXPLAINED.md
+  - Clarified limitations of current single-image implementation
+  - Added future multi-reference possibilities
+
+### Fixed
+- Documentation clarity around parameter defaults
+  - use_custom_system_prompt defaults to False (applies default formatting)
+  - optimize_resolution defaults to False (standard 1M pixel scaling)
+  - upscale_method defaults to nearest-exact (preserves pixels)
+
 ## v1.1
 
 ### Added

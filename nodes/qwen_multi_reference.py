@@ -22,14 +22,14 @@ class QwenMultiReferenceHandler:
             "required": {
                 "reference_method": (["index", "offset", "concat", "grid"], {
                     "default": "index",
-                    "tooltip": "index=sequential | offset=averaged | concat=side-by-side | grid=2x2 layout"
+                    "tooltip": "index=keep separate (best for 'first/second' prompts) | offset=blend | concat=side-by-side (left=image1) | grid=2x2"
                 }),
             },
             "optional": {
-                "image1": ("IMAGE", {"tooltip": "Primary reference image"}),
-                "image2": ("IMAGE", {"tooltip": "Secondary reference (e.g., style)"}),
-                "image3": ("IMAGE", {"tooltip": "Third reference (optional)"}),
-                "image4": ("IMAGE", {"tooltip": "Fourth reference (optional)"}),
+                "image1": ("IMAGE", {"tooltip": "First image (appears LEFT in concat, TOP-LEFT in grid)"}),
+                "image2": ("IMAGE", {"tooltip": "Second image (appears RIGHT in concat, TOP-RIGHT in grid)"}),
+                "image3": ("IMAGE", {"tooltip": "Third image (appears BOTTOM-LEFT in grid)"}),
+                "image4": ("IMAGE", {"tooltip": "Fourth image (appears BOTTOM-RIGHT in grid)"}),
                 "weights": ("STRING", {
                     "default": "1.0,1.0,1.0,1.0",
                     "tooltip": "Weights for each image (comma-separated, used in offset mode)"
