@@ -59,43 +59,22 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load resolution nodes: {e}")
 
-# Template builder nodes for custom prompting
-try:
-    from .nodes.qwen_template_builder import (
-        QwenTemplateBuilder,
-        QwenTokenInfo,
-        QwenPromptFormatter
-    )
-
-    NODE_CLASS_MAPPINGS["QwenTemplateBuilder"] = QwenTemplateBuilder
-    NODE_DISPLAY_NAME_MAPPINGS["QwenTemplateBuilder"] = "Qwen Template Builder"
-
-    NODE_CLASS_MAPPINGS["QwenTokenInfo"] = QwenTokenInfo
-    NODE_DISPLAY_NAME_MAPPINGS["QwenTokenInfo"] = "Qwen Token Reference"
-
-    NODE_CLASS_MAPPINGS["QwenPromptFormatter"] = QwenPromptFormatter
-    NODE_DISPLAY_NAME_MAPPINGS["QwenPromptFormatter"] = "Qwen Prompt Formatter"
-
-    print("[QwenImageWanBridge] Loaded template builder nodes")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load template nodes: {e}")
-
 # Simplified template builder V2
 try:
-    from .nodes.qwen_template_builder_v2 import (
+    from .nodes.qwen_template_builder import (
         QwenTemplateBuilderV2,
         QwenTemplateConnector
     )
 
-    NODE_CLASS_MAPPINGS["QwenTemplateBuilderV2"] = QwenTemplateBuilderV2
-    NODE_DISPLAY_NAME_MAPPINGS["QwenTemplateBuilderV2"] = "Qwen Template Builder V2"
+    NODE_CLASS_MAPPINGS["QwenTemplateBuilder"] = QwenTemplateBuilderV2
+    NODE_DISPLAY_NAME_MAPPINGS["QwenTemplateBuilder"] = "Qwen Template Builder"
 
     NODE_CLASS_MAPPINGS["QwenTemplateConnector"] = QwenTemplateConnector
     NODE_DISPLAY_NAME_MAPPINGS["QwenTemplateConnector"] = "Qwen Template Connector"
 
-    print("[QwenImageWanBridge] Loaded template builder V2 nodes")
+    print("[QwenImageWanBridge] Loaded template builder nodes")
 except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load template V2 nodes: {e}")
+    print(f"[QwenImageWanBridge] Failed to load template nodes: {e}")
 
 # Qwen to Wan Bridge Nodes
 try:
@@ -106,10 +85,10 @@ try:
 
     NODE_CLASS_MAPPINGS["QwenWANKeyframeEditor"] = QwenWANKeyframeEditor
     NODE_DISPLAY_NAME_MAPPINGS["QwenWANKeyframeEditor"] = "Qwen-WAN Keyframe Editor"
-    
+
     NODE_CLASS_MAPPINGS["QwenWANKeyframeExtractor"] = QwenWANKeyframeExtractor
     NODE_DISPLAY_NAME_MAPPINGS["QwenWANKeyframeExtractor"] = "Extract Keyframes for Editing"
-    
+
     print("[QwenImageWanBridge] Loaded Qwen-WAN Bridge nodes")
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Qwen-WAN Bridge nodes: {e}")
@@ -121,16 +100,16 @@ try:
         DenoiseCurveVisualizer,
         LatentStatisticsMonitor
     )
-    
+
     NODE_CLASS_MAPPINGS["MinimalKeyframeV2V"] = MinimalKeyframeV2V
     NODE_DISPLAY_NAME_MAPPINGS["MinimalKeyframeV2V"] = "Minimal Keyframe V2V (Technical)"
-    
+
     NODE_CLASS_MAPPINGS["DenoiseCurveVisualizer"] = DenoiseCurveVisualizer
     NODE_DISPLAY_NAME_MAPPINGS["DenoiseCurveVisualizer"] = "Visualize Denoise Schedule"
-    
+
     NODE_CLASS_MAPPINGS["LatentStatisticsMonitor"] = LatentStatisticsMonitor
     NODE_DISPLAY_NAME_MAPPINGS["LatentStatisticsMonitor"] = "Monitor Latent Statistics"
-    
+
     print("[QwenImageWanBridge] Loaded Minimal Keyframe V2V nodes")
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Minimal Keyframe V2V nodes: {e}")
@@ -138,13 +117,26 @@ except Exception as e:
 # Multi-Reference nodes
 try:
     from .nodes.qwen_multi_reference import QwenMultiReferenceHandler
-    
+
     NODE_CLASS_MAPPINGS["QwenMultiReferenceHandler"] = QwenMultiReferenceHandler
     NODE_DISPLAY_NAME_MAPPINGS["QwenMultiReferenceHandler"] = "Multi-Reference Handler"
-    
+
     print("[QwenImageWanBridge] Loaded Multi-Reference handler")
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Multi-Reference handler: {e}")
+
+# Note: Experimental multi-frame nodes have been archived
+# Use Multi-Reference Handler with "index" mode for multi-frame support
+
+# ============================================================================
+# PATCHES - Apply monkey patches for multi-frame support
+# ============================================================================
+
+try:
+    from .nodes import qwen_encoder_patch
+    print("[QwenImageWanBridge] Applied encoder patches for multi-frame support")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Could not apply patches: {e}")
 
 # ============================================================================
 # EXPORTS
