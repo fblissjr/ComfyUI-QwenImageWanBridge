@@ -119,19 +119,31 @@ class QwenVLCLIPLoader:
 
 class QwenVLTextEncoder:
     """
-    Enhanced text encoder for Qwen2.5-VL with all DiffSynth fixes
+    Text encoder for Qwen2.5-VL with all DiffSynth fixes
     Uses ComfyUI's internal CLIP infrastructure for compatibility
     """
 
-    # DiffSynth-Studio's exact resolution list for Qwen
+    # Resolution list combining DiffSynth-Studio resolutions with modern aspect ratios
     QWEN_RESOLUTIONS = [
-        (256, 256), (256, 512), (256, 768), (256, 1024), (256, 1280), (256, 1536), (256, 1792),
-        (512, 256), (512, 512), (512, 768), (512, 1024), (512, 1280), (512, 1536), (512, 1792),
-        (768, 256), (768, 512), (768, 768), (768, 1024), (768, 1280), (768, 1536),
-        (1024, 256), (1024, 512), (1024, 768), (1024, 1024), (1024, 1280), (1024, 1536),
-        (1280, 256), (1280, 512), (1280, 768), (1280, 1024), (1280, 1280),
-        (1536, 256), (1536, 512), (1536, 768), (1536, 1024),
-        (1792, 256), (1792, 512)
+        # Square resolutions
+        (1024, 1024), (1328, 1328),
+        
+        # Common landscape ratios (optimized for quality)
+        (1328, 800), (1456, 720), (1584, 1056), (1920, 1080),  # 16:9
+        (2048, 1024), (1344, 768), (1536, 640),
+        
+        # Common portrait ratios
+        (800, 1328), (720, 1456), (1056, 1584), (1080, 1920),  # 9:16
+        (1024, 2048), (768, 1344), (640, 1536),
+        
+        # Original DiffSynth-Studio resolutions for compatibility
+        (672, 1568), (688, 1504), (752, 1392), (832, 1248),
+        (880, 1184), (944, 1104), (1104, 944), (1184, 880),
+        (1248, 832), (1392, 752), (1504, 688), (1568, 672),
+        
+        # Smaller resolutions for low VRAM
+        (512, 512), (768, 768), (512, 768), (768, 512),
+        (1024, 768), (768, 1024), (1024, 512), (512, 1024)
     ]
 
     @classmethod
@@ -171,10 +183,6 @@ class QwenVLTextEncoder:
                     "default": False,
                     "tooltip": "Shows detailed processing info in console. Turn on if things aren't working."
                 }),
-                "optimize_resolution": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "ON: Snap to best Qwen resolution (RECOMMENDED) | OFF: Scale to 1M pixels"
-                }),
             }
         }
 
@@ -193,57 +201,27 @@ KEY DECISION: What goes into KSampler.latent_image?
 ALWAYS connect VAE to this node for reference latents!
 """
 
-    def get_optimal_resolution(self, width: int, height: int) -> Tuple[int, int]:
-        """Find the nearest Qwen-supported resolution preserving aspect ratio"""
-        target_pixels = width * height
-        aspect_ratio = width / height
 
-        best_res = min(
-            self.QWEN_RESOLUTIONS,
-            key=lambda r: abs(r[0] * r[1] - target_pixels) * 0.5 +
-                         abs((r[0] / r[1]) - aspect_ratio) * target_pixels * 0.5
-        )
-
-        return best_res
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None, context_image: Optional[torch.Tensor] = None,
               vae=None, use_custom_system_prompt: bool = False,
-              token_removal: str = "auto", debug_mode: bool = False,
-              optimize_resolution: bool = True) -> Tuple[Any]:
+              token_removal: str = "auto", debug_mode: bool = False) -> Tuple[Any]:
 
         images_for_tokenizer = []
         ref_latent = None
         context_latent = None
         original_text = text
+        
+        # No resolution controls needed - images will be processed optimally
 
         # Prepare edit_image if in edit mode
         if mode == "image_edit" and edit_image is not None:
-            import math
-            import comfy.utils
-
             if debug_mode:
                 logger.info(f"[Encoder] Input image/canvas shape: {edit_image.shape}")
 
-            samples = edit_image.movedim(-1, 1)
-
-            # Determine target resolution
-            if optimize_resolution:
-                opt_w, opt_h = self.get_optimal_resolution(samples.shape[3], samples.shape[2])
-                width, height = opt_w, opt_h
-                if debug_mode:
-                    logger.info(f"[Encoder] Using optimal Qwen resolution: {width}x{height}")
-            else:
-                total = int(1024 * 1024)
-                scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
-                width = round(samples.shape[3] * scale_by)
-                height = round(samples.shape[2] * scale_by)
-                if debug_mode:
-                    logger.info(f"[Encoder] Using legacy 1MP area scaling: {width}x{height}")
-
-            s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
-            image = s.movedim(1, -1)
-
+            # Use input image as-is for vision processing (no resizing needed)
+            image = edit_image
             images_for_tokenizer = [image[:, :, :, :3]]
 
             if vae is not None:
@@ -306,22 +284,11 @@ ALWAYS connect VAE to this node for reference latents!
 
         # Process context_image separately (ControlNet-style)
         if context_image is not None and vae is not None:
-            import comfy.utils
             if debug_mode:
                 logger.info(f"[Encoder] Processing context image: {context_image.shape}")
 
-            samples = context_image.movedim(-1, 1)
-
-            # Use same resolution logic as edit_image for consistency
-            if 'width' in locals() and 'height' in locals():
-                context_w, context_h = width, height
-            else: # Fallback if not in edit mode
-                context_w, context_h = self.get_optimal_resolution(samples.shape[3], samples.shape[2])
-
-            s = comfy.utils.common_upscale(samples, context_w, context_h, "area", "disabled")
-            context_img_resized = s.movedim(1, -1)
-
-            context_latent = vae.encode(context_img_resized[:, :, :, :3])
+            # Use context image as-is (no resizing needed)
+            context_latent = vae.encode(context_image[:, :, :, :3])
             if debug_mode:
                 logger.info(f"[Encoder] Encoded context_image latent shape: {context_latent.shape}")
 

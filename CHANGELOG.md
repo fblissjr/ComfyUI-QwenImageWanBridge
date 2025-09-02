@@ -1,6 +1,31 @@
 # Changelog
 
-## v1.2 (December 28, 2024)
+## v1.3
+
+### Added
+- Resize modes for `QwenMultiReferenceHandler` to prevent image distortion
+  - `match_first`: resize all to image1 dimensions (original behavior)
+  - `common_height`: same height, preserve aspect ratios (recommended for concat)
+  - `common_width`: same width, preserve aspect ratios
+  - `largest_dims`: use largest dimensions found across images
+
+### Changed
+- Simplified `QwenVLTextEncoder` by removing unnecessary resolution interface
+  - Removed confusing resolution controls that didn't affect generation
+  - Node now focuses on text encoding and vision processing
+  - Returns clean `(conditioning,)` output like standard ComfyUI text encoders
+  - Resolution controlled by proper nodes (Empty Latent, Multi-Reference Handler)
+
+### Fixed
+- Multi-reference concat mode squishing images with different aspect ratios
+  - Added smart resize logic before concatenation
+  - Aspect ratio preservation prevents distortion
+  - Maintains backward compatibility with existing workflows
+- Grid mode tensor size mismatch when using aspect-preserving resize modes
+  - Grid now uses uniform dimensions to prevent concatenation errors
+  - Calculates average aspect ratio for balanced proportions
+
+## v1.2
 
 ### Added
 - Documentation for multi-reference spatial ordering (MULTI_REFERENCE_SPATIAL_ORDERING.md)
@@ -60,25 +85,3 @@
 - Improved parameter tooltips with plain English descriptions
 - Reference method tooltips now explain each option clearly
 - Removed redundant Scale Image node from workflows (optimizer handles this internally)
-
-### Fixed
-- RoPE (Rotary Position Embeddings) batch processing bug
-  - Applied monkey patch from DiffSynth-Studio
-  - Fixes issues with different image sizes in batch
-- Resolution optimizer selecting wrong aspect ratios
-  - Now considers both pixel count and aspect ratio
-- Parameter order breaking backward compatibility
-  - Moved new parameters to end of function signature
-- Double image scaling causing quality degradation
-  - Removed redundant scaling in workflows
-
-### Technical Details
-- Integrated fixes from DiffSynth-Studio and DiffSynth-Engine
-- Maintained compatibility with ComfyUI's CLIP infrastructure
-- Reference latents passed through conditioning metadata
-- Support for 36 official Qwen resolutions
-- 16-channel VAE latent support throughout
-
-### Documentation
-- Created REFERENCE_METHODS_EXPLAINED.md for multi-reference usage
-- Added decision guides for common use cases

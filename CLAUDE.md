@@ -65,16 +65,18 @@ ComfyUI nodes for the Qwen Image Edit model and Qwen2.5-VL text encoder. Does *N
 - `QwenVLCLIPLoader` - Loads Qwen2.5-VL model with RoPE fix applied
 - `QwenVLTextEncoder` - Text encoder with:
   - Default Qwen formatting or custom Template Builder input
-  - Resolution optimization with aspect ratio preservation (36 Qwen resolutions)
-  - Optional multi-reference input accepts `QwenMultiReferenceHandler` output
-  - Context image support for ControlNet-style conditioning
+  - Resolution control: dropdown (36 Qwen resolutions), custom (exact dimensions)
+  - Optional edit_image input for vision-based editing
+  - Optional context_image input for ControlNet-style conditioning (separate from vision processing)
+  - Width/height outputs for downstream workflow integration
   - Debug mode for troubleshooting
 - `QwenLowresFixNode` - Two-stage generation for quality improvement
-- `QwenMultiReferenceHandler` - Combines up to 4 images with:
-  - Six resize modes: keep_proportion, stretch, resize, pad, pad_edge, crop
+- `QwenMultiReferenceHandler` - Combines up to 4 images with aspect ratio preservation:
+  - Four resize modes: match_first, common_height, common_width, largest_dims
   - Five upscale methods: nearest-exact, bilinear, area, bicubic, lanczos
   - Four combination methods: index, offset, concat, grid
   - Weighted blending for offset method
+  - Smart resizing prevents distortion in concat mode
 
 **Helper Nodes:**
 - `QwenVLEmptyLatent` - Creates empty 16-channel latents
@@ -119,17 +121,24 @@ ComfyUI nodes for the Qwen Image Edit model and Qwen2.5-VL text encoder. Does *N
 - Vision processing duplication bug (2x speedup via patch)
 - Template token dropping standardized (consistency with DiffSynth)
 - Template Builder for custom system prompts (removed duplicate from encoder)
-- Resolution optimization with aspect ratio preservation
+- Resolution optimization with improved aspect ratio matching
 - Two-stage refinement (Lowres Fix)
 - Debug mode for troubleshooting
-- Multi-reference image support (up to 4 images) with spatial positioning clarity
-- Context image support for ControlNet-style conditioning
+- Multi-reference image support with aspect ratio preservation
+- Context image support for ControlNet-style conditioning (separate from vision processing)
+- Width/height outputs from QwenVLTextEncoder for workflow integration
+- Simplified resolution interface (removed buggy auto mode, dropdown + custom only)
+- Fixed grid mode tensor mismatch in multi-reference handler
 
-### Phase 1 Complete (December 2024)
+### Phase 1 Complete (January 2025)
 - Fixed vision processing duplication (2x performance improvement)
 - Standardized template token dropping for consistency with DiffSynth
 - Added context_image support for ControlNet-style workflows
 - Clarified multi-reference spatial behavior vs temporal frames
+- Added width/height outputs to QwenVLTextEncoder
+- Simplified resolution interface (removed confusing auto mode, dropdown/custom only)
+- Fixed multi-reference concat distortion with aspect ratio preservation
+- Fixed grid mode tensor mismatch when using aspect-preserving resize modes
 
 ### Remaining Implementation Plan
 
