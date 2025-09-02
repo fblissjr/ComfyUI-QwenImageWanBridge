@@ -25,23 +25,6 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load encoder nodes: {e}")
 
-# Helper nodes for 16-channel latents
-try:
-    from .nodes.qwen_vl_text_encoder import (
-        QwenVLEmptyLatent,
-        QwenVLImageToLatent
-    )
-
-    NODE_CLASS_MAPPINGS["QwenVLEmptyLatent"] = QwenVLEmptyLatent
-    NODE_DISPLAY_NAME_MAPPINGS["QwenVLEmptyLatent"] = "Qwen Empty Latent (16ch)"
-
-    NODE_CLASS_MAPPINGS["QwenVLImageToLatent"] = QwenVLImageToLatent
-    NODE_DISPLAY_NAME_MAPPINGS["QwenVLImageToLatent"] = "Qwen Image to Latent (16ch)"
-
-    print("[QwenImageWanBridge] Loaded Qwen helper nodes")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Qwen helper nodes: {e}")
-
 # Resolution helper nodes
 try:
     from .nodes.qwen_resolution_helper import (
