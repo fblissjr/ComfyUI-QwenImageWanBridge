@@ -13,6 +13,21 @@ WEB_DIRECTORY = "./web"
 # CORE NODES - Qwen2.5-VL with proper vision support
 # ============================================================================
 
+# New unified transformers-based nodes (v2.0)
+try:
+    from .nodes.qwen_unified import QwenUnifiedLoader
+    NODE_CLASS_MAPPINGS["QwenUnifiedLoader"] = QwenUnifiedLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenUnifiedLoader"] = "Qwen2.5-VL Unified Loader"
+    
+    from .nodes.qwen_unified_encoder import QwenUnifiedTextEncoder
+    NODE_CLASS_MAPPINGS["QwenUnifiedTextEncoder"] = QwenUnifiedTextEncoder
+    NODE_DISPLAY_NAME_MAPPINGS["QwenUnifiedTextEncoder"] = "Qwen2.5-VL Unified Text Encoder"
+
+    print("[QwenImageWanBridge] Loaded Qwen2.5-VL unified nodes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load unified nodes: {e}")
+
+# ComfyUI CLIP-based nodes
 try:
     from .nodes.qwen_vl_encoder import QwenVLCLIPLoader, QwenVLTextEncoder
     NODE_CLASS_MAPPINGS["QwenVLCLIPLoader"] = QwenVLCLIPLoader
@@ -21,9 +36,9 @@ try:
     NODE_CLASS_MAPPINGS["QwenVLTextEncoder"] = QwenVLTextEncoder
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoder"] = "Qwen2.5-VL Text Encoder"
 
-    print("[QwenImageWanBridge] Loaded Qwen2.5-VL nodes using ComfyUI's CLIP")
+    print("[QwenImageWanBridge] Loaded CLIP-based nodes")
 except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load encoder nodes: {e}")
+    print(f"[QwenImageWanBridge] Failed to load CLIP encoder nodes: {e}")
 
 # Resolution helper nodes
 try:
@@ -45,11 +60,11 @@ except Exception as e:
 # Simplified template builder V2
 try:
     from .nodes.qwen_template_builder import (
-        QwenTemplateBuilderV2,
+        QwenTemplateBuilder,
         QwenTemplateConnector
     )
 
-    NODE_CLASS_MAPPINGS["QwenTemplateBuilder"] = QwenTemplateBuilderV2
+    NODE_CLASS_MAPPINGS["QwenTemplateBuilder"] = QwenTemplateBuilder
     NODE_DISPLAY_NAME_MAPPINGS["QwenTemplateBuilder"] = "Qwen Template Builder"
 
     NODE_CLASS_MAPPINGS["QwenTemplateConnector"] = QwenTemplateConnector
@@ -112,14 +127,11 @@ except Exception as e:
 # Use Multi-Reference Handler with "index" mode for multi-frame support
 
 # ============================================================================
-# PATCHES - Apply monkey patches for multi-frame support
+# PATCHES - Archived in v2.0
 # ============================================================================
 
-try:
-    from .nodes import qwen_encoder_patch
-    print("[QwenImageWanBridge] Applied encoder patches for multi-frame support")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Could not apply patches: {e}")
+# Note: Encoder patches archived in v2.0 - no longer needed with unified architecture
+print("[QwenImageWanBridge] Encoder patches not needed with unified transformers architecture")
 
 # ============================================================================
 # EXPORTS

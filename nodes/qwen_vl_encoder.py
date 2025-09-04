@@ -171,10 +171,6 @@ class QwenVLTextEncoder:
                 "vae": ("VAE", {
                     "tooltip": "ALWAYS connect VAE! Encodes images for guidance."
                 }),
-                "use_custom_system_prompt": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "ON: Text from Template Builder (already formatted) | OFF: Apply default Qwen formatting"
-                }),
                 "token_removal": (["auto", "diffsynth", "none"], {
                     "default": "auto",
                     "tooltip": "Keep 'auto' unless you know why you need others. Auto=smart, diffsynth=exact compatibility, none=keep all"
@@ -205,8 +201,7 @@ ALWAYS connect VAE to this node for reference latents!
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None, context_image: Optional[torch.Tensor] = None,
-              vae=None, use_custom_system_prompt: bool = False,
-              token_removal: str = "auto", debug_mode: bool = False) -> Tuple[Any]:
+              vae=None, token_removal: str = "auto", debug_mode: bool = False) -> Tuple[Any]:
 
         images_for_tokenizer = []
         ref_latent = None
@@ -229,55 +224,59 @@ ALWAYS connect VAE to this node for reference latents!
                 if debug_mode:
                     logger.info(f"[Encoder] Encoded edit_image reference latent shape: {ref_latent.shape}")
 
-        # Handle template application
-        if use_custom_system_prompt:
-            if debug_mode:
-                logger.info("[Encoder] Using custom formatted text from Template Builder")
-        else:
-            if mode == "text_to_image":
-                template = (
-                    "<|im_start|>system\n"
-                    "Describe the image by detailing the color, shape, size, texture, "
-                    "quantity, text, spatial relationships of the objects and background:<|im_end|>\n"
-                    "<|im_start|>user\n{}<|im_end|>\n"
-                    "<|im_start|>assistant\n"
-                )
-            else: # image_edit
-                template = (
-                    "<|im_start|>system\n"
-                    "Describe the key features of the input image (color, shape, size, texture, objects, background), "
-                    "then explain how the user's text instruction should alter or modify the image. "
-                    "Generate a new image that meets the user's requirements while maintaining consistency "
-                    "with the original input where appropriate.<|im_end|>\n"
-                    "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{}<|im_end|>\n"
-                    "<|im_start|>assistant\n"
-                )
-            text = template.format(original_text)
-            if debug_mode:
-                logger.info(f"[Encoder] Applied default Qwen formatting for {mode}")
+        # Text is expected to come pre-formatted from Template Builder
+        if debug_mode:
+            logger.info("[Encoder] Using pre-formatted text (from Template Builder or raw input)")
 
         # Tokenize
         if debug_mode:
-            logger.info(f"[Encoder] Tokenizing with text: '{text[:50]}...' and {len(images_for_tokenizer)} images")
+            logger.info(f"[Encoder] Tokenizing with text: '{text[:100]}...' and {len(images_for_tokenizer)} images")
+            logger.info(f"[Encoder] Full text being tokenized:\n{text}")
 
         # NOTE: The custom tokenizer logic for multi-frame has been removed, as the model
         # does not support it. The Canvas Composer node is the correct approach.
         tokens = clip.tokenize(text, images=images_for_tokenizer)
 
+        # Debug: Show original token counts
+        if debug_mode:
+            for key in tokens:
+                for i, token_list in enumerate(tokens.get(key, [])):
+                    logger.info(f"[Encoder] Original tokens[{key}][{i}] length: {len(token_list)}")
+
         # Handle token removal
-        if token_removal == "diffsynth" and not use_custom_system_prompt:
+        if token_removal == "diffsynth":
             drop_count = 34 if mode == "text_to_image" else 64
+            if debug_mode:
+                logger.info(f"[Encoder] Token removal mode: diffsynth (dropping first {drop_count} tokens)")
+            
             for key in tokens:
                 for i in range(len(tokens.get(key, []))):
                     token_list = tokens[key][i]
+                    original_length = len(token_list)
                     if len(token_list) > drop_count:
                         tokens[key][i] = token_list[drop_count:]
+                        if debug_mode:
+                            logger.info(f"[Encoder] tokens[{key}][{i}]: {original_length} -> {len(tokens[key][i])} tokens (dropped {drop_count})")
+                    else:
+                        if debug_mode:
+                            logger.info(f"[Encoder] tokens[{key}][{i}]: {original_length} tokens (too short to drop {drop_count})")
+
+        elif token_removal == "auto":
             if debug_mode:
-                logger.info(f"[Encoder] Dropped first {drop_count} tokens (DiffSynth style)")
+                logger.info("[Encoder] Token removal mode: auto (smart removal)")
+            # Auto mode: assume pre-formatted text, no token removal needed
+            if debug_mode:
+                logger.info("[Encoder] Auto mode: Pre-formatted text, no token removal needed")
 
         elif token_removal == "none":
             if debug_mode:
-                logger.info("[Encoder] Keeping all tokens (no removal)")
+                logger.info("[Encoder] Token removal mode: none (keeping all tokens)")
+
+        # Debug: Show final token counts
+        if debug_mode:
+            for key in tokens:
+                for i, token_list in enumerate(tokens.get(key, [])):
+                    logger.info(f"[Encoder] Final tokens[{key}][{i}] length: {len(token_list)}")
 
         # Encode tokens using ComfyUI's method
         conditioning = clip.encode_from_tokens_scheduled(tokens)
