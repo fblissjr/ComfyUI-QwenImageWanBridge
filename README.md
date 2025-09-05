@@ -2,7 +2,33 @@
 
 # ComfyUI Qwen Image Edit Nodes
 
-ComfyUI nodes for Qwen-Image-Edit for system prompt modifications, with multi-reference support and other fun features.
+ComfyUI nodes for Qwen-Image-Edit for precise image editing via a visual spatial editor, system prompt modifications, multi-reference support, and other fun features.
+
+**[Changelog](CHANGELOG.md)**
+
+## Spatial Token Editor & Reference
+- New: a visual spatial token editor for bounding boxes, shapes, and point object references, with labels. Expect quirks and issues here, it's EOD and a major work in progress, but it should at least be a start.
+
+Qwen-Image-Edit includes precision control tokens for surgical editing:
+
+- **`<|object_ref_start|>...<|object_ref_end|>`** - Reference specific objects by description
+- **`<|box_start|>x1,y1,x2,y2<|box_end|>`** - Target rectangular regions (normalized 0-1 coordinates)
+- **`<|quad_start|>x1,y1,x2,y2,x3,y3,x4,y4<|quad_end|>`** - Define complex quadrilateral areas
+
+These bounding box coordinates represent **normalized rectangular regions** in an image, using the format `(x1, y1, x2, y2)` where all values range from 0.0 to 1.0.
+
+**Coordinate system:**
+- `(0.0, 0.0)` = top-left corner of the image
+- `(1.0, 1.0)` = bottom-right corner of the image
+- `x1, y1` = top-left corner of the bounding box
+- `x2, y2` = bottom-right corner of the bounding box
+
+**Examples from above**
+- `0.2,0.3,0.8,0.7` = rectangle from 20% right, 30% down → 80% right, 70% down (center region)
+- `0.0,0.0,0.5,1.0` = rectangle from top-left → 50% width, full height (left half of image)
+- `0.1,0.0,0.9,0.4` = rectangle from 10% right, top edge → 90% right, 40% down (upper banner area)
+
+*[Examples and usage patterns →](#spatial-token-examples)*
 
 ## Multi-Reference Methods
 
@@ -11,16 +37,6 @@ The `QwenMultiReferenceHandler` offers three composition methods for combining i
 - **concat**: Side-by-side layout for character/object comparison. Best with `common_height` resize for aspect preservation.
 - **grid**: 2x2 layout for balanced influence of all references. Uses uniform dimensions to prevent tensor mismatches.
 - **offset**: Weighted blending creates single composite. Perfect for style transfer with adjustable influence via weights (e.g., `1.0,1.0,0.5,1.2`).
-
-## Spatial Reference Tokens FYI
-
-Qwen-Image-Edit includes precision control tokens for surgical editing:
-
-- **`<|object_ref_start|>...<|object_ref_end|>`** - Reference specific objects by description
-- **`<|box_start|>x1,y1,x2,y2<|box_end|>`** - Target rectangular regions (normalized 0-1 coordinates)
-- **`<|quad_start|>x1,y1,x2,y2,x3,y3,x4,y4<|quad_end|>`** - Define complex quadrilateral areas
-
-*[Examples and usage patterns →](#spatial-token-examples)*
 
 ## Core Nodes
 
@@ -43,6 +59,14 @@ Combines up to 4 images with aspect ratio preservation to prevent distortion.
 - **Resize modes:** match_first, common_height (best for concat), common_width, largest_dims
 - **Use for:** Character fusion, style transfer, pose references
 - **Example:** Combine Mona Lisa + Shrek + fighting pose → Mona Lisa fighting Shrek in the specified pose
+
+### QwenSpatialTokenGenerator
+Interactive spatial editing with visual region drawing interface.
+- **"Open Spatial Editor" button:** Visual bounding box/polygon drawing
+- **Template integration:** Complete prompt formatting with spatial tokens
+- **Multiple input methods:** Upstream workflow images, manual tokens, or visual editor
+- **Use for:** Precise region-based editing with spatial token generation
+- **Example:** Draw box around church → "Replace with castle" → generates full spatial prompt
 
 ### QwenLowresFixNode
 Two-stage refinement: generate → upscale → polish details.
@@ -84,26 +108,15 @@ LoadImage(3x) → QwenMultiReferenceHandler → QwenVLTextEncoder → KSampler
 LoadImage(edit) + LoadImage(control) → QwenVLTextEncoder (edit_image + context_image) → KSampler
 ```
 
+### Spatial Token Editing (NEW)
+```
+LoadImage → QwenSpatialTokenGenerator (spatial editor) → QwenVLTextEncoder → KSampler
+```
+
 ### Quality Enhancement
 ```
 KSampler → QwenLowresFixNode → Final Image
 ```
-
-## Key Features
-
-- Clean text encoder focused on vision and language processing
-- Multi-reference aspect ratio preservation prevents concat distortion
-- Context image support for ControlNet workflows
-- Template Builder with 20+ presets
-- Debug mode with detailed logging
-- Patterns and patches from DiffSynth code
-- Two-stage refinement system
-
-## Model Requirements
-
-Place Qwen2.5-VL models in `ComfyUI/models/text_encoders/`:
-- `qwen_2.5_vl_7b.safetensors` (recommended)
-- Any Qwen2.5-VL checkpoint
 
 ## Advanced Usage
 

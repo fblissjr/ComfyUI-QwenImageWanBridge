@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.4.1 - Pushing out EOD, not fully tested, expecting bugs/issues
+
+### Added
+- **QwenSpatialTokenGenerator** node with visual spatial editing interface
+  *note:* expect quirks here, especially with object references and polygons, but it's a start!
+  - Interactive "Open Spatial Editor" with canvas drawing
+  - Support for bounding boxes, polygons, and object references that correspond to qwen image tokens, so no more manual input
+  - Auto-generation of spatial tokens with proper formatting
+  - Debug mode
+- Auto-token generation when drawing regions in spatial editor
+
+### Potential issues
+- Downstream images / upstream images loading correctly
+  - Fixed coordinate parsing for different region types
+  - Proper handling of object references vs bounding boxes vs polygons
+- Clipboard functionality in spatial editor with browser compatibility fallback
+- Template integration properly including spatial tokens in formatted output
+- Debug output visibility toggle in spatial editor interface
+
 ## v1.3
 
 ### Added
