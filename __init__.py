@@ -108,6 +108,17 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Multi-Reference handler: {e}")
 
+# Token Debugger node
+try:
+    from .nodes.qwen_token_debugger import QwenTokenDebugger
+
+    NODE_CLASS_MAPPINGS["QwenTokenDebugger"] = QwenTokenDebugger
+    NODE_DISPLAY_NAME_MAPPINGS["QwenTokenDebugger"] = "Qwen Token Debugger"
+
+    print("[QwenImageWanBridge] Loaded Token Debugger")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Token Debugger: {e}")
+
 # Note: Experimental multi-frame nodes have been archived
 # Use Multi-Reference Handler with "index" mode for multi-frame support
 
