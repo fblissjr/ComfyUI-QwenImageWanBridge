@@ -7,11 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **No emojis** in code, display names, or documentation
 - Keep all naming and display text professional
 - Avoid "Pure", "Enhanced", "Advanced", "Ultimate" type prefixes - use descriptive names instead
+- Always avoid redundancy and unnecessary complexity. If you need to make a v2, there needs to be a compelling reason for it instead of simply modifying the code or creating a new git branch.
 - Clean, simple node names that describe what they do
 - Keep descriptions minimal and factual
 
 # important-instruction-reminders
-Do what has been asked; nothing more, nothing less.
+Do what has been asked but push back if you think it's not the best solution or unnecessarily complex.
+Use git branches and git commits to track changes and collaborate effectively.
+Use git diffs that tie to the commit history and markdown documentation so we can have context to code changes and individual files changes.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

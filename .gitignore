@@ -17,3 +17,9 @@ config/
 
 # Logs
 *.log
+
+explorations/
+coderef/
+training/
+.claude
+
