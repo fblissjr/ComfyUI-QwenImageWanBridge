@@ -20,4 +20,6 @@ config/
 
 training/
 .claude
+nodes/archive
+Documentation
 
