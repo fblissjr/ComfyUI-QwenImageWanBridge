@@ -19,5 +19,9 @@ config/
 *.log
 
 training/
-.claude
+.claude/
+internal/
+coderef/
+docs/
+Documentation/
 

@@ -108,16 +108,24 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Multi-Reference handler: {e}")
 
-# Token Debugger node
+# Token Analysis nodes
 try:
     from .nodes.qwen_token_debugger import QwenTokenDebugger
+    from .nodes.qwen_token_analyzer_standalone import QwenTokenAnalyzerStandalone
+    from .nodes.qwen_spatial_token_generator import QwenSpatialTokenGenerator
 
     NODE_CLASS_MAPPINGS["QwenTokenDebugger"] = QwenTokenDebugger
     NODE_DISPLAY_NAME_MAPPINGS["QwenTokenDebugger"] = "Qwen Token Debugger"
 
-    print("[QwenImageWanBridge] Loaded Token Debugger")
+    NODE_CLASS_MAPPINGS["QwenTokenAnalyzer"] = QwenTokenAnalyzerStandalone
+    NODE_DISPLAY_NAME_MAPPINGS["QwenTokenAnalyzer"] = "Qwen Token Analyzer"
+
+    NODE_CLASS_MAPPINGS["QwenSpatialTokenGenerator"] = QwenSpatialTokenGenerator
+    NODE_DISPLAY_NAME_MAPPINGS["QwenSpatialTokenGenerator"] = "Qwen Spatial Token Generator"
+
+    print("[QwenImageWanBridge] Loaded Token Analysis nodes (3 nodes)")
 except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Token Debugger: {e}")
+    print(f"[QwenImageWanBridge] Failed to load Token Analysis nodes: {e}")
 
 # Note: Experimental multi-frame nodes have been archived
 # Use Multi-Reference Handler with "index" mode for multi-frame support
@@ -131,6 +139,33 @@ try:
     print("[QwenImageWanBridge] Applied encoder patches for multi-frame support")
 except Exception as e:
     print(f"[QwenImageWanBridge] Could not apply patches: {e}")
+
+# ============================================================================
+# NATIVE NODES - Direct Qwen2.5-VL bypassing ComfyUI CLIP limitations  
+# ============================================================================
+
+try:
+    from .nodes.native.qwen_native_loader import QwenNativeLoader
+    from .nodes.native.qwen_native_encoder import QwenNativeEncoder
+    from .nodes.native.qwen_context_processor import QwenContextProcessor
+    from .nodes.native.qwen_validation_tools import QwenValidationTools
+
+    NODE_CLASS_MAPPINGS["QwenNativeLoader"] = QwenNativeLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenNativeLoader"] = "Qwen Native Loader"
+
+    NODE_CLASS_MAPPINGS["QwenNativeEncoder"] = QwenNativeEncoder
+    NODE_DISPLAY_NAME_MAPPINGS["QwenNativeEncoder"] = "Qwen Native Encoder"
+
+    NODE_CLASS_MAPPINGS["QwenContextProcessor"] = QwenContextProcessor
+    NODE_DISPLAY_NAME_MAPPINGS["QwenContextProcessor"] = "Qwen Context Processor"
+
+    NODE_CLASS_MAPPINGS["QwenValidationTools"] = QwenValidationTools
+    NODE_DISPLAY_NAME_MAPPINGS["QwenValidationTools"] = "Qwen Validation Tools"
+
+    print("[QwenImageWanBridge] Loaded Native Qwen nodes (4 nodes)")
+    print("[QwenImageWanBridge] FIXES: Template dropping, Vision duplication, Processor path, Context images")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Native nodes: {e}")
 
 # ============================================================================
 # EXPORTS
