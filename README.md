@@ -1,4 +1,4 @@
-*Despite the name, this is becoming more of a Qwen Image Edit repo.*
+*Despite the name, this is becoming more of a Qwen Image Edit repo, though I'm still bullish on Qwen Image and WAN video playing a big role together for video generation (and video/keyframe editing)*
 
 # ComfyUI Qwen Image Edit Nodes
 
@@ -6,11 +6,45 @@ ComfyUI nodes for Qwen-Image-Edit for precise image editing via a visual spatial
 
 **[Changelog](CHANGELOG.md)**
 
+## Table of Contents
+
+### Core Nodes
+- **[QwenVLCLIPLoader](#qwenvlcliploader)** - Load Qwen2.5-VL models with fixes
+- **[QwenVLTextEncoder](#qwenvltextencoder)** - Main text encoder with vision support
+- **[QwenSpatialTokenGenerator](#qwenspatialtonkengenerator)** - Interactive spatial editing with visual region drawing *WIP*
+- **[QwenMultiReferenceHandler](#qwenmultireferencehandler)** - Combine up to 4 images with aspect ratio preservation
+- **[QwenLowresFixNode](#qwenlowresfixnode)** - Two-stage refinement for quality enhancement
+
+### Helper Nodes
+- **[QwenVLEmptyLatent / QwenVLImageToLatent](#qwenvlemptylatent--qwenvlimagetolatent)** - 16-channel latent operations
+- **[QwenTemplateBuilder](#qwentemplatebuilder)** - Interactive template builder with style presets
+
+### Quick Start Examples
+- [Text-to-Image](#text-to-image) | [Image Editing](#image-editing) | [Multi-Reference](#multi-reference-composition) | [Spatial Tokens](#spatial-token-editing-new) | [Quality Enhancement](#quality-enhancement)
+
+---
+
 ## Spatial Token Editor & Reference
-- New: a visual spatial token editor for bounding boxes, shapes, and point object references, with labels. Expect quirks and issues here, it's EOD and a major work in progress, but it should at least be a start.
 
-Qwen-Image-Edit includes precision control tokens for surgical editing:
+**New:** Visual spatial token editor with canvas-based region drawing for precise image editing control.
 
+**Note:** I haven't had a chance to test this thoroughly, but if you see issues, let me know. None of these tokens seem to be documented in the reference code that I could find in quick scans, but it does seem to work for the most part. The tokens were identified from the tokenizer config. That all said - this spatial editor node likely has issues.
+
+**TL;DR:** The core output is that it takes a required input image and creates the prompt with the spatial tokens filled in for you. You can (and should) edit these on your own to finetune your edits.
+
+The `QwenSpatialTokenGenerator` provides an interactive interface for creating Qwen-Image-Edit spatial tokens:
+
+- **Visual editor:** Canvas-based drawing for bounding boxes, polygons, and object reference points
+- **Automatic token generation:** Proper Qwen2.5-VL formatting with normalized coordinates
+- **Flexible output:** Optional object_ref labels (checkbox controlled) for pure coordinates or labeled regions
+- **Editable integration:** Spatial tokens appear in base_prompt field for user modification
+- **Dual output:** Plain prompt (editable) + formatted_prompt (template applied)
+- **Region management:** Individual delete buttons and inline label editing for each region
+- **Resolution optimization:** Built-in image resizing to optimal Qwen resolutions
+
+**Token Usage Theory:** I'm uncertain if a bounding box token on its own works better than a bounding box with an object reference, but based on how vision LLMs work and their training datasets, these tokens are usually used for grounding purposes - meaning, the bounding box identifies the region, and by labeling the object reference within that bounding box, you are providing it more context. Does it work better than a bounding box alone? Does it work better than just saying "replace the church with a castle" without any spatial tokens? Don't know yet. Let's find out.
+
+**Supported Spatial Tokens:**
 - **`<|object_ref_start|>...<|object_ref_end|>`** - Reference specific objects by description
 - **`<|box_start|>x1,y1,x2,y2<|box_end|>`** - Target rectangular regions (normalized 0-1 coordinates)
 - **`<|quad_start|>x1,y1,x2,y2,x3,y3,x4,y4<|quad_end|>`** - Define complex quadrilateral areas
@@ -62,11 +96,17 @@ Combines up to 4 images with aspect ratio preservation to prevent distortion.
 
 ### QwenSpatialTokenGenerator
 Interactive spatial editing with visual region drawing interface.
-- **"Open Spatial Editor" button:** Visual bounding box/polygon drawing
-- **Template integration:** Complete prompt formatting with spatial tokens
-- **Multiple input methods:** Upstream workflow images, manual tokens, or visual editor
-- **Use for:** Precise region-based editing with spatial token generation
-- **Example:** Draw box around church → "Replace with castle" → generates full spatial prompt
+- **Required image input:** Direct image connection with built-in resolution optimization
+- **"Open Spatial Editor" button:** Canvas-based drawing for bounding boxes, polygons, and object reference points
+- **Individual region management:** Delete buttons and inline label editing for each created region
+- **Automatic token generation:** Proper Qwen2.5-VL formatting with normalized coordinates
+- **Optional object_ref labels:** Checkbox controlled - enable for labeled regions, disable for pure coordinates
+- **Editable spatial tokens:** Generated tokens appear in base_prompt field for user modification
+- **Dual output:** Plain prompt (base_prompt contents) + formatted_prompt (template applied)
+- **Integrated resolution optimization:** Built-in QwenOptimalResolution logic eliminates separate preprocessing
+- **Debug mode:** Detailed coordinate and token generation logging
+- **Use for:** Precise region-based editing with visual spatial token creation
+- **Example:** Connect image → draw box around church → "Replace with castle" → generates optimized image + spatial tokens
 
 ### QwenLowresFixNode
 Two-stage refinement: generate → upscale → polish details.
@@ -110,7 +150,7 @@ LoadImage(edit) + LoadImage(control) → QwenVLTextEncoder (edit_image + context
 
 ### Spatial Token Editing (NEW)
 ```
-LoadImage → QwenSpatialTokenGenerator (spatial editor) → QwenVLTextEncoder → KSampler
+LoadImage → QwenSpatialTokenGenerator (required image input, spatial editor) → QwenVLTextEncoder → KSampler
 ```
 
 ### Quality Enhancement

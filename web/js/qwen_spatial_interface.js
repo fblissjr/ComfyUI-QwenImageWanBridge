@@ -356,6 +356,7 @@ class QwenSpatialInterface {
       this.regions = [];
       this.updateRegionsList(dialog);
       this.redrawCanvas();
+      this.generateTokens(dialog); // Auto-generate tokens (will be empty)
     };
 
     // Generate tokens
@@ -366,7 +367,19 @@ class QwenSpatialInterface {
     // Copy tokens
     dialog.querySelector("#copyTokens").onclick = () => {
       const tokens = dialog.querySelector("#spatialTokensOutput").value;
-      navigator.clipboard.writeText(tokens);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(tokens);
+        this.updateDebug("Tokens copied to clipboard", dialog);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = tokens;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        this.updateDebug("Tokens copied to clipboard (fallback)", dialog);
+      }
     };
 
     // Send to node
@@ -419,6 +432,8 @@ class QwenSpatialInterface {
         if (e.detail === 2 && this.polygonPoints.length >= 3) {
           this.finishPolygon(dialog);
         }
+      } else if (this.drawingMode === "object_reference") {
+        this.addObjectReference(startX, startY, dialog);
       } else {
         isDragging = true;
       }
@@ -449,8 +464,6 @@ class QwenSpatialInterface {
         if (Math.abs(endX - startX) > 5 && Math.abs(endY - startY) > 5) {
           this.addBoundingBox(startX, startY, endX, endY, dialog);
         }
-      } else if (this.drawingMode === "object_reference") {
-        this.addObjectReference(startX, startY, dialog);
       }
 
       isDragging = false;
@@ -645,15 +658,117 @@ class QwenSpatialInterface {
                     border-radius: 3px;
                     background: ${color}10;
                     font-size: 12px;
+                    position: relative;
                 ">
-                    <div style="color: ${color}; font-weight: 500;">${region.label}</div>
-                    <div style="opacity: 0.7; font-size: 10px;">${region.type}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <input type="text" 
+                                   value="${region.label}" 
+                                   data-region-index="${index}"
+                                   class="region-label-input"
+                                   style="
+                                       background: transparent;
+                                       border: none;
+                                       color: ${color};
+                                       font-weight: 500;
+                                       font-size: 12px;
+                                       width: 100%;
+                                       padding: 1px 0;
+                                       outline: none;
+                                   "
+                                   onchange="this.dispatchEvent(new CustomEvent('regionLabelChange', {detail: {index: ${index}, label: this.value}}))"
+                                   onkeypress="if(event.key==='Enter') this.blur()">
+                            <div style="opacity: 0.7; font-size: 10px;">${region.type}</div>
+                        </div>
+                        <div style="display: flex; gap: 4px; margin-left: 8px;">
+                            <button class="region-delete-btn" 
+                                    data-region-index="${index}"
+                                    style="
+                                        padding: 2px 6px;
+                                        background: rgba(255, 0, 0, 0.2);
+                                        border: 1px solid rgba(255, 0, 0, 0.3);
+                                        border-radius: 2px;
+                                        color: #ff6666;
+                                        font-size: 10px;
+                                        cursor: pointer;
+                                        line-height: 1;
+                                    "
+                                    title="Delete region">×</button>
+                        </div>
+                    </div>
                 </div>
             `;
       })
       .join("");
 
     listContainer.innerHTML = listHTML;
+    
+    // Add event listeners for the new functionality
+    this.setupRegionListEvents(dialog);
+  }
+
+  setupRegionListEvents(dialog) {
+    // Handle delete button clicks
+    dialog.querySelectorAll('.region-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.target.dataset.regionIndex);
+        this.deleteRegion(index, dialog);
+      });
+    });
+
+    // Handle label changes
+    dialog.querySelectorAll('.region-label-input').forEach(input => {
+      input.addEventListener('regionLabelChange', (e) => {
+        const { index, label } = e.detail;
+        this.updateRegionLabel(index, label, dialog);
+      });
+      
+      // Also handle blur to catch changes without Enter key
+      input.addEventListener('blur', (e) => {
+        const index = parseInt(e.target.dataset.regionIndex);
+        const label = e.target.value;
+        this.updateRegionLabel(index, label, dialog);
+      });
+    });
+  }
+
+  deleteRegion(index, dialog) {
+    if (index < 0 || index >= this.regions.length) return;
+    
+    const deletedRegion = this.regions[index];
+    
+    // Simple confirmation
+    if (!confirm(`Delete region "${deletedRegion.label}"?`)) return;
+    
+    this.regions.splice(index, 1);
+    
+    this.updateRegionsList(dialog);
+    this.redrawCanvas();
+    this.generateTokens(dialog);
+    
+    this.updateDebug(`Deleted region: ${deletedRegion.label} (${deletedRegion.type})`, dialog);
+  }
+
+  updateRegionLabel(index, newLabel, dialog) {
+    if (index < 0 || index >= this.regions.length) return;
+    
+    // Prevent empty labels - revert to old label
+    if (!newLabel || newLabel.trim() === '') {
+      const input = dialog.querySelector(`input[data-region-index="${index}"]`);
+      if (input) input.value = this.regions[index].label;
+      return;
+    }
+    
+    const oldLabel = this.regions[index].label;
+    const trimmedLabel = newLabel.trim();
+    
+    // Only update if label actually changed
+    if (oldLabel !== trimmedLabel) {
+      this.regions[index].label = trimmedLabel;
+      this.redrawCanvas();
+      this.generateTokens(dialog);
+      this.updateDebug(`Updated region label: "${oldLabel}" → "${trimmedLabel}"`, dialog);
+    }
   }
 
   generateTokens(dialog) {
