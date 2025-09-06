@@ -1,0 +1,568 @@
+{
+  "id": "qwen-vl-image-edit-example",
+  "revision": 0,
+  "last_node_id": 110,
+  "last_link_id": 215,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Note",
+      "pos": [-400, -200],
+      "size": [400, 150],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "properties": {},
+      "widgets_values": [
+        "IMPROVED QWEN2.5-VL WORKFLOW\n\nThis workflow uses the new proper Qwen2.5-VL nodes with real vision processing:\n- QwenVLLoader: Loads actual Qwen2.5-VL model\n- QwenVLTextEncoder: Real multimodal encoding\n- Exact system prompts from DiffSynth-Studio\n\nRequires: pip install transformers"
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 37,
+      "type": "UNETLoader",
+      "pos": [20, 20],
+      "size": [330, 90],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [196]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "qwen_image_edit_fp8_e4m3fn.safetensors",
+        "fp8_e4m3fn"
+      ]
+    },
+    {
+      "id": 39,
+      "type": "VAELoader",
+      "pos": [20, 340],
+      "size": [330, 60],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 0,
+          "links": [134, 136, 167]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "qwen_image_vae.safetensors"
+      ]
+    },
+    {
+      "id": 110,
+      "type": "QwenVLLoader",
+      "pos": [20, 150],
+      "size": [330, 150],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "model",
+          "type": "QWEN_VL_MODEL",
+          "slot_index": 0,
+          "links": [211]
+        },
+        {
+          "name": "processor",
+          "type": "QWEN_VL_PROCESSOR",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "QwenVLLoader"
+      },
+      "widgets_values": [
+        "qwen2.5-vl-7b-instruct",
+        "fp16",
+        "cuda",
+        ""
+      ],
+      "title": "Load Qwen2.5-VL Model (NEW)",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 111,
+      "type": "QwenVLTextEncoder",
+      "pos": [410, 250],
+      "size": [400, 280],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "qwen_model",
+          "type": "QWEN_VL_MODEL",
+          "link": 211
+        },
+        {
+          "name": "edit_image",
+          "type": "IMAGE",
+          "link": 194
+        }
+      ],
+      "outputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "links": [212, 213]
+        },
+        {
+          "name": "vision_features",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "QwenVLTextEncoder"
+      },
+      "widgets_values": [
+        "Transform the white coffee mug to float 20px above the wooden table's surface while maintaining its size and orientation, preserving all other elements in the kitchen scene.",
+        "image_edit",
+        true
+      ],
+      "title": "Qwen2.5-VL Text Encoder (NEW)",
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 76,
+      "type": "LoadImage",
+      "pos": [20, 460],
+      "size": [280, 320],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [185, 194, 200]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [201]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "view.png",
+        "image"
+      ]
+    },
+    {
+      "id": 106,
+      "type": "ImageResizeKJv2",
+      "pos": [130, 840],
+      "size": [270, 340],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 200
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 201
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [202]
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageResizeKJv2"
+      },
+      "widgets_values": [
+        1328,
+        1328,
+        "lanczos",
+        "pad",
+        "0, 0, 0",
+        "center",
+        2,
+        "cpu",
+        ""
+      ]
+    },
+    {
+      "id": 77,
+      "type": "VAEEncode",
+      "pos": [620, 680],
+      "size": [140, 46],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 202
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 136
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [209]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 80,
+      "type": "ConditioningZeroOut",
+      "pos": [600, 580],
+      "size": [200, 26],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 212
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [208]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ConditioningZeroOut"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 73,
+      "type": "LoraLoaderModelOnly",
+      "pos": [395, 50],
+      "size": [270, 82],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 196
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [170]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      },
+      "widgets_values": [
+        "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+        1
+      ]
+    },
+    {
+      "id": 66,
+      "type": "ModelSamplingAuraFlow",
+      "pos": [860, -145],
+      "size": [300, 58],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 204
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [154]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ModelSamplingAuraFlow"
+      },
+      "widgets_values": [
+        3.5
+      ]
+    },
+    {
+      "id": 81,
+      "type": "CFGNorm",
+      "pos": [870, 15],
+      "size": [270, 58],
+      "flags": {},
+      "order": 20,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 154
+        }
+      ],
+      "outputs": [
+        {
+          "name": "patched_model",
+          "type": "MODEL",
+          "links": [206]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CFGNorm"
+      },
+      "widgets_values": [
+        1
+      ]
+    },
+    {
+      "id": 109,
+      "type": "KSampler",
+      "pos": [875, 130],
+      "size": [300, 560],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 206
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 213
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 208
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 209
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [210]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        57387840270147,
+        "randomize",
+        8,
+        1,
+        "euler",
+        "simple",
+        1
+      ]
+    },
+    {
+      "id": 84,
+      "type": "VAEDecodeTiled",
+      "pos": [1225, 760],
+      "size": [210, 150],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 210
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 167
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [205]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecodeTiled"
+      },
+      "widgets_values": [
+        512,
+        64,
+        64,
+        8
+      ]
+    },
+    {
+      "id": 108,
+      "type": "SaveImage",
+      "pos": [1435, 155],
+      "size": [270, 58],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 205
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "qwen_vl_edit"
+      ]
+    },
+    {
+      "id": 112,
+      "type": "Note",
+      "pos": [850, 760],
+      "size": [350, 200],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "properties": {},
+      "widgets_values": [
+        "KEY IMPROVEMENTS:\n\n1. QwenVLLoader loads actual Qwen2.5-VL model\n2. QwenVLTextEncoder does real vision processing\n3. Vision tokens actually work now!\n4. Exact system prompts from DiffSynth-Studio\n5. Proper multimodal fusion\n\nThe old CLIPLoader approach is replaced with proper transformers integration."
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    }
+  ],
+  "links": [
+    [134, 39, 0, 77, 1, "VAE"],
+    [136, 39, 0, 77, 1, "VAE"],
+    [154, 66, 0, 81, 0, "MODEL"],
+    [162, 88, 0, 86, 0, "MODEL"],
+    [167, 39, 0, 84, 1, "VAE"],
+    [169, 86, 0, 87, 0, "MODEL"],
+    [170, 73, 0, 88, 0, "MODEL"],
+    [185, 76, 0, 79, 0, "IMAGE"],
+    [194, 76, 0, 111, 1, "IMAGE"],
+    [196, 37, 0, 73, 0, "MODEL"],
+    [200, 76, 0, 106, 0, "IMAGE"],
+    [201, 76, 1, 106, 1, "MASK"],
+    [202, 106, 0, 77, 0, "IMAGE"],
+    [204, 87, 0, 66, 0, "MODEL"],
+    [205, 84, 0, 108, 0, "IMAGE"],
+    [206, 81, 0, 109, 0, "MODEL"],
+    [208, 80, 0, 109, 2, "CONDITIONING"],
+    [209, 77, 0, 109, 3, "LATENT"],
+    [210, 109, 0, 84, 0, "LATENT"],
+    [211, 110, 0, 111, 0, "QWEN_VL_MODEL"],
+    [212, 111, 0, 80, 0, "CONDITIONING"],
+    [213, 111, 0, 109, 1, "CONDITIONING"]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Step 1 - Load Models (IMPROVED)",
+      "bounding": [10, -50, 370, 480],
+      "color": "#3f789e",
+      "font_size": 24
+    },
+    {
+      "id": 2,
+      "title": "Step 2 - Image Preprocessing",
+      "bounding": [10, 800, 400, 400],
+      "color": "#3f789e",
+      "font_size": 24
+    },
+    {
+      "id": 3,
+      "title": "Step 3 - Multimodal Encoding (NEW)",
+      "bounding": [380, 160, 450, 470],
+      "color": "#a1309b",
+      "font_size": 24
+    },
+    {
+      "id": 4,
+      "title": "Step 4 - Generation Pipeline",
+      "bounding": [850, -400, 600, 1100],
+      "color": "#3f789e",
+      "font_size": 24
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7,
+      "offset": [400, 300]
+    }
+  },
+  "version": 0.4
+}

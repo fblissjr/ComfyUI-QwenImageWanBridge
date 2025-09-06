@@ -118,6 +118,15 @@ class QwenSpatialInterface {
                                 font-size: 12px;
                             ">
                         </div>
+                        <div style="margin-top: 8px;">
+                            <label style="display: flex; align-items: center; font-size: 12px; opacity: 0.8; cursor: pointer;">
+                                <input type="checkbox" id="includeObjectRef" checked style="
+                                    margin-right: 6px;
+                                    cursor: pointer;
+                                ">
+                                Include object reference label (for boxes/polygons)
+                            </label>
+                        </div>
 
                         <div id="drawingHelp" style="
                             margin-top: 8px;
@@ -595,10 +604,12 @@ class QwenSpatialInterface {
 
   addBoundingBox(x1, y1, x2, y2, dialog) {
     const label = dialog.querySelector("#regionLabel").value || "object";
+    const includeObjectRef = dialog.querySelector("#includeObjectRef").checked;
 
     const region = {
       type: "bounding_box",
       label: label,
+      includeObjectRef: includeObjectRef,
       coords: [
         Math.min(x1, x2),
         Math.min(y1, y2),
@@ -610,7 +621,8 @@ class QwenSpatialInterface {
     this.regions.push(region);
     this.updateRegionsList(dialog);
     this.redrawCanvas();
-    this.updateDebug(`Added bounding box: ${label}`, dialog);
+    this.generateTokens(dialog); // Auto-generate tokens
+    this.updateDebug(`Added bounding box: ${label} (obj_ref: ${includeObjectRef})`, dialog);
   }
 
   updateRegionsList(dialog) {
@@ -645,24 +657,82 @@ class QwenSpatialInterface {
   }
 
   generateTokens(dialog) {
-    if (!this.currentImage || this.regions.length === 0) {
+    this.updateDebug(`generateTokens called: image=${!!this.currentImage}, regions=${this.regions.length}`, dialog);
+    
+    if (!this.currentImage) {
+      dialog.querySelector('#spatialTokensOutput').value = '';
+      this.updateDebug("No image loaded - cannot generate tokens", dialog);
+      return;
+    }
+    
+    if (this.regions.length === 0) {
+      dialog.querySelector('#spatialTokensOutput').value = '';
       this.updateDebug("No regions to generate tokens from", dialog);
       return;
     }
-
-    const tokens = this.regions.map((region) => {
-      const [x1, y1, x2, y2] = region.coords;
-      const normX1 = x1 / this.currentImage.width;
-      const normY1 = y1 / this.currentImage.height;
-      const normX2 = x2 / this.currentImage.width;
-      const normY2 = y2 / this.currentImage.height;
-
-      return `<|object_ref_start|>${region.label}<|object_ref_end|> at <|box_start|>${normX1.toFixed(3)},${normY1.toFixed(3)},${normX2.toFixed(3)},${normY2.toFixed(3)}<|box_end|>`;
-    });
-
-    const spatialTokens = tokens.join(" ");
-    dialog.querySelector("#spatialTokensOutput").value = spatialTokens;
+    
+    const tokens = this.regions.map(region => {
+      if (region.type === 'bounding_box') {
+        const [x1, y1, x2, y2] = region.coords;
+        const normX1 = (x1 / this.currentImage.width).toFixed(3);
+        const normY1 = (y1 / this.currentImage.height).toFixed(3);
+        const normX2 = (x2 / this.currentImage.width).toFixed(3);
+        const normY2 = (y2 / this.currentImage.height).toFixed(3);
+        
+        // Make object_ref optional for bounding boxes
+        if (region.includeObjectRef !== false) {
+          return `<|object_ref_start|>${region.label}<|object_ref_end|> at <|box_start|>${normX1},${normY1},${normX2},${normY2}<|box_end|>`;
+        } else {
+          return `<|box_start|>${normX1},${normY1},${normX2},${normY2}<|box_end|>`;
+        }
+        
+      } else if (region.type === 'object_reference') {
+        // Object reference is just a label, no coordinates
+        return `<|object_ref_start|>${region.label}<|object_ref_end|>`;
+        
+      } else if (region.type === 'polygon') {
+        const normalizedPoints = region.coords.map(([x, y]) => 
+          `${(x / this.currentImage.width).toFixed(3)},${(y / this.currentImage.height).toFixed(3)}`
+        ).join(' ');
+        
+        // Make object_ref optional for polygons/quads
+        if (region.includeObjectRef !== false) {
+          return `<|object_ref_start|>${region.label}<|object_ref_end|> outlined by <|quad_start|>${normalizedPoints}<|quad_end|>`;
+        } else {
+          return `<|quad_start|>${normalizedPoints}<|quad_end|>`;
+        }
+      }
+      
+      return ''; // fallback
+    }).filter(token => token); // remove empty tokens
+    
+    const spatialTokens = tokens.join(' ');
+    dialog.querySelector('#spatialTokensOutput').value = spatialTokens;
     this.updateDebug(`Generated ${tokens.length} spatial tokens`, dialog);
+    
+    // Update base_prompt widget with spatial tokens for easy editing
+    this.updateBasePromptWithTokens(spatialTokens);
+  }
+
+  updateBasePromptWithTokens(spatialTokens) {
+    if (!this.node || !this.node.widgets) return;
+    
+    const basePromptWidget = this.node.widgets.find(w => w.name === 'base_prompt');
+    if (!basePromptWidget) return;
+    
+    // Get current base prompt, removing any existing spatial tokens
+    let currentPrompt = basePromptWidget.value || '';
+    
+    // Remove existing spatial tokens (anything with <|...|> patterns)
+    currentPrompt = currentPrompt.replace(/<\|[^|]+\|>/g, '').trim();
+    
+    // Combine base prompt with spatial tokens
+    const combinedPrompt = spatialTokens ? 
+      `${currentPrompt} ${spatialTokens}`.trim() : 
+      currentPrompt;
+      
+    basePromptWidget.value = combinedPrompt;
+    this.node.setDirtyCanvas(true, true);
   }
 
   sendToNode(node, dialog) {
@@ -778,10 +848,12 @@ class QwenSpatialInterface {
     }
 
     const label = dialog.querySelector("#regionLabel").value || "polygon";
+    const includeObjectRef = dialog.querySelector("#includeObjectRef").checked;
 
     this.regions.push({
       type: "polygon",
       label: label,
+      includeObjectRef: includeObjectRef,
       coords: this.polygonPoints.slice(),
       normalized: false,
     });
@@ -790,8 +862,9 @@ class QwenSpatialInterface {
     this.updateRegionsList(dialog);
     this.updateDynamicControls(dialog);
     this.redrawCanvas();
+    this.generateTokens(dialog); // Auto-generate tokens
     this.updateDebug(
-      `Added polygon with ${this.regions[this.regions.length - 1].coords.length} points, label "${label}"`,
+      `Added polygon with ${this.regions[this.regions.length - 1].coords.length} points, label "${label}" (obj_ref: ${includeObjectRef})`,
       dialog,
     );
   }

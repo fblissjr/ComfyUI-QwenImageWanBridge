@@ -158,11 +158,16 @@ class QwenSpatialTokenGenerator:
 
     def _process_bounding_box(self, region, img_width, img_height, normalize_coords, draw, debug_info):
         """Process bounding box coordinates"""
-        coords_str = region['coords'].strip()
+        coords_str = region['coords'].strip() if isinstance(region['coords'], str) else region['coords']
         label = region['label']
+        include_object_ref = region.get('includeObjectRef', True)  # Default to True for backward compatibility
 
-        # Parse x1,y1,x2,y2
-        coords = [float(c.strip()) for c in coords_str.split(',')]
+        # Handle both string and list formats
+        if isinstance(coords_str, str):
+            coords = [float(c.strip()) for c in coords_str.split(',')]
+        else:
+            coords = list(coords_str)
+            
         if len(coords) != 4:
             raise ValueError(f"Bounding box needs 4 coordinates, got {len(coords)}")
 
@@ -179,7 +184,8 @@ class QwenSpatialTokenGenerator:
 
         # Draw annotation
         draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
-        draw.text((x1, y1-15), label, fill="red")
+        if include_object_ref:
+            draw.text((x1, y1-15), label, fill="red")
 
         # Generate normalized coordinates for token
         norm_x1, norm_y1 = x1 / img_width, y1 / img_height
@@ -187,36 +193,61 @@ class QwenSpatialTokenGenerator:
 
         debug_info.append(f"  Box coords: ({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f})")
         debug_info.append(f"  Normalized: ({norm_x1:.3f},{norm_y1:.3f},{norm_x2:.3f},{norm_y2:.3f})")
+        debug_info.append(f"  Include object_ref: {include_object_ref}")
 
-        return f"<|object_ref_start|>{label}<|object_ref_end|> at <|box_start|>{norm_x1:.3f},{norm_y1:.3f},{norm_x2:.3f},{norm_y2:.3f}<|box_end|>"
+        if include_object_ref:
+            return f"<|object_ref_start|>{label}<|object_ref_end|> at <|box_start|>{norm_x1:.3f},{norm_y1:.3f},{norm_x2:.3f},{norm_y2:.3f}<|box_end|>"
+        else:
+            return f"<|box_start|>{norm_x1:.3f},{norm_y1:.3f},{norm_x2:.3f},{norm_y2:.3f}<|box_end|>"
 
     def _process_polygon(self, region, img_width, img_height, normalize_coords, draw, debug_info):
         """Process polygon coordinates"""
-        coords_str = region['coords'].strip()
+        coords_data = region['coords']
         label = region['label']
+        include_object_ref = region.get('includeObjectRef', True)  # Default to True for backward compatibility
 
-        # Parse space-separated x,y pairs
-        coord_pairs = coords_str.split()
-        if len(coord_pairs) < 3:
-            raise ValueError(f"Polygon needs at least 3 points, got {len(coord_pairs)}")
-
-        points = []
-        for pair in coord_pairs:
-            if ',' not in pair:
-                raise ValueError(f"Invalid coordinate pair: '{pair}'")
-            x_str, y_str = pair.split(',', 1)
-            x, y = float(x_str), float(y_str)
-
-            # Normalize if needed
-            if normalize_coords and x <= 1.0 and y <= 1.0:
-                x, y = x * img_width, y * img_height
-
-            points.append((max(0, min(x, img_width)), max(0, min(y, img_height))))
+        # Handle both string and list formats
+        if isinstance(coords_data, str):
+            # Parse space-separated x,y pairs from string
+            coord_pairs = coords_data.strip().split()
+            if len(coord_pairs) < 3:
+                raise ValueError(f"Polygon needs at least 3 points, got {len(coord_pairs)}")
+            
+            points = []
+            for pair in coord_pairs:
+                if ',' not in pair:
+                    raise ValueError(f"Invalid coordinate pair: '{pair}'")
+                x_str, y_str = pair.split(',', 1)
+                x, y = float(x_str), float(y_str)
+                
+                # Normalize if needed
+                if normalize_coords and x <= 1.0 and y <= 1.0:
+                    x, y = x * img_width, y * img_height
+                
+                points.append((max(0, min(x, img_width)), max(0, min(y, img_height))))
+        else:
+            # Handle list of [x,y] pairs from JavaScript
+            if len(coords_data) < 3:
+                raise ValueError(f"Polygon needs at least 3 points, got {len(coords_data)}")
+            
+            points = []
+            for coord in coords_data:
+                if isinstance(coord, (list, tuple)) and len(coord) == 2:
+                    x, y = coord[0], coord[1]
+                else:
+                    raise ValueError(f"Invalid coordinate format: {coord}")
+                
+                # Normalize if needed
+                if normalize_coords and x <= 1.0 and y <= 1.0:
+                    x, y = x * img_width, y * img_height
+                
+                points.append((max(0, min(x, img_width)), max(0, min(y, img_height))))
 
         # Draw annotation
         if len(points) >= 3:
             draw.polygon(points, outline="blue", width=2)
-            draw.text((points[0][0], points[0][1]-15), label, fill="blue")
+            if include_object_ref:
+                draw.text((points[0][0], points[0][1]-15), label, fill="blue")
 
         # Generate normalized coordinates for token
         norm_points = []
@@ -225,8 +256,12 @@ class QwenSpatialTokenGenerator:
 
         debug_info.append(f"  Polygon: {len(points)} points")
         debug_info.append(f"  Points: {' '.join(norm_points)}")
+        debug_info.append(f"  Include object_ref: {include_object_ref}")
 
-        return f"<|object_ref_start|>{label}<|object_ref_end|> outlined by <|quad_start|>{' '.join(norm_points)}<|quad_end|>"
+        if include_object_ref:
+            return f"<|object_ref_start|>{label}<|object_ref_end|> outlined by <|quad_start|>{' '.join(norm_points)}<|quad_end|>"
+        else:
+            return f"<|quad_start|>{' '.join(norm_points)}<|quad_end|>"
 
     def _process_object_reference(self, region, debug_info):
         """Process simple object reference"""
