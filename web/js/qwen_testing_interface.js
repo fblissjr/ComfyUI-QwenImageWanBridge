@@ -93,44 +93,48 @@ class QwenTestingInterface {
                 left: "10%",
                 width: "80%",
                 height: "80%",
-                background: "white",
-                border: "2px solid #333",
+                background: "rgba(20, 20, 20, 0.95)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
                 borderRadius: "8px",
                 zIndex: 10000,
                 overflow: "hidden",
                 display: "flex",
                 flexDirection: "column",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+                fontFamily: "system-ui, -apple-system, sans-serif",
+                color: "rgba(255, 255, 255, 0.9)"
             }
         });
 
         dialog.innerHTML = `
             <div style="
-                background: #f8f9fa;
+                background: rgba(0, 0, 0, 0.3);
                 padding: 15px 20px;
-                border-bottom: 1px solid #dee2e6;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
             ">
-                <h2 style="margin: 0; color: #212529;">Qwen Token Testing Interface</h2>
-                <div>
+                <h2 style="margin: 0; color: rgba(255, 255, 255, 0.9); font-size: 18px; font-weight: 500;">Qwen Token Testing Interface</h2>
+                <div style="display: flex; gap: 6px;">
                     <button id="exportResults" style="
-                        padding: 8px 16px;
-                        margin-right: 10px;
-                        background: #007bff;
+                        padding: 6px 12px;
+                        background: rgba(0, 120, 255, 0.8);
                         color: white;
-                        border: none;
+                        border: 1px solid rgba(0, 120, 255, 0.5);
                         border-radius: 4px;
                         cursor: pointer;
+                        font-size: 12px;
                     ">Export Results</button>
                     <button id="closeDialog" style="
-                        padding: 8px 16px;
-                        background: #dc3545;
+                        padding: 6px 12px;
+                        background: rgba(244, 67, 54, 0.8);
                         color: white;
-                        border: none;
+                        border: 1px solid rgba(244, 67, 54, 0.5);
                         border-radius: 4px;
                         cursor: pointer;
+                        font-size: 12px;
                     ">Close</button>
                 </div>
             </div>
@@ -139,45 +143,46 @@ class QwenTestingInterface {
                 <!-- Left Panel: Test Selection -->
                 <div style="
                     width: 300px;
-                    border-right: 1px solid #dee2e6;
-                    background: #f8f9fa;
+                    border-right: 1px solid rgba(255, 255, 255, 0.1);
+                    background: rgba(0, 0, 0, 0.2);
                     overflow-y: auto;
                 ">
                     <div style="padding: 15px;">
-                        <h4 style="margin: 0 0 10px 0;">Test Templates</h4>
+                        <h4 style="margin: 0 0 10px 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500;">Test Templates</h4>
                         <div id="testCategories">
                             <div class="category-group">
-                                <h5 style="margin: 10px 0 5px 0; color: #6c757d;">Vision</h5>
+                                <h5 style="margin: 10px 0 5px 0; color: rgba(255, 255, 255, 0.6); font-size: 12px;">Vision</h5>
                                 <div id="visionTests"></div>
                             </div>
                             <div class="category-group">
-                                <h5 style="margin: 10px 0 5px 0; color: #6c757d;">Chat</h5>
+                                <h5 style="margin: 10px 0 5px 0; color: rgba(255, 255, 255, 0.6); font-size: 12px;">Chat</h5>
                                 <div id="chatTests"></div>
                             </div>
                             <div class="category-group">
-                                <h5 style="margin: 10px 0 5px 0; color: #6c757d;">Spatial</h5>
+                                <h5 style="margin: 10px 0 5px 0; color: rgba(255, 255, 255, 0.6); font-size: 12px;">Spatial</h5>
                                 <div id="spatialTests"></div>
                             </div>
                             <div class="category-group">
-                                <h5 style="margin: 10px 0 5px 0; color: #6c757d;">Code</h5>
+                                <h5 style="margin: 10px 0 5px 0; color: rgba(255, 255, 255, 0.6); font-size: 12px;">Code</h5>
                                 <div id="codeTests"></div>
                             </div>
                             <div class="category-group">
-                                <h5 style="margin: 10px 0 5px 0; color: #6c757d;">Tool</h5>
+                                <h5 style="margin: 10px 0 5px 0; color: rgba(255, 255, 255, 0.6); font-size: 12px;">Tool</h5>
                                 <div id="toolTests"></div>
                             </div>
                         </div>
                         
-                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
-                            <h5 style="margin: 0 0 10px 0;">Custom Test</h5>
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                            <h5 style="margin: 0 0 10px 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500;">Custom Test</h5>
                             <button id="createCustomTest" style="
                                 width: 100%;
                                 padding: 8px;
-                                background: #28a745;
+                                background: rgba(40, 167, 69, 0.8);
                                 color: white;
-                                border: none;
+                                border: 1px solid rgba(40, 167, 69, 0.5);
                                 border-radius: 4px;
                                 cursor: pointer;
+                                font-size: 12px;
                             ">Create Custom Test</button>
                         </div>
                     </div>
@@ -187,37 +192,38 @@ class QwenTestingInterface {
                 <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
                     <!-- Test Editor -->
                     <div style="
-                        border-bottom: 1px solid #dee2e6;
-                        background: white;
+                        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                        background: rgba(40, 40, 40, 0.3);
                         flex: 1;
                         overflow: hidden;
                         display: flex;
                         flex-direction: column;
                     ">
-                        <div style="padding: 15px; border-bottom: 1px solid #dee2e6;">
+                        <div style="padding: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <h4 style="margin: 0;" id="currentTestName">Select a test template</h4>
-                                <div>
+                                <h4 style="margin: 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500;" id="currentTestName">Select a test template</h4>
+                                <div style="display: flex; gap: 6px;">
                                     <button id="validateTest" style="
                                         padding: 6px 12px;
-                                        background: #ffc107;
-                                        color: #212529;
-                                        border: none;
+                                        background: rgba(255, 193, 7, 0.8);
+                                        color: rgba(33, 37, 41, 0.9);
+                                        border: 1px solid rgba(255, 193, 7, 0.5);
                                         border-radius: 4px;
                                         cursor: pointer;
-                                        margin-right: 5px;
+                                        font-size: 12px;
                                     ">Validate</button>
                                     <button id="runTest" style="
                                         padding: 6px 12px;
-                                        background: #28a745;
+                                        background: rgba(40, 167, 69, 0.8);
                                         color: white;
-                                        border: none;
+                                        border: 1px solid rgba(40, 167, 69, 0.5);
                                         border-radius: 4px;
                                         cursor: pointer;
+                                        font-size: 12px;
                                     ">Run Test</button>
                                 </div>
                             </div>
-                            <p style="margin: 0; color: #6c757d; font-size: 14px;" id="testDescription"></p>
+                            <p style="margin: 0; color: rgba(255, 255, 255, 0.6); font-size: 12px;" id="testDescription"></p>
                         </div>
                         
                         <div style="flex: 1; padding: 15px; overflow: auto;">
@@ -226,10 +232,12 @@ class QwenTestingInterface {
                                 height: 200px;
                                 font-family: 'Monaco', 'Menlo', monospace;
                                 font-size: 12px;
-                                border: 1px solid #ced4da;
+                                background: rgba(255, 255, 255, 0.05);
+                                border: 1px solid rgba(255, 255, 255, 0.2);
                                 border-radius: 4px;
                                 padding: 10px;
                                 resize: vertical;
+                                color: rgba(255, 255, 255, 0.9);
                             " placeholder="Enter your test text here..."></textarea>
                         </div>
                     </div>
@@ -237,12 +245,12 @@ class QwenTestingInterface {
                     <!-- Results Panel -->
                     <div style="
                         height: 300px;
-                        border-top: 1px solid #dee2e6;
-                        background: #f8f9fa;
+                        border-top: 1px solid rgba(255, 255, 255, 0.1);
+                        background: rgba(0, 0, 0, 0.2);
                         overflow: auto;
                     ">
                         <div style="padding: 15px;">
-                            <h4 style="margin: 0 0 15px 0;">Test Results</h4>
+                            <h4 style="margin: 0 0 15px 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500;">Test Results</h4>
                             <div id="testResults"></div>
                         </div>
                     </div>
@@ -300,12 +308,13 @@ class QwenTestingInterface {
                     width: "100%",
                     padding: "8px 12px",
                     marginBottom: "5px",
-                    background: "white",
-                    border: "1px solid #ced4da",
+                    background: "rgba(255, 255, 255, 0.05)",
+                    border: "1px solid rgba(255, 255, 255, 0.2)",
                     borderRadius: "4px",
                     cursor: "pointer",
                     textAlign: "left",
-                    fontSize: "13px"
+                    fontSize: "12px",
+                    color: "rgba(255, 255, 255, 0.9)"
                 },
                 textContent: test.name
             });
@@ -539,8 +548,8 @@ class QwenTestingInterface {
             style: {
                 marginBottom: "15px",
                 padding: "12px",
-                background: "white",
-                border: "1px solid #dee2e6",
+                background: "rgba(255, 255, 255, 0.05)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
                 borderRadius: "4px"
             }
         });
@@ -550,7 +559,7 @@ class QwenTestingInterface {
         
         resultElement.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <strong>${results.testName || 'Test'}</strong>
+                <strong style="color: rgba(255, 255, 255, 0.9);">${results.testName || 'Test'}</strong>
                 <span style="
                     background: ${typeColor}; 
                     color: white; 
@@ -559,8 +568,8 @@ class QwenTestingInterface {
                     font-size: 11px;
                 ">${results.type}</span>
             </div>
-            <div style="font-size: 12px; color: #6c757d; margin-bottom: 8px;">${timestamp}</div>
-            <div style="font-size: 13px;">
+            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 8px;">${timestamp}</div>
+            <div style="font-size: 13px; color: rgba(255, 255, 255, 0.8);">
                 ${results.results.map(result => this.formatResult(result)).join('<br>')}
             </div>
         `;
@@ -594,32 +603,77 @@ class QwenTestingInterface {
                 left: "50%",
                 transform: "translate(-50%, -50%)",
                 width: "500px",
-                background: "white",
-                border: "2px solid #333",
+                background: "rgba(20, 20, 20, 0.95)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
                 borderRadius: "8px",
                 padding: "20px",
                 zIndex: 10001,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+                backdropFilter: "blur(10px)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                fontFamily: "system-ui, -apple-system, sans-serif",
+                color: "rgba(255, 255, 255, 0.9)"
             }
         });
         
         customTestDialog.innerHTML = `
-            <h3 style="margin: 0 0 15px 0;">Create Custom Test</h3>
+            <h3 style="margin: 0 0 15px 0; color: rgba(255, 255, 255, 0.9); font-size: 18px; font-weight: 500;">Create Custom Test</h3>
             <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px;">Test Name:</label>
-                <input type="text" id="customTestName" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                <label style="display: block; margin-bottom: 5px; color: rgba(255, 255, 255, 0.9); font-size: 14px;">Test Name:</label>
+                <input type="text" id="customTestName" style="
+                    width: 100%; 
+                    padding: 8px; 
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.2); 
+                    border-radius: 4px;
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 12px;
+                ">
             </div>
             <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px;">Description:</label>
-                <input type="text" id="customTestDesc" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                <label style="display: block; margin-bottom: 5px; color: rgba(255, 255, 255, 0.9); font-size: 14px;">Description:</label>
+                <input type="text" id="customTestDesc" style="
+                    width: 100%; 
+                    padding: 8px; 
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.2); 
+                    border-radius: 4px;
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 12px;
+                ">
             </div>
             <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px;">Template:</label>
-                <textarea id="customTestTemplate" rows="6" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-family: monospace; font-size: 12px;"></textarea>
+                <label style="display: block; margin-bottom: 5px; color: rgba(255, 255, 255, 0.9); font-size: 14px;">Template:</label>
+                <textarea id="customTestTemplate" rows="6" style="
+                    width: 100%; 
+                    padding: 8px; 
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.2); 
+                    border-radius: 4px; 
+                    font-family: 'Monaco', 'Menlo', monospace; 
+                    font-size: 11px;
+                    color: rgba(255, 255, 255, 0.9);
+                    resize: vertical;
+                "></textarea>
             </div>
-            <div style="text-align: right;">
-                <button id="saveCustomTest" style="padding: 8px 16px; margin: 5px; background: #28a745; color: white; border: none; border-radius: 4px;">Save Test</button>
-                <button id="cancelCustomTest" style="padding: 8px 16px; margin: 5px; background: #6c757d; color: white; border: none; border-radius: 4px;">Cancel</button>
+            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button id="saveCustomTest" style="
+                    padding: 6px 12px; 
+                    background: rgba(40, 167, 69, 0.8); 
+                    color: white; 
+                    border: 1px solid rgba(40, 167, 69, 0.5); 
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                ">Save Test</button>
+                <button id="cancelCustomTest" style="
+                    padding: 6px 12px; 
+                    background: rgba(108, 117, 125, 0.8); 
+                    color: white; 
+                    border: 1px solid rgba(108, 117, 125, 0.5); 
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                ">Cancel</button>
             </div>
         `;
         

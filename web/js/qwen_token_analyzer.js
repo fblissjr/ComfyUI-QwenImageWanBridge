@@ -157,106 +157,6 @@ class TokenAnalyzer {
     }
 }
 
-class SpatialCoordinateEditor {
-    constructor() {
-        this.regions = [];
-        this.canvas = null;
-        this.ctx = null;
-        this.activeRegion = null;
-        this.isDragging = false;
-    }
-
-    createCanvas(width = 512, height = 512) {
-        this.canvas = $el("canvas", {
-            width: width,
-            height: height,
-            style: {
-                border: "1px solid #ccc",
-                cursor: "crosshair",
-                maxWidth: "100%"
-            }
-        });
-        
-        this.ctx = this.canvas.getContext('2d');
-        this.setupEventListeners();
-        return this.canvas;
-    }
-
-    setupEventListeners() {
-        let startX, startY;
-        
-        this.canvas.addEventListener('mousedown', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            startX = e.clientX - rect.left;
-            startY = e.clientY - rect.top;
-            this.isDragging = true;
-        });
-
-        this.canvas.addEventListener('mousemove', (e) => {
-            if (!this.isDragging) return;
-            
-            const rect = this.canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            const currentY = e.clientY - rect.top;
-            
-            this.redraw();
-            this.drawRegion(startX, startY, currentX, currentY, 'rgba(0, 255, 0, 0.3)');
-        });
-
-        this.canvas.addEventListener('mouseup', (e) => {
-            if (!this.isDragging) return;
-            
-            const rect = this.canvas.getBoundingClientRect();
-            const endX = e.clientX - rect.left;
-            const endY = e.clientY - rect.top;
-            
-            const region = {
-                x1: Math.min(startX, endX),
-                y1: Math.min(startY, endY),
-                x2: Math.max(startX, endX),
-                y2: Math.max(startY, endY),
-                label: `region_${this.regions.length + 1}`
-            };
-            
-            this.regions.push(region);
-            this.redraw();
-            this.isDragging = false;
-            
-            // Trigger callback if set
-            if (this.onRegionCreated) {
-                this.onRegionCreated(region);
-            }
-        });
-    }
-
-    drawRegion(x1, y1, x2, y2, color = 'rgba(255, 0, 0, 0.3)') {
-        this.ctx.fillStyle = color;
-        this.ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
-        this.ctx.strokeStyle = 'red';
-        this.ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-    }
-
-    redraw() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.regions.forEach(region => {
-            this.drawRegion(region.x1, region.y1, region.x2, region.y2);
-            
-            // Draw label
-            this.ctx.fillStyle = 'black';
-            this.ctx.font = '12px Arial';
-            this.ctx.fillText(region.label, region.x1 + 2, region.y1 + 14);
-        });
-    }
-
-    generateToken(region) {
-        return `<|object_ref_start|>${region.label}<|object_ref_end|> at <|box_start|>${region.x1},${region.y1},${region.x2},${region.y2}<|box_end|>`;
-    }
-
-    clearRegions() {
-        this.regions = [];
-        this.redraw();
-    }
-}
 
 // Create widget for token analysis display
 function createTokenAnalysisWidget(node, inputName, inputData, app) {
@@ -318,12 +218,6 @@ app.registerExtension({
                     const analyzeBtn = node.addWidget("button", "Analyze Tokens", "analyze", () => {
                         showTokenAnalysisDialog(node);
                     });
-                    
-                    // Add spatial editor button
-                    const spatialBtn = node.addWidget("button", "Spatial Editor", "spatial", () => {
-                        showSpatialEditorDialog(node);
-                    });
-                    
                 }, 10);
                 
                 return ret;
@@ -340,15 +234,18 @@ function showTokenAnalysisDialog(node) {
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            background: "white",
-            border: "2px solid #333",
+            background: "rgba(20, 20, 20, 0.95)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
             padding: "20px",
             zIndex: 10000,
             maxWidth: "600px",
             maxHeight: "80vh",
             overflow: "auto",
             borderRadius: "8px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+            backdropFilter: "blur(10px)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+            color: "rgba(255, 255, 255, 0.9)"
         }
     });
 
@@ -361,53 +258,135 @@ function showTokenAnalysisDialog(node) {
     const analysis = analyzer.analyzeText(currentText);
     
     dialog.innerHTML = `
-        <h3 style="margin: 0 0 15px 0; color: #333;">Token Analysis</h3>
+        <h3 style="margin: 0 0 15px 0; color: rgba(255, 255, 255, 0.9); font-size: 18px; font-weight: 500;">Token Analysis</h3>
         
-        <div style="margin-bottom: 15px;">
-            <strong>Statistics:</strong><br>
-            Total Tokens (approx): ${analysis.totalTokens}<br>
-            Special Tokens: ${analysis.specialTokens}<br>
-            Vision Tokens: ${analysis.visionTokens}<br>
-            Spatial Tokens: ${analysis.spatialTokens}
+        <div style="
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        ">
+            <strong style="color: rgba(255, 255, 255, 0.9);">Statistics:</strong><br>
+            <span style="font-family: 'Monaco', 'Menlo', monospace; font-size: 13px;">
+                Total Tokens (approx): ${analysis.totalTokens}<br>
+                Special Tokens: ${analysis.specialTokens}<br>
+                Vision Tokens: ${analysis.visionTokens}<br>
+                Spatial Tokens: ${analysis.spatialTokens}
+            </span>
         </div>
         
         ${analysis.sequences.length > 0 ? `
             <div style="margin-bottom: 15px;">
-                <strong>Sequences Found:</strong>
-                <ul style="margin: 5px 0; padding-left: 20px;">
+                <strong style="color: rgba(255, 255, 255, 0.9);">Sequences Found:</strong>
+                <div style="
+                    background: rgba(255, 255, 255, 0.05);
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    font-family: 'Monaco', 'Menlo', monospace;
+                    font-size: 12px;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    margin-top: 8px;
+                ">
                     ${analysis.sequences.map(seq => 
-                        `<li>${seq.type}: <code>${seq.content}</code></li>`
+                        `<div style="margin-bottom: 4px; color: rgba(255, 255, 255, 0.7);">
+                            ${seq.type}: <code style="background: rgba(255, 255, 255, 0.1); padding: 1px 4px; border-radius: 2px;">${seq.content}</code>
+                        </div>`
                     ).join('')}
-                </ul>
+                </div>
             </div>
         ` : ''}
         
         ${analysis.errors.length > 0 ? `
-            <div style="margin-bottom: 15px; color: #d32f2f;">
-                <strong>Errors:</strong>
-                <ul style="margin: 5px 0; padding-left: 20px;">
-                    ${analysis.errors.map(err => `<li>${err}</li>`).join('')}
-                </ul>
+            <div style="margin-bottom: 15px;">
+                <strong style="color: #ff6666;">Errors:</strong>
+                <div style="
+                    background: rgba(255, 0, 0, 0.1);
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid rgba(255, 0, 0, 0.2);
+                    margin-top: 8px;
+                ">
+                    ${analysis.errors.map(err => 
+                        `<div style="color: #ff6666; font-size: 13px; margin-bottom: 4px;">• ${err}</div>`
+                    ).join('')}
+                </div>
             </div>
         ` : ''}
         
         <div style="margin-bottom: 15px;">
-            <strong>Template Generator:</strong><br>
-            <select id="templateType" style="margin: 5px 0; padding: 5px;">
+            <strong style="color: rgba(255, 255, 255, 0.9);">Template Generator:</strong><br>
+            <select id="templateType" style="
+                width: 100%;
+                margin: 8px 0;
+                padding: 6px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+                color: white;
+                font-size: 12px;
+            ">
                 <option value="basic_vision">Basic Vision</option>
                 <option value="chat_vision">Chat + Vision</option>
                 <option value="spatial_edit">Spatial Edit</option>
                 <option value="full_template">Full Template</option>
             </select><br>
-            <input type="text" id="customText" placeholder="Custom text..." style="width: 100%; padding: 5px; margin: 5px 0;"><br>
-            <button id="generateBtn" style="padding: 8px 16px; margin: 5px 0;">Generate Template</button>
+            <input type="text" id="customText" placeholder="Custom text..." style="
+                width: 100%;
+                padding: 6px;
+                margin: 5px 0;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+                color: white;
+                font-size: 12px;
+            "><br>
+            <button id="generateBtn" style="
+                padding: 8px 16px;
+                margin: 5px 0;
+                background: rgba(0, 120, 255, 0.8);
+                color: white;
+                border: 1px solid rgba(0, 120, 255, 0.5);
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Generate Template</button>
         </div>
         
-        <textarea id="templateOutput" style="width: 100%; height: 100px; margin-bottom: 15px; font-family: monospace;" readonly></textarea>
+        <textarea id="templateOutput" style="
+            width: 100%;
+            height: 100px;
+            margin-bottom: 15px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+            resize: vertical;
+        " readonly></textarea>
         
-        <div style="text-align: right;">
-            <button id="useTemplate" style="padding: 8px 16px; margin: 5px; background: #4caf50; color: white; border: none; border-radius: 4px;">Use Template</button>
-            <button id="closeBtn" style="padding: 8px 16px; margin: 5px; background: #f44336; color: white; border: none; border-radius: 4px;">Close</button>
+        <div style="display: flex; gap: 6px; justify-content: flex-end;">
+            <button id="useTemplate" style="
+                padding: 6px 12px;
+                background: rgba(76, 175, 80, 0.8);
+                color: white;
+                border: 1px solid rgba(76, 175, 80, 0.5);
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Use Template</button>
+            <button id="closeBtn" style="
+                padding: 6px 12px;
+                background: rgba(244, 67, 54, 0.8);
+                color: white;
+                border: 1px solid rgba(244, 67, 54, 0.5);
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Close</button>
         </div>
     `;
     
@@ -433,76 +412,3 @@ function showTokenAnalysisDialog(node) {
     };
 }
 
-function showSpatialEditorDialog(node) {
-    const dialog = $el("div", {
-        parent: document.body,
-        style: {
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "white",
-            border: "2px solid #333",
-            padding: "20px",
-            zIndex: 10000,
-            width: "700px",
-            maxHeight: "80vh",
-            overflow: "auto",
-            borderRadius: "8px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
-        }
-    });
-
-    const spatialEditor = new SpatialCoordinateEditor();
-    const canvas = spatialEditor.createCanvas(512, 512);
-    
-    dialog.innerHTML = `
-        <h3 style="margin: 0 0 15px 0; color: #333;">Spatial Coordinate Editor</h3>
-        <p style="margin-bottom: 15px; color: #666;">Click and drag to create bounding boxes. Generated tokens will appear below.</p>
-        <div style="text-align: center; margin-bottom: 15px;"></div>
-        <div style="margin-bottom: 15px;">
-            <button id="clearRegions" style="padding: 8px 16px; margin: 5px; background: #ff9800; color: white; border: none; border-radius: 4px;">Clear Regions</button>
-            <button id="exportTokens" style="padding: 8px 16px; margin: 5px; background: #2196f3; color: white; border: none; border-radius: 4px;">Export Tokens</button>
-        </div>
-        <textarea id="tokensOutput" style="width: 100%; height: 120px; margin-bottom: 15px; font-family: monospace;" readonly placeholder="Generated spatial tokens will appear here..."></textarea>
-        <div style="text-align: right;">
-            <button id="useTokens" style="padding: 8px 16px; margin: 5px; background: #4caf50; color: white; border: none; border-radius: 4px;">Use Tokens</button>
-            <button id="closeBtn" style="padding: 8px 16px; margin: 5px; background: #f44336; color: white; border: none; border-radius: 4px;">Close</button>
-        </div>
-    `;
-    
-    dialog.querySelector('div').appendChild(canvas);
-    
-    const tokensOutput = dialog.querySelector('#tokensOutput');
-    
-    spatialEditor.onRegionCreated = (region) => {
-        const tokens = spatialEditor.regions.map(r => spatialEditor.generateToken(r)).join('\n');
-        tokensOutput.value = tokens;
-    };
-    
-    dialog.querySelector('#clearRegions').onclick = () => {
-        spatialEditor.clearRegions();
-        tokensOutput.value = '';
-    };
-    
-    dialog.querySelector('#exportTokens').onclick = () => {
-        const tokens = spatialEditor.regions.map(r => spatialEditor.generateToken(r)).join(' ');
-        navigator.clipboard.writeText(tokens).then(() => {
-            alert('Tokens copied to clipboard!');
-        });
-    };
-    
-    dialog.querySelector('#useTokens').onclick = () => {
-        const textWidget = node.widgets?.find(w => w.name === "text" || w.name === "prompt");
-        if (textWidget && tokensOutput.value) {
-            const currentText = textWidget.value || "";
-            textWidget.value = currentText + (currentText ? ' ' : '') + tokensOutput.value;
-            node.setDirtyCanvas(true, true);
-        }
-        document.body.removeChild(dialog);
-    };
-    
-    dialog.querySelector('#closeBtn').onclick = () => {
-        document.body.removeChild(dialog);
-    };
-}
