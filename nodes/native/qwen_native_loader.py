@@ -17,9 +17,15 @@ try:
     from transformers import (
         Qwen2VLForConditionalGeneration,
         Qwen2VLProcessor,
-        BitsAndBytesConfig
+        BitsAndBytesConfig,
+        AutoConfig,
+        AutoModelForVision2Seq
     )
     TRANSFORMERS_AVAILABLE = True
+    
+    # Log transformers version for debugging
+    import transformers
+    logging.info(f"transformers version: {transformers.__version__}")
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
     logging.warning("transformers library not available - QwenNativeLoader disabled")
@@ -229,6 +235,22 @@ This enables:
         logger.info(f"Loading model from: {final_model_path}")
         logger.info(f"Settings: device={device}, dtype={dtype}, low_vram={low_vram}, quantization={quantization}")
         
+        # Log file structure for debugging
+        import os
+        if os.path.exists(final_model_path):
+            try:
+                files = os.listdir(final_model_path)
+                logger.info(f"Model directory contains {len(files)} files:")
+                for f in sorted(files):
+                    if f.endswith(('.json', '.safetensors', '.bin', '.py')):
+                        file_path = os.path.join(final_model_path, f)
+                        size = os.path.getsize(file_path) / (1024*1024) if os.path.isfile(file_path) else 0
+                        logger.info(f"  {f} ({size:.1f} MB)")
+            except Exception as list_error:
+                logger.warning(f"Could not list directory contents: {list_error}")
+        else:
+            logger.info(f"Path does not exist locally: {final_model_path}")
+        
         # Prepare loading arguments
         load_kwargs = {
             "torch_dtype": self._get_dtype(dtype),
@@ -259,7 +281,6 @@ This enables:
             logger.info(f"Load kwargs: {load_kwargs}")
             
             # Try to load config first to verify compatibility
-            from transformers import AutoConfig
             try:
                 config = AutoConfig.from_pretrained(
                     final_model_path, 
@@ -268,13 +289,44 @@ This enables:
                 logger.info(f"Model config loaded: {config.model_type}")
                 logger.info(f"Hidden size: {getattr(config, 'hidden_size', 'unknown')}")
                 logger.info(f"Vocab size: {getattr(config, 'vocab_size', 'unknown')}")
+                logger.info(f"Architecture: {getattr(config, 'architectures', 'unknown')}")
             except Exception as config_error:
                 logger.warning(f"Could not load config: {config_error}")
+                config = None
             
-            model = Qwen2VLForConditionalGeneration.from_pretrained(
-                final_model_path,
-                **load_kwargs
-            )
+            # Try different loading approaches based on config
+            model = None
+            loading_errors = []
+            
+            # Approach 1: Direct Qwen2VL class
+            try:
+                logger.info("Attempting to load with Qwen2VLForConditionalGeneration...")
+                model = Qwen2VLForConditionalGeneration.from_pretrained(
+                    final_model_path,
+                    **load_kwargs
+                )
+                logger.info("Successfully loaded with Qwen2VLForConditionalGeneration")
+            except Exception as e1:
+                loading_errors.append(f"Qwen2VLForConditionalGeneration: {e1}")
+                logger.warning(f"Failed with Qwen2VLForConditionalGeneration: {e1}")
+            
+            # Approach 2: AutoModel if direct class failed
+            if model is None:
+                try:
+                    logger.info("Attempting to load with AutoModelForVision2Seq...")
+                    model = AutoModelForVision2Seq.from_pretrained(
+                        final_model_path,
+                        **load_kwargs
+                    )
+                    logger.info("Successfully loaded with AutoModelForVision2Seq")
+                except Exception as e2:
+                    loading_errors.append(f"AutoModelForVision2Seq: {e2}")
+                    logger.warning(f"Failed with AutoModelForVision2Seq: {e2}")
+            
+            # If both approaches failed, raise comprehensive error
+            if model is None:
+                error_details = "\n".join([f"  - {err}" for err in loading_errors])
+                raise RuntimeError(f"All model loading approaches failed:\n{error_details}")
             
             # Load processor - critical for proper vision token handling
             # ComfyUI uses tokenizer-only path which degrades spatial understanding
