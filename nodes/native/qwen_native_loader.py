@@ -53,8 +53,8 @@ class QwenNativeLoader:
         
         # Get local models from text_encoders folder
         models = folder_paths.get_filename_list("text_encoders")
-        # Filter for directories (not .safetensors files)
-        local_models = [m for m in models if not m.endswith('.safetensors') and "qwen" in m.lower()]
+        # Filter for directories (not .safetensors files) - show all directories
+        local_models = [m for m in models if not m.endswith('.safetensors')]
         
         # Add common HuggingFace repo options
         hf_repos = [
@@ -71,8 +71,9 @@ class QwenNativeLoader:
 
         return {
             "required": {
-                "model_path": (all_options, {
-                    "tooltip": "Local directory from 'ComfyUI/models/text_encoders' or HuggingFace repo path"
+                "model_path": ("STRING", {
+                    "default": all_options[0] if all_options else "Qwen/Qwen2.5-VL-7B-Instruct",
+                    "tooltip": "Local directory from 'ComfyUI/models/text_encoders' or HuggingFace repo path. Examples: 'my_qwen_model' (local) or 'Qwen/Qwen2.5-VL-7B-Instruct' (HF repo)"
                 }),
                 "auto_download": ("BOOLEAN", {
                     "default": True,
