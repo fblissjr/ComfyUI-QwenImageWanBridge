@@ -19,6 +19,20 @@ class QwenSpatialInterface {
     this.polygonPoints = [];
     this.imageScale = 1;
     this.imageOffset = { x: 0, y: 0 };
+    
+    // Qwen resolutions for coordinate optimization
+    this.QWEN_RESOLUTIONS = [
+      [1024, 1024],
+      [672, 1568], [688, 1504], [720, 1456], [752, 1392],
+      [800, 1328], [832, 1248], [880, 1184], [944, 1104],
+      [1104, 944], [1184, 880], [1248, 832], [1328, 800],
+      [1392, 752], [1456, 720], [1504, 688], [1568, 672],
+      [1328, 1328], [1920, 1080], [1080, 1920],
+    ];
+    
+    // Store original and optimized dimensions
+    this.originalDimensions = { width: 0, height: 0 };
+    this.optimizedDimensions = { width: 0, height: 0 };
   }
 
   createInterface(node = null) {
@@ -1023,6 +1037,61 @@ class QwenSpatialInterface {
     const timestamp = new Date().toLocaleTimeString();
     debugOutput.textContent += `${timestamp}: ${message}\n`;
     debugOutput.scrollTop = debugOutput.scrollHeight;
+  }
+
+  findClosestResolution(width, height) {
+    const aspectRatio = width / height;
+    
+    let bestResolution = null;
+    let bestRatioDiff = Infinity;
+    
+    for (const [resW, resH] of this.QWEN_RESOLUTIONS) {
+      const resRatio = resW / resH;
+      const ratioDiff = Math.abs(Math.log(resRatio / aspectRatio));
+      
+      if (ratioDiff < bestRatioDiff) {
+        bestRatioDiff = ratioDiff;
+        bestResolution = [resW, resH];
+      }
+    }
+    
+    return bestResolution;
+  }
+
+  optimizeImageForQwen(img) {
+    // Store original dimensions
+    this.originalDimensions = { width: img.width, height: img.height };
+    
+    // Find optimal Qwen resolution
+    const [targetW, targetH] = this.findClosestResolution(img.width, img.height);
+    this.optimizedDimensions = { width: targetW, height: targetH };
+    
+    // Create optimized canvas
+    const optimizedCanvas = document.createElement('canvas');
+    optimizedCanvas.width = targetW;
+    optimizedCanvas.height = targetH;
+    const ctx = optimizedCanvas.getContext('2d');
+    
+    // Fill with black background
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, targetW, targetH);
+    
+    // Calculate scale and positioning to fit image within target resolution
+    const scale = Math.min(targetW / img.width, targetH / img.height);
+    const scaledW = img.width * scale;
+    const scaledH = img.height * scale;
+    const offsetX = (targetW - scaledW) / 2;
+    const offsetY = (targetH - scaledH) / 2;
+    
+    // Draw the scaled image centered
+    ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
+    
+    return {
+      canvas: optimizedCanvas,
+      scale: scale,
+      offsetX: offsetX,
+      offsetY: offsetY
+    };
   }
 
   resizeCanvases(width, height) {

@@ -80,12 +80,21 @@ Loads Qwen2.5-VL models with RoPE position embedding fixes.
 - **Example:** Text-to-image, image editing workflows
 
 ### QwenVLTextEncoder
-Main text encoder with vision support and dual image inputs.
-- **edit_image:** Vision-processed image for semantic understanding
+Main text encoder with vision support, dual image inputs, and dual-encoding architecture.
+
+**Dual-Encoding Architecture (v1.4.4+):**
+- **Semantic Path:** edit_image → QwenVisionProcessor → MultiFrameVisionEmbedder → high-level understanding
+- **Reconstructive Path:** edit_image → VAE → structural features → low-level detail preservation
+- **Fusion:** Both paths combined in MMDiT-compatible conditioning for balanced semantic coherence + visual fidelity
+
+**Inputs:**
+- **edit_image:** Vision-processed image for semantic understanding (activates dual-encoding when VAE connected)
 - **context_image:** ControlNet-style spatial conditioning (no vision processing)
-- **Outputs:** conditioning
-- **Use for:** Text+image encoding with vision token processing
-- **Example:** "Change dress to red" (edit_image) + pose skeleton (context_image)
+- **vae:** Optional VAE connection enables dual-encoding architecture
+
+**Outputs:** conditioning with dual-encoding metadata
+- **Use for:** Text+image encoding with advanced vision processing
+- **Example:** "Change dress to red" (edit_image) + pose skeleton (context_image) with automatic dual-encoding when VAE connected
 
 ### QwenMultiReferenceHandler
 Combines up to 4 images with aspect ratio preservation to prevent distortion.
@@ -137,6 +146,12 @@ QwenVLCLIPLoader → QwenVLTextEncoder (mode: text_to_image) → KSampler
 ```
 LoadImage → QwenVLTextEncoder (edit_image, mode: image_edit) → KSampler
 ```
+
+**With Dual-Encoding (v1.4.4+):**
+```
+LoadImage → VAEEncode → QwenVLTextEncoder (edit_image + vae, mode: image_edit) → KSampler
+```
+*Automatically activates semantic + reconstructive dual encoding for improved editing quality*
 
 ### Multi-Reference Composition
 ```
