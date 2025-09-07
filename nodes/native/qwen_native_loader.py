@@ -255,6 +255,22 @@ This enables:
             # Load model - this is the core difference from ComfyUI's approach
             # We load directly instead of going through ComfyUI's CLIP wrapper
             logger.info("Loading Qwen2.5-VL model...")
+            logger.info(f"Model path: {final_model_path}")
+            logger.info(f"Load kwargs: {load_kwargs}")
+            
+            # Try to load config first to verify compatibility
+            from transformers import AutoConfig
+            try:
+                config = AutoConfig.from_pretrained(
+                    final_model_path, 
+                    trust_remote_code=trust_remote_code
+                )
+                logger.info(f"Model config loaded: {config.model_type}")
+                logger.info(f"Hidden size: {getattr(config, 'hidden_size', 'unknown')}")
+                logger.info(f"Vocab size: {getattr(config, 'vocab_size', 'unknown')}")
+            except Exception as config_error:
+                logger.warning(f"Could not load config: {config_error}")
+            
             model = Qwen2VLForConditionalGeneration.from_pretrained(
                 final_model_path,
                 **load_kwargs
@@ -296,8 +312,35 @@ This enables:
             return (model, processor, config)
             
         except Exception as e:
-            logger.error(f"Failed to load Qwen model: {e}")
-            raise RuntimeError(f"Model loading failed: {e}")
+            error_msg = str(e)
+            logger.error(f"Failed to load Qwen model: {error_msg}")
+            
+            # Provide specific guidance for common errors
+            if "size mismatch" in error_msg:
+                if "3584" in error_msg and "1280" in error_msg:
+                    guidance = (
+                        f"Model architecture mismatch detected. "
+                        f"The checkpoint appears to be Qwen2.5-VL 7B (3584 dims) but transformers is loading "
+                        f"a different model size (1280 dims). This usually means:\n"
+                        f"1. Wrong model path - verify '{final_model_path}' contains the correct model\n"
+                        f"2. Corrupted model files - try re-downloading\n"
+                        f"3. Mixed model files from different variants\n"
+                        f"Try using a different model path or re-download the model."
+                    )
+                else:
+                    guidance = (
+                        f"Model size mismatch detected. The checkpoint and model architecture don't match. "
+                        f"Verify the model path '{final_model_path}' points to a complete, compatible model."
+                    )
+            elif "trust_remote_code" in error_msg:
+                guidance = (
+                    f"Remote code execution blocked. Set trust_remote_code=True to load this model. "
+                    f"Note: This allows the model to execute custom code."
+                )
+            else:
+                guidance = f"Model loading failed. Check that '{final_model_path}' contains a valid Qwen2.5-VL model."
+            
+            raise RuntimeError(f"Model loading failed: {error_msg}\n\nGuidance: {guidance}")
 
     def _estimate_memory_footprint(self, model) -> float:
         """Estimate model memory footprint in GB"""
