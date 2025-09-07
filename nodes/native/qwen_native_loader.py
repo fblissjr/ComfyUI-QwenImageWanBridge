@@ -26,6 +26,7 @@ except ImportError:
 
 import comfy.model_management as model_management
 import comfy.utils
+import folder_paths
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +51,32 @@ class QwenNativeLoader:
                 }
             }
         
+        # Get local models from text_encoders folder
+        models = folder_paths.get_filename_list("text_encoders")
+        # Filter for directories (not .safetensors files)
+        local_models = [m for m in models if not m.endswith('.safetensors') and "qwen" in m.lower()]
+        
+        # Add common HuggingFace repo options
+        hf_repos = [
+            "Qwen/Qwen2.5-VL-7B-Instruct",
+            "Qwen/Qwen2.5-VL-3B-Instruct", 
+            "Qwen/Qwen2-VL-7B-Instruct",
+            "Qwen/Qwen2-VL-2B-Instruct"
+        ]
+        
+        # Combine local and HF options
+        all_options = local_models + hf_repos
+        if not all_options:
+            all_options = ["Qwen/Qwen2.5-VL-7B-Instruct"]
+
         return {
             "required": {
-                "model_path": ("STRING", {
-                    "default": "Qwen/Qwen-Image-Edit",
-                    "tooltip": "HuggingFace model path or local directory"
+                "model_path": (all_options, {
+                    "tooltip": "Local directory from 'ComfyUI/models/text_encoders' or HuggingFace repo path"
+                }),
+                "auto_download": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Automatically download from HuggingFace if model not found locally"
                 }),
                 "device": (["auto", "cuda", "cpu"], {
                     "default": "auto",
@@ -157,14 +179,14 @@ This enables:
     def load_qwen_native(
         self, 
         model_path: str,
+        auto_download: bool = True,
         device: str = "auto",
         dtype: str = "auto", 
         low_vram: bool = False,
         quantization: str = "none",
         model_variant: str = "edit",
         trust_remote_code: bool = True,
-        cache_dir: str = "",
-        **kwargs
+        cache_dir: str = ""
     ) -> Tuple[Any, Any, Any]:
         """
         Load Qwen2.5-VL model and processor directly from transformers
@@ -176,7 +198,36 @@ This enables:
         if not TRANSFORMERS_AVAILABLE:
             raise RuntimeError("transformers library is required for QwenNativeLoader")
         
-        logger.info(f"Loading Qwen model: {model_path}")
+        # Determine if this is a local path or HuggingFace repo
+        if "/" in model_path and not model_path.startswith("/"):
+            # Looks like HuggingFace repo (e.g., "Qwen/Qwen2.5-VL-7B-Instruct")
+            if auto_download:
+                logger.info(f"Using HuggingFace repo: {model_path}")
+                final_model_path = model_path  # Let transformers handle download
+            else:
+                # Try to find it locally first
+                local_path = folder_paths.get_full_path("text_encoders", model_path.split("/")[-1])
+                import os
+                if os.path.exists(local_path):
+                    final_model_path = local_path
+                    logger.info(f"Found local copy: {local_path}")
+                else:
+                    raise RuntimeError(f"Model {model_path} not found locally and auto_download is disabled. "
+                                     f"Enable auto_download or manually download to: {local_path}")
+        else:
+            # Local directory path
+            import os
+            final_model_path = folder_paths.get_full_path("text_encoders", model_path)
+            if not os.path.exists(final_model_path):
+                if auto_download and "/" not in model_path:
+                    # Try common HF repo format
+                    hf_path = f"Qwen/{model_path}"
+                    logger.info(f"Local path not found, trying HuggingFace: {hf_path}")
+                    final_model_path = hf_path
+                else:
+                    raise RuntimeError(f"Local model directory not found: {final_model_path}")
+        
+        logger.info(f"Loading model from: {final_model_path}")
         logger.info(f"Settings: device={device}, dtype={dtype}, low_vram={low_vram}, quantization={quantization}")
         
         # Prepare loading arguments
@@ -206,7 +257,7 @@ This enables:
             # We load directly instead of going through ComfyUI's CLIP wrapper
             logger.info("Loading Qwen2.5-VL model...")
             model = Qwen2VLForConditionalGeneration.from_pretrained(
-                model_path,
+                final_model_path,
                 **load_kwargs
             )
             
@@ -214,7 +265,7 @@ This enables:
             # ComfyUI uses tokenizer-only path which degrades spatial understanding
             logger.info("Loading Qwen2VL processor...")
             processor = Qwen2VLProcessor.from_pretrained(
-                model_path,
+                final_model_path,
                 trust_remote_code=trust_remote_code,
                 cache_dir=cache_dir if cache_dir else None
             )
