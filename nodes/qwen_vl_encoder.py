@@ -212,6 +212,7 @@ ALWAYS connect VAE to this node for reference latents!
         ref_latent = None
         context_latent = None
         original_text = text
+        dual_encoding_data = None
         
         # No resolution controls needed - images will be processed optimally
 
@@ -224,8 +225,50 @@ ALWAYS connect VAE to this node for reference latents!
             image = edit_image
             images_for_tokenizer = [image[:, :, :, :3]]
 
+            # DUAL ENCODING: Process through both semantic and reconstructive paths
             if vae is not None:
+                # Reconstructive path - standard VAE encoding
                 ref_latent = vae.encode(image[:, :, :, :3])
+                
+                # DUAL ENCODING: Semantic path using native-level processing
+                try:
+                    from .qwen_vision_processor import QwenVisionProcessor
+                    from .qwen_processor import Qwen2VLProcessor
+                    from .qwen_custom_tokenizer import MultiFrameVisionEmbedder
+                    
+                    # Create advanced vision features (native-quality processing)
+                    vision_processor = QwenVisionProcessor()
+                    qwen_processor = Qwen2VLProcessor() 
+                    embedder = MultiFrameVisionEmbedder()
+                    
+                    # Process image through semantic vision pipeline
+                    image_list = [image[0]]  # Remove batch dimension for processor
+                    semantic_patches, semantic_grid = vision_processor.create_vision_patches(image_list)
+                    
+                    # Create semantic embeddings (paper's semantic path)
+                    semantic_embeddings = embedder.embed_vision_patches(
+                        semantic_patches, semantic_grid, vision_model=None
+                    )
+                    
+                    # Store dual encoding data for conditioning fusion (paper architecture)
+                    dual_encoding_data = {
+                        "semantic_embeddings": semantic_embeddings,  # High-level understanding
+                        "semantic_patches": semantic_patches,
+                        "semantic_grid": semantic_grid,
+                        "reconstructive_latent": ref_latent,  # Low-level structure
+                        "fusion_method": "mmdit_compatible",  # Paper's MMDiT fusion
+                        "has_dual_encoding": True
+                    }
+                    
+                    if debug_mode:
+                        logger.info(f"[Encoder] Dual encoding - Semantic patches: {semantic_patches.shape}")
+                        logger.info(f"[Encoder] Dual encoding - Reconstructive latent: {ref_latent.shape}")
+                        logger.info(f"[Encoder] Dual encoding - Semantic grid: {semantic_grid}")
+                        
+                except ImportError:
+                    logger.warning("[Encoder] Advanced vision processing not available, using standard VAE only")
+                    ref_latent = vae.encode(image[:, :, :, :3])
+                    
                 if debug_mode:
                     logger.info(f"[Encoder] Encoded edit_image reference latent shape: {ref_latent.shape}")
 
@@ -300,12 +343,20 @@ ALWAYS connect VAE to this node for reference latents!
         if context_latent is not None:
             all_ref_latents.append(context_latent)
 
+        # DUAL ENCODING: Add semantic-reconstructive fusion data
+        if dual_encoding_data is not None:
+            conditioning_updates["dual_encoding"] = dual_encoding_data
+            if debug_mode:
+                logger.info("[Encoder] Added dual encoding data to conditioning (semantic + reconstructive)")
+
         if all_ref_latents:
             conditioning_updates["reference_latents"] = all_ref_latents
-            if COMFY_AVAILABLE:
-                conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
+            
+        if conditioning_updates and COMFY_AVAILABLE:
+            conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
             if debug_mode:
-                logger.info(f"[Encoder] Added {len(all_ref_latents)} reference latents to conditioning.")
+                update_keys = list(conditioning_updates.keys())
+                logger.info(f"[Encoder] Added conditioning updates: {update_keys}")
 
         if debug_mode:
             logger.info(f"[Encoder] Final conditioning created for mode: {mode}")
