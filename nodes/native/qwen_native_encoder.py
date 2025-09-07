@@ -1,16 +1,16 @@
 """
-QwenNativeEncoder - Native Qwen2.5-VL text/vision encoding bypassing ComfyUI bugs
+QwenNativeEncoder - Native Qwen2.5-VL text/vision encoding
 
-This module provides native encoding that eliminates all ComfyUI CLIP system bugs:
+This WIP module provides native encoding using transformers:
 - Template token dropping (magic numbers 872, 198 → fixed indices)
-- Vision processing duplication (repeat(2,1,1,1) → single frame)  
+- Vision processing duplication (repeat(2,1,1,1) → single frame)
 - Missing Qwen2VLProcessor (tokenizer-only → full processor)
 - No context image support (missing → DiffSynth-style latent concat)
 
 Reference implementations:
 - DiffSynth-Engine: diffsynth_engine/pipelines/qwen_image.py
 - DiffSynth-Studio: diffsynth/pipelines/qwen_image.py units
-- Tokenizer analysis: explorations/qwen25vl_tokenizer_analysis_20250905.md
+- Tokenizer analysis of Qwen2.5-VL tokenizer
 """
 
 import torch
@@ -25,8 +25,31 @@ try:
         Qwen2VLProcessor,
     )
     TRANSFORMERS_AVAILABLE = True
+
+    # Try to import Qwen2.5-VL class for compatibility
+    try:
+        from transformers import Qwen2_5_VLForConditionalGeneration
+        QWEN25_ENCODER_AVAILABLE = True
+    except ImportError:
+        try:
+            import transformers.models.qwen2_5_vl.modeling_qwen2_5_vl as qwen25_module
+            Qwen2_5_VLForConditionalGeneration = qwen25_module.Qwen2_5_VLForConditionalGeneration
+            QWEN25_ENCODER_AVAILABLE = True
+        except Exception:
+            QWEN25_ENCODER_AVAILABLE = False
+
+    # Import official Qwen2.5-VL utilities for proper processing
+    try:
+        from qwen_vl_utils import process_vision_info
+        QWEN_VL_UTILS_AVAILABLE = True
+        logging.info("qwen_vl_utils available - using official processing approach")
+    except ImportError:
+        QWEN_VL_UTILS_AVAILABLE = False
+        logging.warning("qwen_vl_utils not available - falling back to custom processing")
+
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
+    QWEN_VL_UTILS_AVAILABLE = False
     logging.warning("transformers library not available - QwenNativeEncoder disabled")
 
 import comfy.conds as conds
@@ -35,7 +58,7 @@ import comfy.utils
 
 logger = logging.getLogger(__name__)
 
-# Template dropping indices from DiffSynth (fixes ComfyUI's magic numbers bug)
+# Template dropping indices from DiffSynth
 TEMPLATE_DROP_TEXT = 34    # DiffSynth: text-only template
 TEMPLATE_DROP_IMAGE = 64   # DiffSynth: image-edit template
 
@@ -53,18 +76,16 @@ QWEN_RESOLUTIONS = [
 
 class QwenNativeEncoder:
     """
-    Native Qwen2.5-VL encoder eliminating all ComfyUI bugs and limitations
-    
-    Key improvements over ComfyUI:
+    Native Qwen2.5-VL encoder
     - Uses Qwen2VLProcessor instead of tokenizer-only path (better spatial understanding)
     - Fixed template dropping with DiffSynth indices (no magic numbers)
     - Single frame vision processing (eliminates 2x computation waste)
-    - Context image support for ControlNet workflows (missing from ComfyUI)
+    - Context image support for ControlNet workflows
     - All 22 special tokens supported (spatial references, entity control)
     - Proper attention mask handling for variable sequences
     - Debug and analysis capabilities
     """
-    
+
     @classmethod
     def INPUT_TYPES(cls):
         if not TRANSFORMERS_AVAILABLE:
@@ -73,7 +94,7 @@ class QwenNativeEncoder:
                     "error": ("STRING", {"default": "transformers library required"}),
                 }
             }
-        
+
         return {
             "required": {
                 "qwen_model": ("QWEN_MODEL", {
@@ -91,7 +112,10 @@ class QwenNativeEncoder:
             "optional": {
                 # Vision inputs
                 "edit_image": ("IMAGE", {
-                    "tooltip": "Image for vision-based editing (uses vision tokens)"
+                    "tooltip": "Single image for vision-based editing (uses vision tokens)"
+                }),
+                "edit_images": ("IMAGE", {
+                    "tooltip": "Multiple images for comparison/multi-image editing (uses vision tokens for each)"
                 }),
                 "context_image": ("IMAGE", {
                     "tooltip": "Control image for ControlNet-style conditioning (no vision tokens)"
@@ -99,15 +123,20 @@ class QwenNativeEncoder:
                 "vae": ("VAE", {
                     "tooltip": "VAE for encoding context/reference images to latents"
                 }),
-                
+
                 # Advanced prompting
+                "spatial_tokens": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Generated spatial tokens from QwenSpatialTokenGenerator or manual input"
+                }),
                 "spatial_refs": ("STRING", {
                     "multiline": True,
                     "default": "",
                     "tooltip": "Spatial references: <|box_start|>x1,y1,x2,y2<|box_end|>"
                 }),
                 "object_refs": ("STRING", {
-                    "multiline": True, 
+                    "multiline": True,
                     "default": "",
                     "tooltip": "Object references: <|object_ref_start|>description<|object_ref_end|>"
                 }),
@@ -119,7 +148,7 @@ class QwenNativeEncoder:
                     "default": "",
                     "tooltip": "Per-entity descriptions (one per mask)"
                 }),
-                
+
                 # Template and chat
                 "chat_template": ("BOOLEAN", {
                     "default": True,
@@ -134,7 +163,7 @@ class QwenNativeEncoder:
                     "default": "default",
                     "tooltip": "Template optimization for different use cases"
                 }),
-                
+
                 # Processing options
                 "resolution": (["auto"] + [f"{w}x{h}" for w, h in QWEN_RESOLUTIONS], {
                     "default": "auto",
@@ -148,7 +177,7 @@ class QwenNativeEncoder:
                     "default": "fixed",
                     "tooltip": "Template removal method. Fixed uses DiffSynth indices."
                 }),
-                
+
                 # Debug and analysis
                 "debug_tokens": ("BOOLEAN", {
                     "default": False,
@@ -164,72 +193,192 @@ class QwenNativeEncoder:
                 }),
             }
         }
-    
+
     RETURN_TYPES = ("CONDITIONING", "INT", "INT", "DICT")
     RETURN_NAMES = ("conditioning", "width", "height", "debug_info")
     FUNCTION = "encode_native"
     CATEGORY = "QwenImage/Native"
-    TITLE = "Qwen Native Encoder" 
+    TITLE = "Qwen Native Encoder"
     DESCRIPTION = """
-Native Qwen2.5-VL encoder eliminating ComfyUI bugs and limitations.
+Native Qwen2.5-VL encoder
 
 FIXES APPLIED:
-- Template dropping: Fixed indices (not magic numbers)
-- Vision processing: Single frame (no duplication bug)
+- Vision processing: Single frame (no duplication)
 - Processor: Full Qwen2VLProcessor (not tokenizer-only)
 - Context images: ControlNet-style workflows enabled
 - Spatial tokens: All 22 special tokens supported
-
-This encoder provides 2x performance improvement and enables
-features missing from ComfyUI's implementation.
 """
 
-    def _prepare_images(self, edit_image: Optional[torch.Tensor], 
+    def _process_qwen25_official(self, processor, text, images, system_prompt, template_style, debug_tokens):
+        """
+        Process using official Qwen2.5-VL approach with proper message format
+
+        This follows the official documentation:
+        https://github.com/QwenLM/Qwen2.5-VL/blob/main/README.md
+        """
+        if debug_tokens:
+            logger.info("Using official Qwen2.5-VL processing pipeline")
+
+        # Convert PIL images to the format expected by qwen_vl_utils
+        pil_images = []
+        if images:
+            for img in images:
+                if isinstance(img, torch.Tensor):
+                    # Convert tensor to PIL
+                    if img.dim() == 4:
+                        img = img[0]  # Remove batch dimension
+                    if img.shape[0] == 3:  # CHW format
+                        img = img.permute(1, 2, 0)  # Convert to HWC
+
+                    # Convert to numpy and then PIL
+                    img_np = img.cpu().numpy()
+                    if img_np.max() <= 1.0:
+                        img_np = (img_np * 255).astype(np.uint8)
+                    else:
+                        img_np = img_np.astype(np.uint8)
+
+                    pil_img = Image.fromarray(img_np)
+                    pil_images.append(pil_img)
+                elif isinstance(img, Image.Image):
+                    pil_images.append(img)
+
+        # Create messages in official Qwen2.5-VL format
+        messages = []
+
+        # Add system message if provided
+        if system_prompt and system_prompt.strip():
+            messages.append({
+                "role": "system",
+                "content": system_prompt
+            })
+        elif template_style == "edit":
+            messages.append({
+                "role": "system",
+                "content": "Describe the key features of the input image, then explain how the user's text instruction should alter or modify the image."
+            })
+
+        # Create user message with images and text
+        user_content = []
+
+        # Add images first
+        for pil_img in pil_images:
+            user_content.append({
+                "type": "image",
+                "image": pil_img
+            })
+
+        # Add text
+        user_content.append({
+            "type": "text",
+            "text": text
+        })
+
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
+
+        if debug_tokens:
+            logger.info(f"Created {len(messages)} messages with {len(pil_images)} images")
+
+        # Apply chat template using processor
+        formatted_text = processor.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+
+        if debug_tokens:
+            logger.info(f"Template-formatted text: {formatted_text[:200]}...")
+
+        # Extract vision info using official utility
+        image_inputs, video_inputs = process_vision_info(messages)
+
+        # Process with processor
+        inputs = processor(
+            text=[formatted_text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt"
+        )
+
+        if debug_tokens:
+            logger.info(f"Official processing complete - input_ids shape: {inputs.input_ids.shape}")
+            if 'pixel_values' in inputs:
+                logger.info(f"Pixel values shape: {inputs.pixel_values.shape}")
+
+        return inputs
+
+    def _prepare_images(self, edit_image: Optional[torch.Tensor],
+                       edit_images: Optional[torch.Tensor],
                        context_image: Optional[torch.Tensor],
                        resolution: str, debug_vision: bool) -> Tuple[List, Optional[torch.Tensor]]:
         """Prepare images for processing"""
         images_for_processor = []
         context_latents = None
-        
-        # Handle edit_image (vision tokens path)
+
+        # Handle edit_image (single image vision tokens path)
         if edit_image is not None:
             if debug_vision:
                 logger.info(f"Edit image shape: {edit_image.shape}")
-            
+
             # Convert to PIL for processor
             # edit_image is [batch, height, width, channels] in 0-1 range
             image_np = (edit_image[0].cpu().numpy() * 255).astype(np.uint8)
             pil_image = Image.fromarray(image_np)
             images_for_processor.append(pil_image)
-            
+
             if debug_vision:
-                logger.info(f"Prepared PIL image: {pil_image.size}")
-        
+                logger.info(f"Prepared single PIL image: {pil_image.size}")
+
+        # Handle edit_images (multiple images vision tokens path)
+        elif edit_images is not None:
+            if debug_vision:
+                logger.info(f"Edit images shape: {edit_images.shape}")
+
+            # Convert each image in batch to PIL
+            # edit_images is [batch, height, width, channels] in 0-1 range
+            batch_size = edit_images.shape[0]
+            for i in range(batch_size):
+                image_np = (edit_images[i].cpu().numpy() * 255).astype(np.uint8)
+                pil_image = Image.fromarray(image_np)
+                images_for_processor.append(pil_image)
+
+            if debug_vision:
+                logger.info(f"Prepared {len(images_for_processor)} PIL images for multi-image processing")
+
         # Handle context_image (direct latent path - DiffSynth approach)
         if context_image is not None:
             if debug_vision:
                 logger.info(f"Context image shape: {context_image.shape}")
             # Context images will be processed separately for latent concatenation
-        
+
         return images_for_processor, context_latents
 
-    def _process_spatial_tokens(self, text: str, spatial_refs: str, 
+    def _process_spatial_tokens(self, text: str, spatial_tokens: str, spatial_refs: str,
                               object_refs: str, debug_tokens: bool) -> str:
         """Process and inject spatial reference tokens"""
         enhanced_text = text
-        
+
+        # Add generated spatial tokens from QwenSpatialTokenGenerator
+        if spatial_tokens.strip():
+            if debug_tokens:
+                logger.info(f"Adding spatial tokens: {spatial_tokens}")
+            enhanced_text = f"{enhanced_text} {spatial_tokens}"
+
         # Add spatial reference tokens if provided
         if spatial_refs.strip():
             if debug_tokens:
                 logger.info(f"Adding spatial references: {spatial_refs}")
             enhanced_text = f"{enhanced_text} {spatial_refs}"
-        
-        # Add object reference tokens if provided  
+
+        # Add object reference tokens if provided
         if object_refs.strip():
             if debug_tokens:
                 logger.info(f"Adding object references: {object_refs}")
             enhanced_text = f"{enhanced_text} {object_refs}"
-        
+
         return enhanced_text
 
     def _apply_chat_template(self, text: str, system_prompt: str,
@@ -237,7 +386,7 @@ features missing from ComfyUI's implementation.
         """Apply chat template formatting"""
         if not chat_template:
             return text
-        
+
         # System prompt selection
         if system_prompt.strip():
             system = system_prompt
@@ -250,69 +399,88 @@ features missing from ComfyUI's implementation.
                 "custom": ""
             }
             system = system_prompts.get(template_style, system_prompts["default"])
-        
+
         # Format with chat template
         if system:
             formatted = f"<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
         else:
             formatted = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
-        
+
         return formatted
 
-    def _apply_template_dropping(self, hidden_states: torch.Tensor, 
+    def _apply_template_dropping(self, hidden_states: torch.Tensor,
                                template_dropping: str, has_vision: bool) -> torch.Tensor:
-        """Apply template dropping using DiffSynth's fixed indices (fixes ComfyUI bug)"""
+        """Apply template dropping using DiffSynth's fixed indices"""
         if template_dropping == "none":
             return hidden_states
-        
-        # Use DiffSynth's fixed indices instead of ComfyUI's magic numbers (872, 198)
+
+        # Use DiffSynth's fixed indices
         if template_dropping == "fixed":
             drop_idx = TEMPLATE_DROP_IMAGE if has_vision else TEMPLATE_DROP_TEXT
             return hidden_states[:, drop_idx:]
-        
-        # Auto mode - try to detect (ComfyUI's approach, less reliable)
+
+        # Auto mode - try to detect
         elif template_dropping == "auto":
             # This would implement ComfyUI's dynamic detection
             # But we recommend using "fixed" for reliability
             return hidden_states[:, TEMPLATE_DROP_TEXT:]  # Fallback to text template
-        
+
         return hidden_states
 
     def _create_conditioning(self, hidden_states: torch.Tensor,
                            attention_mask: Optional[torch.Tensor] = None,
                            context_latents: Optional[torch.Tensor] = None,
-                           ref_latents: Optional[torch.Tensor] = None) -> List:
-        """Create ComfyUI-compatible conditioning format"""
-        
-        # Create cross-attention conditioning
-        cond = conds.CONDCrossAttn(hidden_states)
-        
-        # Prepare extra data for conditioning
+                           ref_latents = None) -> List:
+        """Create ComfyUI-compatible conditioning format, matching text encoder output format"""
+
+        # ComfyUI's text encoders return raw tensors that get wrapped later in the pipeline
+        # QwenImageTEModel.encode_token_weights() returns (out, pooled, extra)
+        # The samplers expect raw tensors, not pre-wrapped CONDCrossAttn objects
+
+        # Prepare extra data for conditioning (like ComfyUI's QwenImageTEModel does)
         extra_data = {}
-        
-        # Add attention mask if available
+
+        # Add attention mask if available (like ComfyUI's QwenImageTEModel does)
         if attention_mask is not None:
-            extra_data["attention_mask"] = attention_mask
-        
-        # Add reference latents (edit_image path)
+            # Remove attention mask if it's all ones (ComfyUI optimization)
+            if attention_mask.sum() != torch.numel(attention_mask):
+                extra_data["attention_mask"] = attention_mask
+
+        # Add reference latents (edit_image or edit_images path)
         if ref_latents is not None:
-            extra_data["reference_latents"] = [ref_latents]
-        
+            if isinstance(ref_latents, list):
+                # Multi-image case: list of latents
+                extra_data["reference_latents"] = ref_latents
+            else:
+                # Single image case: wrap in list for consistency
+                extra_data["reference_latents"] = [ref_latents]
+
         # Add context latents (DiffSynth-style ControlNet path)
         if context_latents is not None:
             extra_data["context_latents"] = [context_latents]
-        
-        # Return ComfyUI conditioning format
-        return [[cond, extra_data]]
+
+        # Return raw tensor format like ComfyUI's text encoders: [[tensor, extra_data]]
+        # The CONDCrossAttn wrapping happens later in ComfyUI's conditioning pipeline
+        return [[hidden_states, extra_data]]
+
+    def _extract_masked_hidden(self, hidden_states: torch.Tensor, mask: torch.Tensor):
+        """Extract hidden states based on attention mask, following DiffSynth pattern."""
+        bool_mask = mask.bool()
+        valid_lengths = bool_mask.sum(dim=1)
+        selected = hidden_states[bool_mask]
+        split_result = torch.split(selected, valid_lengths.tolist(), dim=0)
+        return split_result
 
     def encode_native(
         self,
         qwen_model,
-        qwen_processor, 
+        qwen_processor,
         text: str,
         edit_image: Optional[torch.Tensor] = None,
+        edit_images: Optional[torch.Tensor] = None,
         context_image: Optional[torch.Tensor] = None,
         vae = None,
+        spatial_tokens: str = "",
         spatial_refs: str = "",
         object_refs: str = "",
         entity_masks = None,
@@ -329,129 +497,248 @@ features missing from ComfyUI's implementation.
         **kwargs
     ) -> Tuple[List, int, int, Dict]:
         """
-        Native encoding eliminating all ComfyUI bugs and limitations
-        
+        Native encoding WIP
+
         Reference implementations:
-        - DiffSynth-Engine: diffsynth_engine/pipelines/qwen_image.py  
+        - DiffSynth-Engine: diffsynth_engine/pipelines/qwen_image.py
         - DiffSynth-Studio: diffsynth/pipelines/qwen_image.py
         """
-        
+
         if not TRANSFORMERS_AVAILABLE:
             raise RuntimeError("transformers library is required for QwenNativeEncoder")
-        
+
         if debug_tokens or debug_vision:
             logger.info("Starting native Qwen encoding...")
             logger.info(f"Text: {text[:100]}..." if len(text) > 100 else f"Text: {text}")
-        
-        # Initialize outputs
-        width, height = 1024, 1024  # Default
-        debug_info = {"method": "native", "bugs_fixed": ["template_dropping", "vision_duplication", "processor_path"]}
-        
-        # Prepare images for processing
-        images_for_processor, context_latents = self._prepare_images(
-            edit_image, context_image, resolution, debug_vision
-        )
-        
-        # Process spatial and object references
-        enhanced_text = self._process_spatial_tokens(
-            text, spatial_refs, object_refs, debug_tokens
-        )
-        
-        # Apply chat template
-        formatted_text = self._apply_chat_template(
-            enhanced_text, system_prompt, template_style, chat_template
-        )
-        
-        if debug_tokens:
-            logger.info(f"Final formatted text: {formatted_text}")
-        
-        # CRITICAL FIX: Use Qwen2VLProcessor instead of tokenizer-only path
-        # ComfyUI uses tokenizer-only which degrades spatial understanding
+
+        # Use ComfyUI's device management for consistency
+        model_device = model_management.get_torch_device()
+        if hasattr(qwen_model, 'device'):
+            model_device = qwen_model.device
+        else:
+            model_device = next(qwen_model.parameters()).device
+
+        # Input validation
+        if edit_image is not None and edit_images is not None:
+            raise ValueError("Cannot provide both 'edit_image' and 'edit_images'. Use one or the other.")
+
         try:
-            if use_processor and images_for_processor:
-                # Full processor path (recommended - fixes ComfyUI's limitation)
-                model_inputs = qwen_processor(
-                    text=formatted_text,
-                    images=images_for_processor,
-                    return_tensors="pt",
-                    padding=True
-                )
-                if debug_tokens:
-                    logger.info("Using full Qwen2VLProcessor (better spatial understanding)")
-            else:
-                # Fallback to tokenizer-only (ComfyUI's approach)
-                model_inputs = qwen_processor.tokenizer(
-                    formatted_text,
-                    return_tensors="pt", 
-                    padding=True
-                )
-                if debug_tokens:
-                    logger.info("Using tokenizer-only path (ComfyUI compatibility)")
-            
-            # Move to model device
-            device = next(qwen_model.parameters()).device
-            model_inputs = {k: v.to(device) if torch.is_tensor(v) else v 
-                          for k, v in model_inputs.items()}
-            
-            # CRITICAL FIX: Single frame processing (eliminates ComfyUI's duplication bug)
-            # ComfyUI duplicates images with repeat(2,1,1,1) wasting 2x computation
-            with torch.no_grad():
-                outputs = qwen_model(**model_inputs)
-                hidden_states = outputs.last_hidden_state
-                
+            # Initialize outputs
+            width, height = 1024, 1024  # Default
+            debug_info = {"method": "native", "bugs_fixed": ["template_dropping", "vision_duplication", "processor_path"]}
+
+            # Add multi-image info to debug
+            if edit_images is not None:
+                debug_info["multi_image_count"] = edit_images.shape[0] if edit_images is not None else 0
                 if debug_vision:
-                    logger.info(f"Hidden states shape: {hidden_states.shape}")
-            
-            # CRITICAL FIX: Template dropping with fixed indices (not magic numbers)
-            # ComfyUI uses magic numbers 872, 198 which often fail
-            has_vision = bool(images_for_processor)
-            hidden_states = self._apply_template_dropping(
-                hidden_states, template_dropping, has_vision
+                    logger.info(f"Processing {edit_images.shape[0]} images in multi-image mode")
+
+                # Prepare images for processing
+            images_for_processor, context_latents = self._prepare_images(
+                edit_image, edit_images, context_image, resolution, debug_vision
             )
-            
+
+            # Move context_latents to model device if needed
+            if context_latents is not None and hasattr(context_latents, 'device'):
+                if context_latents.device != model_device:
+                    context_latents = context_latents.to(model_device, non_blocking=True)
+
+            # Process spatial and object references
+            enhanced_text = self._process_spatial_tokens(
+                text, spatial_tokens, spatial_refs, object_refs, debug_tokens
+            )
+
+            # Use DiffSynth's exact processing approach
             if debug_tokens:
-                logger.info(f"After template dropping: {hidden_states.shape}")
-                debug_info["template_drop_tokens"] = TEMPLATE_DROP_IMAGE if has_vision else TEMPLATE_DROP_TEXT
-            
-            # Process context image (DiffSynth-style ControlNet support)
-            if context_image is not None and vae is not None:
+                logger.info("Using DiffSynth-compatible processing approach")
+
+            # Determine template and drop index based on whether we have images
+            if images_for_processor:
+                # DiffSynth's template for edit mode (line 522)
+                template = "<|im_start|>system\nDescribe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{}<|im_end|>\n<|im_start|>assistant\n"
+                drop_idx = 64
+            else:
+                # DiffSynth's template for text-only mode (line 519)
+                template = "<|im_start|>system\nDescribe the image by detailing the color, shape, size, texture, quantity, text, spatial relationships of the objects and background:<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
+                drop_idx = 34
+
+            # Format text exactly like DiffSynth (line 524)
+            txt = [template.format(enhanced_text)]
+
+            if debug_tokens:
+                logger.info(f"Template formatted text: {txt[0][:200]}...")
+
+            try:
+                # Follow DiffSynth's exact processing pattern (lines 526-531)
+                if images_for_processor and hasattr(qwen_processor, 'tokenizer'):
+                    # Qwen-Image-Edit model path (line 528)
+                    model_inputs = qwen_processor(text=txt, images=images_for_processor, padding=True, return_tensors="pt")
+                    if debug_tokens:
+                        logger.info("Using DiffSynth processor path (Qwen-Image-Edit)")
+                elif hasattr(qwen_processor, 'tokenizer'):
+                    # Qwen-Image model path (line 531)
+                    model_inputs = qwen_processor.tokenizer(txt, max_length=4096+drop_idx, padding=True, truncation=True, return_tensors="pt")
+                    if debug_tokens:
+                        logger.info("Using DiffSynth tokenizer path (Qwen-Image)")
+                        if model_inputs['input_ids'].shape[1] >= 1024:
+                            logger.warning(f"QwenImage model was trained on prompts up to 512 tokens. Current prompt requires {model_inputs['input_ids'].shape[1] - drop_idx} tokens, which may lead to unpredictable behavior.")
+                else:
+                    raise RuntimeError("QwenNativeEncoder requires either tokenizer or processor to be loaded.")
+
+                # Ensure all inputs are on the same device as the model
+                for k, v in model_inputs.items():
+                    if torch.is_tensor(v) and v.device != model_device:
+                        model_inputs[k] = v.to(model_device, non_blocking=True)
+
+                if debug_tokens:
+                    logger.info(f"Model inputs keys: {list(model_inputs.keys())}")
+                    if 'pixel_values' in model_inputs:
+                        logger.info(f"Pixel values shape: {model_inputs['pixel_values'].shape}")
+                    logger.info(f"Input IDs shape: {model_inputs['input_ids'].shape}")
+
+            except Exception as e:
+                raise RuntimeError(f"DiffSynth-style processing failed: {e}")
+
+            # Model forward pass following DiffSynth pattern (line 537-540)
+            # DiffSynth uses pipe.text_encoder which is the model's language_model component
+            # We need to access the text encoder part of the full model
+            with torch.no_grad():
+                # Get the text encoder/language model component (like DiffSynth's pipe.text_encoder)
+                if hasattr(qwen_model, 'language_model'):
+                    text_encoder = qwen_model.language_model
+                elif hasattr(qwen_model, 'model'):
+                    text_encoder = qwen_model.model
+                else:
+                    text_encoder = qwen_model  # Fallback
+
                 if debug_vision:
-                    logger.info("Processing context image for ControlNet conditioning")
-                # Direct VAE encoding (no vision tokens - key difference from edit_image)
-                context_latents = vae.encode(context_image[:, :, :, :3])
-                debug_info["context_image_processed"] = True
-            
-            # Process reference latents from edit_image
-            ref_latents = None
-            if edit_image is not None and vae is not None:
-                ref_latents = vae.encode(edit_image[:, :, :, :3])
-                debug_info["reference_latents_created"] = True
-            
-            # Create ComfyUI-compatible conditioning
-            conditioning = self._create_conditioning(
-                hidden_states,
-                attention_mask=model_inputs.get("attention_mask"),
-                context_latents=context_latents,
-                ref_latents=ref_latents
-            )
-            
-            # Update debug info
-            debug_info.update({
-                "token_count": hidden_states.shape[1] if hidden_states.dim() > 1 else 0,
-                "sequence_length": hidden_states.shape[1] if hidden_states.dim() > 1 else 0,
-                "hidden_size": hidden_states.shape[-1],
-                "has_attention_mask": model_inputs.get("attention_mask") is not None,
-                "has_context_latents": context_latents is not None,
-                "has_reference_latents": ref_latents is not None,
-                "processor_used": use_processor and bool(images_for_processor),
-            })
-            
-            if debug_tokens or debug_vision:
-                logger.info("Native encoding completed successfully")
-                logger.info(f"Debug info: {debug_info}")
-            
-            return (conditioning, width, height, debug_info)
-            
+                    logger.info(f"Using text encoder component: {type(text_encoder)}")
+
+                if 'pixel_values' in model_inputs:
+                    # DiffSynth line 538: with pixel values - call text encoder directly
+                    outputs = text_encoder(
+                        input_ids=model_inputs['input_ids'],
+                        attention_mask=model_inputs['attention_mask'],
+                        pixel_values=model_inputs['pixel_values'],
+                        image_grid_thw=model_inputs['image_grid_thw'],
+                        output_hidden_states=True,
+                    )
+                else:
+                    # DiffSynth line 540: text only - call text encoder directly
+                    outputs = text_encoder(
+                        input_ids=model_inputs['input_ids'],
+                        attention_mask=model_inputs['attention_mask'],
+                        output_hidden_states=True,
+                    )
+
+                if debug_vision:
+                    logger.info(f"Text encoder outputs type: {type(outputs)}")
+                    logger.info(f"Text encoder outputs structure: {dir(outputs)}")
+
+                # Extract hidden states properly from transformers output structure
+                if hasattr(outputs, 'hidden_states') and outputs.hidden_states:
+                    # hidden_states is a tuple of all layers - get the last layer
+                    hidden_states = outputs.hidden_states[-1]
+                    if debug_vision:
+                        logger.info(f"Using outputs.hidden_states[-1], shape: {hidden_states.shape}")
+                elif hasattr(outputs, 'last_hidden_state'):
+                    # Use last_hidden_state directly
+                    hidden_states = outputs.last_hidden_state
+                    if debug_vision:
+                        logger.info(f"Using outputs.last_hidden_state, shape: {hidden_states.shape}")
+                elif isinstance(outputs, (tuple, list)) and len(outputs) > 0:
+                    # Fallback: if it's a tuple/list, try the last element
+                    hidden_states = outputs[-1]
+                    if debug_vision:
+                        logger.info(f"Using outputs[-1] (tuple/list), type: {type(hidden_states)}")
+                        if hasattr(hidden_states, 'shape'):
+                            logger.info(f"Hidden states shape: {hidden_states.shape}")
+                else:
+                    raise RuntimeError(f"Could not extract hidden states from text encoder output. Type: {type(outputs)}, dir: {dir(outputs)}")
+
+                if debug_vision:
+                    logger.info(f"Final hidden states shape before processing: {hidden_states.shape}")
+
+            # DiffSynth's template dropping approach (lines 542-543)
+            # Extract masked hidden states and drop template tokens
+            with torch.no_grad():  # Prevent compilation attempts
+                split_hidden_states = self._extract_masked_hidden(hidden_states, model_inputs['attention_mask'])
+                split_hidden_states = [e[drop_idx:] for e in split_hidden_states]  # Drop template tokens
+
+                # Reconstruct hidden states (DiffSynth lines 544-547) - keep it simple
+                device = hidden_states.device
+                dtype = hidden_states.dtype
+
+                # Simplified reconstruction to avoid device copy issues
+                if len(split_hidden_states) == 1:
+                    # Single batch case - most common
+                    hidden_states = split_hidden_states[0].unsqueeze(0)  # Add batch dimension [seq_len, hidden_size] -> [1, seq_len, hidden_size]
+                    # Create matching attention mask [1, seq_len]
+                    attention_mask = torch.ones(hidden_states.shape[:2], dtype=torch.long, device=device)
+                else:
+                    # Multi-batch case
+                    attn_mask_list = [torch.ones(e.size(0), dtype=torch.long, device=device) for e in split_hidden_states]
+                    max_seq_len = max([e.size(0) for e in split_hidden_states])
+                    hidden_states = torch.stack([torch.cat([u, torch.zeros(max_seq_len - u.size(0), u.size(1), device=device, dtype=dtype)]) for u in split_hidden_states])
+                    attention_mask = torch.stack([torch.cat([u, torch.zeros(max_seq_len - u.size(0), device=device)]) for u in attn_mask_list])
+
+            if debug_tokens:
+                logger.info(f"After DiffSynth template dropping: {hidden_states.shape}")
+                logger.info(f"Dropped {drop_idx} template tokens")
+
+                if debug_tokens:
+                    logger.info(f"After template dropping: {hidden_states.shape}")
+                    # Determine if we had vision inputs for debug info
+                    had_vision = bool(images_for_processor)
+                    debug_info["template_drop_tokens"] = TEMPLATE_DROP_IMAGE if had_vision else TEMPLATE_DROP_TEXT
+
+                # Process context image (DiffSynth-style ControlNet support)
+                if context_image is not None and vae is not None:
+                    if debug_vision:
+                        logger.info("Processing context image for ControlNet conditioning")
+                    # Direct VAE encoding (no vision tokens - key difference from edit_image)
+                    context_latents = vae.encode(context_image[:, :, :, :3])
+                    debug_info["context_image_processed"] = True
+
+                # Process reference latents from edit_image or edit_images
+                ref_latents = None
+                if edit_image is not None and vae is not None:
+                    ref_latents = vae.encode(edit_image[:, :, :, :3])
+                    debug_info["reference_latents_created"] = True
+                elif edit_images is not None and vae is not None:
+                    # For multi-image, encode each image separately and collect
+                    ref_latents = []
+                    for i in range(edit_images.shape[0]):
+                        single_latent = vae.encode(edit_images[i:i+1, :, :, :3])
+                        ref_latents.append(single_latent)
+                    debug_info["reference_latents_created"] = True
+                    debug_info["reference_latents_count"] = len(ref_latents)
+
+                # Create ComfyUI-compatible conditioning
+                conditioning = self._create_conditioning(
+                    hidden_states,
+                    attention_mask=model_inputs.get("attention_mask"),
+                    context_latents=context_latents,
+                    ref_latents=ref_latents
+                )
+
+                # Update debug info
+                debug_info.update({
+                    "token_count": hidden_states.shape[1] if hidden_states.dim() > 1 else 0,
+                    "sequence_length": hidden_states.shape[1] if hidden_states.dim() > 1 else 0,
+                    "hidden_size": hidden_states.shape[-1],
+                    "has_attention_mask": model_inputs.get("attention_mask") is not None,
+                    "has_context_latents": context_latents is not None,
+                    "has_reference_latents": ref_latents is not None,
+                    "processor_used": use_processor and bool(images_for_processor),
+                })
+
+                if debug_tokens or debug_vision:
+                    logger.info("Native encoding completed successfully")
+                    logger.info(f"Debug info: {debug_info}")
+
+                return (conditioning, width, height, debug_info)
+
         except Exception as e:
             logger.error(f"Native encoding failed: {e}")
             raise RuntimeError(f"Encoding failed: {e}")

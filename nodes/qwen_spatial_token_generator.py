@@ -5,7 +5,6 @@ Pure spatial token generation without templates or assumptions
 
 import json
 import pathlib
-import math
 from PIL import Image, ImageDraw
 import numpy as np
 import torch
@@ -17,17 +16,7 @@ import comfy.utils
 logger = logging.getLogger(__name__)
 
 class QwenSpatialTokenGenerator:
-    """Generate spatial tokens from image coordinates and labels with integrated resolution optimization"""
-    
-    # Qwen-preferred resolutions (width, height)
-    QWEN_RESOLUTIONS = [
-        (1024, 1024),
-        (672, 1568), (688, 1504), (720, 1456), (752, 1392),
-        (800, 1328), (832, 1248), (880, 1184), (944, 1104),
-        (1104, 944), (1184, 880), (1248, 832), (1328, 800),
-        (1392, 752), (1456, 720), (1504, 688), (1568, 672),
-        (1328, 1328), (1920, 1080), (1080, 1920),
-    ]
+    """Generate spatial tokens from image coordinates and labels"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -44,10 +33,6 @@ class QwenSpatialTokenGenerator:
                     "raw"
                 ], {
                     "default": "default_edit"
-                }),
-                "optimize_resolution": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Automatically resize to optimal Qwen resolution"
                 }),
                 "debug_mode": ("BOOLEAN", {"default": False})
             },
@@ -70,73 +55,7 @@ class QwenSpatialTokenGenerator:
     CATEGORY = "Qwen/Spatial"
     OUTPUT_NODE = True
 
-    def find_closest_resolution(self, width: int, height: int) -> Tuple[int, int]:
-        """Find the closest Qwen resolution based on aspect ratio"""
-        aspect_ratio = width / height
-        
-        best_resolution = None
-        best_ratio_diff = float('inf')
-        
-        for res_w, res_h in self.QWEN_RESOLUTIONS:
-            res_ratio = res_w / res_h
-            ratio_diff = abs(math.log(res_ratio / aspect_ratio))
-            
-            if ratio_diff < best_ratio_diff:
-                best_ratio_diff = ratio_diff
-                best_resolution = (res_w, res_h)
-        
-        return best_resolution
-
-    def optimize_image_resolution(self, image: torch.Tensor, debug_info: List[str]) -> torch.Tensor:
-        """Optimize image to best Qwen resolution using fit mode"""
-        # Get current dimensions
-        batch, height, width, channels = image.shape
-        debug_info.append(f"Original image: {width}x{height}")
-        
-        # Find optimal resolution
-        target_w, target_h = self.find_closest_resolution(width, height)
-        debug_info.append(f"Target resolution: {target_w}x{target_h}")
-        
-        if width == target_w and height == target_h:
-            debug_info.append("Image already at optimal resolution")
-            return image
-        
-        # Scale to fit inside, maintaining aspect ratio
-        scale = min(target_w / width, target_h / height)
-        new_width = round(width * scale)
-        new_height = round(height * scale)
-        
-        # Move channels to correct position for resize
-        samples = image.movedim(-1, 1)  # [B, H, W, C] -> [B, C, H, W]
-        
-        # Resize
-        if new_width != width or new_height != height:
-            samples = comfy.utils.common_upscale(
-                samples, new_width, new_height, 
-                "bilinear", "disabled"
-            )
-            debug_info.append(f"Resized to: {new_width}x{new_height}")
-        
-        # Add padding if needed to reach exact target
-        if new_width < target_w or new_height < target_h:
-            pad_left = (target_w - new_width) // 2
-            pad_right = target_w - new_width - pad_left
-            pad_top = (target_h - new_height) // 2
-            pad_bottom = target_h - new_height - pad_top
-            
-            # Pad with zeros (black)
-            samples = torch.nn.functional.pad(
-                samples, 
-                (pad_left, pad_right, pad_top, pad_bottom),
-                mode='constant', 
-                value=0
-            )
-            debug_info.append(f"Padded to final: {target_w}x{target_h}")
-        
-        # Move channels back
-        return samples.movedim(1, -1)  # [B, C, H, W] -> [B, H, W, C]
-
-    def generate_tokens(self, image, base_prompt, template_mode, optimize_resolution, debug_mode,
+    def generate_tokens(self, image, base_prompt, template_mode, debug_mode,
                        spatial_tokens="", additional_regions=""):
         """Generate complete formatted prompt with spatial tokens"""
 
@@ -144,15 +63,10 @@ class QwenSpatialTokenGenerator:
         debug_info.append("=== SPATIAL TOKEN GENERATOR ===")
 
         try:
-            # Process input image with optional resolution optimization
-            debug_info.append("Processing input image")
-            if optimize_resolution:
-                optimized_image = self.optimize_image_resolution(image, debug_info)
-                pil_image = self._tensor_to_pil(optimized_image)
-            else:
-                pil_image = self._tensor_to_pil(image)
-                debug_info.append("Resolution optimization disabled")
-                
+            # Process input image (no resolution optimization - handled by spatial editor)
+            debug_info.append("Processing input image (no resolution optimization)")
+            pil_image = self._tensor_to_pil(image)
+
             img_width, img_height = pil_image.size
             debug_info.append(f"Final image size: {img_width}x{img_height}")
 
@@ -223,13 +137,8 @@ class QwenSpatialTokenGenerator:
             formatted_prompt = self._apply_template(complete_prompt, template_mode, debug_info)
 
             # Convert final image back to tensor
-            if optimize_resolution:
-                # Return the optimized image with annotations overlaid
-                final_image = self._pil_to_tensor(annotated_image)
-            else:
-                # Return the original image with annotations
-                final_image = self._pil_to_tensor(annotated_image)
-                
+            final_image = self._pil_to_tensor(annotated_image)
+
             token_count = len(spatial_tokens.split("<|")) - 1 if spatial_tokens else 0
             debug_text = "\n".join(debug_info) if debug_mode else f"Generated prompt with spatial tokens"
 
@@ -256,7 +165,7 @@ class QwenSpatialTokenGenerator:
             coords = [float(c.strip()) for c in coords_str.split(',')]
         else:
             coords = list(coords_str)
-            
+
         if len(coords) != 4:
             raise ValueError(f"Bounding box needs 4 coordinates, got {len(coords)}")
 
@@ -301,35 +210,35 @@ class QwenSpatialTokenGenerator:
             coord_pairs = coords_data.strip().split()
             if len(coord_pairs) < 3:
                 raise ValueError(f"Polygon needs at least 3 points, got {len(coord_pairs)}")
-            
+
             points = []
             for pair in coord_pairs:
                 if ',' not in pair:
                     raise ValueError(f"Invalid coordinate pair: '{pair}'")
                 x_str, y_str = pair.split(',', 1)
                 x, y = float(x_str), float(y_str)
-                
+
                 # Normalize if needed
                 if normalize_coords and x <= 1.0 and y <= 1.0:
                     x, y = x * img_width, y * img_height
-                
+
                 points.append((max(0, min(x, img_width)), max(0, min(y, img_height))))
         else:
             # Handle list of [x,y] pairs from JavaScript
             if len(coords_data) < 3:
                 raise ValueError(f"Polygon needs at least 3 points, got {len(coords_data)}")
-            
+
             points = []
             for coord in coords_data:
                 if isinstance(coord, (list, tuple)) and len(coord) == 2:
                     x, y = coord[0], coord[1]
                 else:
                     raise ValueError(f"Invalid coordinate format: {coord}")
-                
+
                 # Normalize if needed
                 if normalize_coords and x <= 1.0 and y <= 1.0:
                     x, y = x * img_width, y * img_height
-                
+
                 points.append((max(0, min(x, img_width)), max(0, min(y, img_height))))
 
         # Draw annotation

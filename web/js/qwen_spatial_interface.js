@@ -103,6 +103,119 @@ class QwenSpatialInterface {
                         ">
                     </div>
 
+                    <!-- Resolution Selection -->
+                    <div id="resolutionSection" style="margin-bottom: 20px; display: none;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 500;">Resolution</h4>
+                        
+                        <!-- Resolution Type -->
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 12px; opacity: 0.8;">Selection Method:</label>
+                            <select id="resolutionType" style="
+                                width: 100%;
+                                padding: 6px;
+                                background: rgba(255, 255, 255, 0.05);
+                                border: 1px solid rgba(255, 255, 255, 0.2);
+                                border-radius: 4px;
+                                color: white;
+                                font-size: 12px;
+                            ">
+                                <option value="auto">Auto (Best Match)</option>
+                                <option value="recommended">Recommended List</option>
+                                <option value="custom">Custom Dimensions</option>
+                            </select>
+                        </div>
+
+                        <!-- Recommended Resolutions -->
+                        <div id="recommendedResolutions" style="margin-bottom: 8px; display: none;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 12px; opacity: 0.8;">Recommended:</label>
+                            <select id="resolutionSelect" style="
+                                width: 100%;
+                                padding: 6px;
+                                background: rgba(255, 255, 255, 0.05);
+                                border: 1px solid rgba(255, 255, 255, 0.2);
+                                border-radius: 4px;
+                                color: white;
+                                font-size: 12px;
+                            ">
+                            </select>
+                        </div>
+
+                        <!-- Custom Resolution -->
+                        <div id="customResolution" style="display: none;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <input type="number" id="customWidth" placeholder="Width" min="512" max="2048" step="16" style="
+                                    flex: 1;
+                                    padding: 6px;
+                                    background: rgba(255, 255, 255, 0.05);
+                                    border: 1px solid rgba(255, 255, 255, 0.2);
+                                    border-radius: 4px;
+                                    color: white;
+                                    font-size: 12px;
+                                ">
+                                <input type="number" id="customHeight" placeholder="Height" min="512" max="2048" step="16" style="
+                                    flex: 1;
+                                    padding: 6px;
+                                    background: rgba(255, 255, 255, 0.05);
+                                    border: 1px solid rgba(255, 255, 255, 0.2);
+                                    border-radius: 4px;
+                                    color: white;
+                                    font-size: 12px;
+                                ">
+                            </div>
+                            <button id="applyCustomResolution" style="
+                                width: 100%;
+                                padding: 6px;
+                                background: rgba(70, 130, 255, 0.3);
+                                color: white;
+                                border: 1px solid rgba(70, 130, 255, 0.5);
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-size: 12px;
+                            ">Apply Custom</button>
+                        </div>
+
+                        <!-- Resize Method -->
+                        <div id="resizeMethodSection" style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 12px; opacity: 0.8;">Resize Method:</label>
+                            <select id="resizeMethod" style="
+                                width: 100%;
+                                padding: 6px;
+                                background: rgba(255, 255, 255, 0.05);
+                                border: 1px solid rgba(255, 255, 255, 0.2);
+                                border-radius: 4px;
+                                color: white;
+                                font-size: 12px;
+                            ">
+                                <option value="pad">Pad (scale + black borders)</option>
+                                <option value="crop">Crop (scale + center crop)</option>
+                                <option value="stretch">Stretch (distort to exact size)</option>
+                                <option value="resize">Resize (scale, maintain ratio)</option>
+                            </select>
+                            <div style="
+                                margin-top: 4px;
+                                font-size: 10px;
+                                opacity: 0.6;
+                                line-height: 1.3;
+                            " id="resizeMethodHelp">
+                                Scale and add black padding to fit exact dimensions
+                            </div>
+                        </div>
+
+                        <!-- Resolution Info -->
+                        <div id="resolutionInfo" style="
+                            margin-top: 8px;
+                            padding: 6px;
+                            background: rgba(255, 255, 255, 0.05);
+                            border-radius: 4px;
+                            font-size: 11px;
+                            opacity: 0.8;
+                        ">
+                            <div>Original: <span id="originalSize">-</span></div>
+                            <div>Target: <span id="targetSize">-</span></div>
+                            <div>Aspect Ratio: <span id="aspectRatioInfo">-</span></div>
+                        </div>
+                    </div>
+
                     <!-- Drawing Mode -->
                     <div style="margin-bottom: 20px;">
                         <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 500;">Spatial Type</h4>
@@ -365,6 +478,68 @@ class QwenSpatialInterface {
       debugOutput.style.display = e.target.checked ? "block" : "none";
     };
 
+    // Resolution type selection
+    dialog.querySelector("#resolutionType").onchange = (e) => {
+      this.updateResolutionInterface(e.target.value, dialog);
+    };
+
+    // Recommended resolution selection  
+    dialog.querySelector("#resolutionSelect").onchange = (e) => {
+      const [width, height] = e.target.value.split('x').map(Number);
+      this.applyResolution(width, height, dialog);
+    };
+
+    // Resize method change
+    dialog.querySelector("#resizeMethod").onchange = (e) => {
+      this.updateResizeMethodHelp(e.target.value, dialog);
+      
+      // If an image is loaded, re-apply the optimization with the new method
+      if (this.currentImage && this.originalImageSrc) {
+        this.updateDebug(`Resize method changed to: ${e.target.value}`, dialog);
+        const currentWidth = this.optimizedDimensions.width;
+        const currentHeight = this.optimizedDimensions.height;
+        this.applyResolution(currentWidth, currentHeight, dialog);
+      }
+    };
+
+    // Custom resolution application
+    dialog.querySelector("#applyCustomResolution").onclick = () => {
+      this.updateDebug("=== CUSTOM RESOLUTION BUTTON CLICKED ===", dialog);
+      
+      const widthInput = dialog.querySelector("#customWidth");
+      const heightInput = dialog.querySelector("#customHeight");
+      
+      this.updateDebug(`Width input element: ${!!widthInput}, value: '${widthInput?.value}'`, dialog);
+      this.updateDebug(`Height input element: ${!!heightInput}, value: '${heightInput?.value}'`, dialog);
+      
+      const width = parseInt(widthInput?.value);
+      const height = parseInt(heightInput?.value);
+      
+      this.updateDebug(`Parsed values: width=${width}, height=${height}`, dialog);
+      this.updateDebug(`Width isNaN: ${isNaN(width)}, Height isNaN: ${isNaN(height)}`, dialog);
+      
+      if (isNaN(width) || isNaN(height)) {
+        this.updateDebug("ERROR: Please enter valid numeric values for both width and height", dialog);
+        return;
+      }
+      
+      if (width < 512 || height < 512) {
+        this.updateDebug("ERROR: Minimum resolution is 512x512", dialog);
+        return;
+      }
+      
+      // Ensure dimensions are multiples of 16
+      const adjustedWidth = Math.round(width / 16) * 16;
+      const adjustedHeight = Math.round(height / 16) * 16;
+      
+      if (adjustedWidth !== width || adjustedHeight !== height) {
+        this.updateDebug(`Adjusted resolution to multiples of 16: ${width}x${height} → ${adjustedWidth}x${adjustedHeight}`, dialog);
+      }
+      
+      this.updateDebug(`About to call applyResolution(${adjustedWidth}, ${adjustedHeight})`, dialog);
+      this.applyResolution(adjustedWidth, adjustedHeight, dialog);
+    };
+
     // Clear regions
     dialog.querySelector("#clearRegions").onclick = () => {
       this.regions = [];
@@ -487,14 +662,38 @@ class QwenSpatialInterface {
   loadImage(file, dialog) {
     const reader = new FileReader();
     reader.onload = (e) => {
+      // Store original image source for re-optimization
+      this.originalImageSrc = e.target.result;
+      
       const img = new Image();
       img.onload = () => {
-        this.currentImage = img;
-        this.imageScale = 1;
-        this.regions = [];
-        this.updateCanvas(dialog);
-        this.updateRegionsList(dialog);
-        this.updateDebug(`Image loaded: ${img.width}x${img.height}px`, dialog);
+        // Show resolution section now that image is loaded
+        dialog.querySelector('#resolutionSection').style.display = 'block';
+        
+        // Get current resize method (default to 'pad')
+        const resizeMethodSelect = dialog.querySelector("#resizeMethod");
+        const resizeMethod = resizeMethodSelect ? resizeMethodSelect.value : 'pad';
+        
+        // Optimize the image for Qwen coordinate system
+        const optimizedData = this.optimizeImageForQwen(img, null, null, resizeMethod);
+        
+        // Create new image from optimized canvas
+        this.currentImage = new Image();
+        this.currentImage.onload = () => {
+          this.imageScale = 1;
+          this.regions = [];
+          this.updateCanvas(dialog);
+          this.updateRegionsList(dialog);
+          this.updateResolutionInfo(dialog);
+          this.updateDebug(`Original: ${this.originalDimensions.width}x${this.originalDimensions.height}px`, dialog);
+          this.updateDebug(`Optimized: ${this.optimizedDimensions.width}x${this.optimizedDimensions.height}px`, dialog);
+          this.updateDebug(`Scale: ${optimizedData.scale.toFixed(3)}, Offset: (${optimizedData.offsetX.toFixed(0)},${optimizedData.offsetY.toFixed(0)})`, dialog);
+          this.updateDebug(`IMPORTANT: Set optimize_resolution=False in Python node to avoid double optimization!`, dialog);
+        };
+        this.currentImage.src = optimizedData.canvas.toDataURL();
+        
+        // Store optimization data for coordinate calculations
+        this.optimizationData = optimizedData;
       };
       img.src = e.target.result;
     };
@@ -800,13 +999,21 @@ class QwenSpatialInterface {
       return;
     }
     
+    // Use optimized dimensions for coordinate normalization
+    const imageWidth = this.optimizedDimensions.width || this.currentImage.width;
+    const imageHeight = this.optimizedDimensions.height || this.currentImage.height;
+    
+    this.updateDebug(`Using dimensions for normalization: ${imageWidth}x${imageHeight}`, dialog);
+    
     const tokens = this.regions.map(region => {
       if (region.type === 'bounding_box') {
         const [x1, y1, x2, y2] = region.coords;
-        const normX1 = (x1 / this.currentImage.width).toFixed(3);
-        const normY1 = (y1 / this.currentImage.height).toFixed(3);
-        const normX2 = (x2 / this.currentImage.width).toFixed(3);
-        const normY2 = (y2 / this.currentImage.height).toFixed(3);
+        const normX1 = (x1 / imageWidth).toFixed(3);
+        const normY1 = (y1 / imageHeight).toFixed(3);
+        const normX2 = (x2 / imageWidth).toFixed(3);
+        const normY2 = (y2 / imageHeight).toFixed(3);
+        
+        this.updateDebug(`Box ${region.label}: (${x1},${y1},${x2},${y2}) → (${normX1},${normY1},${normX2},${normY2})`, dialog);
         
         // Make object_ref optional for bounding boxes
         if (region.includeObjectRef !== false) {
@@ -821,8 +1028,10 @@ class QwenSpatialInterface {
         
       } else if (region.type === 'polygon') {
         const normalizedPoints = region.coords.map(([x, y]) => 
-          `${(x / this.currentImage.width).toFixed(3)},${(y / this.currentImage.height).toFixed(3)}`
+          `${(x / imageWidth).toFixed(3)},${(y / imageHeight).toFixed(3)}`
         ).join(' ');
+        
+        this.updateDebug(`Polygon ${region.label}: ${region.coords.length} points normalized`, dialog);
         
         // Make object_ref optional for polygons/quads
         if (region.includeObjectRef !== false) {
@@ -1032,6 +1241,151 @@ class QwenSpatialInterface {
     }
   }
 
+  // Resolution interface handling methods
+  updateResolutionInterface(type, dialog) {
+    const recommendedDiv = dialog.querySelector('#recommendedResolutions');
+    const customDiv = dialog.querySelector('#customResolution');
+    
+    // Hide all first
+    recommendedDiv.style.display = 'none';
+    customDiv.style.display = 'none';
+    
+    if (type === 'recommended') {
+      recommendedDiv.style.display = 'block';
+      this.populateRecommendedResolutions(dialog);
+    } else if (type === 'custom') {
+      customDiv.style.display = 'block';
+    }
+    
+    // Auto mode doesn't need any additional UI
+  }
+
+  populateRecommendedResolutions(dialog) {
+    if (!this.currentImage) {
+      console.log("populateRecommendedResolutions: No current image");
+      return;
+    }
+    
+    console.log(`populateRecommendedResolutions: originalDimensions=${this.originalDimensions.width}x${this.originalDimensions.height}`);
+    console.log(`populateRecommendedResolutions: optimizedDimensions=${this.optimizedDimensions.width}x${this.optimizedDimensions.height}`);
+    
+    const select = dialog.querySelector('#resolutionSelect');
+    if (!select) {
+      console.log("populateRecommendedResolutions: No select element found");
+      return;
+    }
+    
+    const recommendations = this.getRecommendedResolutions(
+      this.originalDimensions.width, 
+      this.originalDimensions.height
+    );
+    
+    console.log(`populateRecommendedResolutions: got ${recommendations?.length} recommendations:`, recommendations);
+    
+    select.innerHTML = recommendations.map(({width, height, label}) => {
+      const isCurrentMatch = (width === this.optimizedDimensions.width && height === this.optimizedDimensions.height);
+      const aspectRatio = (width / height).toFixed(2);
+      const displayLabel = isCurrentMatch ? 
+        `${width}x${height} (current) - ${aspectRatio}:1` :
+        `${width}x${height} - ${aspectRatio}:1`;
+      return `<option value="${width}x${height}">${displayLabel}</option>`;
+    }).join('');
+    
+    console.log(`populateRecommendedResolutions: select.innerHTML length=${select.innerHTML.length}`);
+  }
+
+  applyResolution(width, height, dialog) {
+    if (!this.currentImage) {
+      this.updateDebug("ERROR: No image loaded for resolution change", dialog);
+      return;
+    }
+    
+    if (!this.originalImageSrc) {
+      this.updateDebug("ERROR: No original image source available for re-optimization", dialog);
+      return;
+    }
+    
+    this.updateDebug(`Starting resolution change to ${width}x${height}`, dialog);
+    
+    // Re-optimize the image with the new target resolution
+    const img = new Image();
+    img.onload = () => {
+      this.updateDebug(`Original image loaded for optimization: ${img.width}x${img.height}`, dialog);
+      
+      // Get current resize method
+      const resizeMethod = dialog.querySelector("#resizeMethod").value;
+      this.updateDebug(`Using resize method: ${resizeMethod}`, dialog);
+      
+      const optimizedData = this.optimizeImageForQwen(img, width, height, resizeMethod);
+      
+      // Create new optimized image
+      this.currentImage = new Image();
+      this.currentImage.onload = () => {
+        this.updateDebug(`New optimized image loaded: ${this.currentImage.width}x${this.currentImage.height}`, dialog);
+        this.updateDebug(`Current optimized dimensions: ${this.optimizedDimensions.width}x${this.optimizedDimensions.height}`, dialog);
+        
+        // Clear existing regions as coordinates would be invalid
+        this.regions = [];
+        
+        this.updateDebug("Calling updateCanvas...", dialog);
+        this.updateCanvas(dialog);
+        
+        this.updateDebug("Calling updateRegionsList...", dialog);
+        this.updateRegionsList(dialog);
+        
+        this.updateDebug("Calling updateResolutionInfo...", dialog);
+        this.updateResolutionInfo(dialog);
+        
+        this.updateDebug(`=== RESOLUTION CHANGE COMPLETE: ${width}x${height} ===`, dialog);
+      };
+      
+      this.currentImage.onerror = () => {
+        this.updateDebug("ERROR: Failed to load optimized image from canvas", dialog);
+      };
+      
+      this.updateDebug(`Setting new image source from optimized canvas`, dialog);
+      this.currentImage.src = optimizedData.canvas.toDataURL();
+      
+      // Store optimization data
+      this.optimizationData = optimizedData;
+    };
+    
+    img.onerror = () => {
+      this.updateDebug("ERROR: Failed to load original image for re-optimization", dialog);
+    };
+    
+    // Use the original image source to re-optimize
+    this.updateDebug(`Loading original image from source for re-optimization`, dialog);
+    img.src = this.originalImageSrc;
+  }
+
+  updateResolutionInfo(dialog) {
+    if (!this.currentImage) return;
+    
+    const originalSpan = dialog.querySelector('#originalSize');
+    const targetSpan = dialog.querySelector('#targetSize');
+    const aspectSpan = dialog.querySelector('#aspectRatioInfo');
+    
+    originalSpan.textContent = `${this.originalDimensions.width}x${this.originalDimensions.height}`;
+    targetSpan.textContent = `${this.optimizedDimensions.width}x${this.optimizedDimensions.height}`;
+    
+    const originalAspect = (this.originalDimensions.width / this.originalDimensions.height).toFixed(2);
+    const targetAspect = (this.optimizedDimensions.width / this.optimizedDimensions.height).toFixed(2);
+    
+    aspectSpan.textContent = `${originalAspect} → ${targetAspect}`;
+  }
+
+  updateResizeMethodHelp(method, dialog) {
+    const helpElement = dialog.querySelector('#resizeMethodHelp');
+    const helpTexts = {
+      'pad': 'Scale and add black padding to fit exact dimensions',
+      'crop': 'Scale and center crop to fill exact dimensions',
+      'stretch': 'Stretch/distort image to exact dimensions (may distort aspect ratio)',
+      'resize': 'Scale maintaining aspect ratio (final size may differ from target)'
+    };
+    helpElement.textContent = helpTexts[method] || '';
+  }
+
   updateDebug(message, dialog) {
     const debugOutput = dialog.querySelector("#debugOutput");
     const timestamp = new Date().toLocaleTimeString();
@@ -1058,13 +1412,47 @@ class QwenSpatialInterface {
     return bestResolution;
   }
 
-  optimizeImageForQwen(img) {
+  getRecommendedResolutions(originalWidth, originalHeight) {
+    const aspectRatio = originalWidth / originalHeight;
+    
+    // Get all resolutions and calculate their aspect ratios and differences
+    const recommendations = this.QWEN_RESOLUTIONS.map(([w, h]) => {
+      const resRatio = w / h;
+      const ratioDiff = Math.abs(Math.log(resRatio / aspectRatio));
+      return { width: w, height: h, ratio: resRatio, diff: ratioDiff };
+    });
+    
+    // Sort by aspect ratio similarity (smallest difference first)
+    recommendations.sort((a, b) => a.diff - b.diff);
+    
+    // Return top 5 recommendations
+    return recommendations.slice(0, 5).map(r => ({
+      width: r.width,
+      height: r.height,
+      label: `${r.width}x${r.height} (${(r.ratio > 1 ? 'landscape' : r.ratio < 1 ? 'portrait' : 'square')})`,
+      isClosest: r === recommendations[0]
+    }));
+  }
+
+  optimizeImageForQwen(img, targetWidth = null, targetHeight = null, resizeMethod = 'pad') {
+    console.log(`optimizeImageForQwen called: target=${targetWidth}x${targetHeight}, method=${resizeMethod}`);
+    
     // Store original dimensions
     this.originalDimensions = { width: img.width, height: img.height };
     
-    // Find optimal Qwen resolution
-    const [targetW, targetH] = this.findClosestResolution(img.width, img.height);
+    // Use provided target resolution or find optimal one
+    let targetW, targetH;
+    if (targetWidth && targetHeight) {
+      targetW = targetWidth;
+      targetH = targetHeight;
+      console.log(`Using provided target: ${targetW}x${targetH}`);
+    } else {
+      [targetW, targetH] = this.findClosestResolution(img.width, img.height);
+      console.log(`Auto-selected target: ${targetW}x${targetH}`);
+    }
+    
     this.optimizedDimensions = { width: targetW, height: targetH };
+    console.log(`Initial optimized dimensions set: ${targetW}x${targetH}`);
     
     // Create optimized canvas
     const optimizedCanvas = document.createElement('canvas');
@@ -1072,26 +1460,77 @@ class QwenSpatialInterface {
     optimizedCanvas.height = targetH;
     const ctx = optimizedCanvas.getContext('2d');
     
-    // Fill with black background
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, targetW, targetH);
+    let scale, scaledW, scaledH, offsetX, offsetY;
     
-    // Calculate scale and positioning to fit image within target resolution
-    const scale = Math.min(targetW / img.width, targetH / img.height);
-    const scaledW = img.width * scale;
-    const scaledH = img.height * scale;
-    const offsetX = (targetW - scaledW) / 2;
-    const offsetY = (targetH - scaledH) / 2;
+    switch (resizeMethod) {
+      case 'stretch':
+        // Stretch to exact dimensions (distort aspect ratio)
+        scale = 1; // Not meaningful for stretch
+        scaledW = targetW;
+        scaledH = targetH;
+        offsetX = 0;
+        offsetY = 0;
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        break;
+        
+      case 'crop':
+        // Scale to fill and center crop
+        scale = Math.max(targetW / img.width, targetH / img.height);
+        scaledW = img.width * scale;
+        scaledH = img.height * scale;
+        offsetX = (targetW - scaledW) / 2;
+        offsetY = (targetH - scaledH) / 2;
+        
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, targetW, targetH);
+        ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
+        break;
+        
+      case 'resize':
+        // Scale maintaining aspect ratio (may not fill exact target)
+        scale = Math.min(targetW / img.width, targetH / img.height);
+        scaledW = img.width * scale;
+        scaledH = img.height * scale;
+        // Update target dimensions to actual final dimensions
+        this.optimizedDimensions = { width: Math.round(scaledW), height: Math.round(scaledH) };
+        optimizedCanvas.width = Math.round(scaledW);
+        optimizedCanvas.height = Math.round(scaledH);
+        console.log(`Resize mode: updated canvas to ${optimizedCanvas.width}x${optimizedCanvas.height}`);
+        console.log(`Resize mode: updated optimizedDimensions to ${this.optimizedDimensions.width}x${this.optimizedDimensions.height}`);
+        offsetX = 0;
+        offsetY = 0;
+        ctx.drawImage(img, 0, 0, scaledW, scaledH);
+        break;
+        
+      case 'pad':
+      default:
+        // Scale to fit with padding (original behavior)
+        scale = Math.min(targetW / img.width, targetH / img.height);
+        scaledW = img.width * scale;
+        scaledH = img.height * scale;
+        offsetX = (targetW - scaledW) / 2;
+        offsetY = (targetH - scaledH) / 2;
+        
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, targetW, targetH);
+        ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
+        break;
+    }
     
-    // Draw the scaled image centered
-    ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
-    
-    return {
+    const result = {
       canvas: optimizedCanvas,
       scale: scale,
       offsetX: offsetX,
-      offsetY: offsetY
+      offsetY: offsetY,
+      targetWidth: this.optimizedDimensions.width,
+      targetHeight: this.optimizedDimensions.height,
+      resizeMethod: resizeMethod
     };
+    
+    console.log(`optimizeImageForQwen result:`, result);
+    console.log(`Canvas actual size: ${optimizedCanvas.width}x${optimizedCanvas.height}`);
+    
+    return result;
   }
 
   resizeCanvases(width, height) {

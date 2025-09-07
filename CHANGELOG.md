@@ -1,11 +1,74 @@
 # Changelog
 
-# v1.4.x - General Notes
-**Experimental Feature Notice:** I haven't had a chance to test this thoroughly, but if you see issues, let me know. None of these tokens seem to be documented in the reference code that I could find in quick scans, but it does seem to work for the most part. The tokens were identified from the tokenizer config. That all said - this spatial editor node likely has issues, but the TL;DR of how to use it is that it takes a required input image and creates the prompt with the spatial tokens filled in for you. You can (and should) edit these on your own to finetune your edits.
+## v1.5.1 Spatial Editor Improvements ()
+
+### Added
+- Resolution handling in spatial editor
+  - Three selection modes: Auto (best match), Recommended (top 5 suggestions), Custom (manual input)
+  - Aspect-ratio aware recommendations sorted by similarity to source image
+  - Real-time resolution info display showing original → target dimensions and aspect ratio changes
+  - Automatic re-optimization when resolution changes (clears existing regions for accuracy)
+  - Custom resolution validation with automatic 16-pixel alignment
+  - Resolution section appears dynamically when image is loaded
+  - Multiple resize strategies for different use cases:
+    - **Pad**: Scale and add black borders to fit exact dimensions (default, preserves aspect ratio)
+    - **Crop**: Scale and center crop to fill exact dimensions (may lose edge content)
+    - **Stretch**: Distort image to exact dimensions (changes aspect ratio)
+    - **Resize**: Scale maintaining aspect ratio (final size may differ from target)
+
+### Simplified
+- **QwenSpatialTokenGenerator workflow streamlined** - Removed redundant resolution optimization:
+  - Eliminated `optimize_resolution` parameter (was causing double optimization issues)
+  - Resolution handling now exclusively managed by JavaScript spatial editor
+  - Simplified Python node focuses purely on token generation and template application
+  - No more coordinate mismatch warnings - spatial editor handles all optimization
+  - Cleaner node interface with fewer confusing parameters
+
+### Fixed
+- **Double optimization eliminated** - Spatial editor now single source of truth for image resolution
+- **Coordinate accuracy improved** - JavaScript and Python now use identical optimized dimensions
+- **User experience enhanced** - Clear resolution controls instead of hidden optimization conflicts
+- **Custom resolution application** - Fixed bug where custom width/height inputs weren't being applied
+- **Resolution display bug** - Fixed "undefined" aspect ratio display in recommended resolutions dropdown
+- **Debug improvements** - Added comprehensive debug logging for resolution changes and method switching
+
+### Technical Improvements
+- **Resolution interface methods** added to spatial editor:
+  - `updateResolutionInterface()` - Controls UI visibility based on selection mode
+  - `populateRecommendedResolutions()` - Dynamically populates aspect-ratio sorted suggestions
+  - `applyResolution()` - Re-optimizes image with new target resolution
+  - `updateResolutionInfo()` - Real-time dimension and aspect ratio feedback
+- **Code cleanup** in Python spatial token generator:
+  - Removed unused `find_closest_resolution()` and `optimize_image_resolution()` methods
+  - Removed `QWEN_RESOLUTIONS` constant and `math` import
+  - Simplified class description and parameter handling
+  - Cleaner separation of concerns between JS and Python components
+
+### Documentation
+- **USAGE_GUIDE.md** - Comprehensive V1 vs V2 comparison with migration guidance
+- **Workflow examples** for both simple and advanced multi-image use cases
+- **Troubleshooting guide** for resolution, coordinate, and performance issues
+
+# September 2025 - v1.4.x General Notes
+**Experimental Feature Notice:** I haven't had a chance to test this thoroughly, but if you see issues, let me know. None of these tokens seem to be documented in the reference code that I could find in quick scans, but it does seem to work? The tokens were identified from the tokenizer config. That all said - this spatial editor node likely has issues, but the TL;DR of how to use it is that it takes a required input image and creates the prompt with the spatial tokens filled in for you. You can (and should) edit these on your own to finetune your edits.
 
 **Token Usage Theory:** I'm uncertain if a bounding box token on its own works better than a bounding box with an object reference, but based on how vision LLMs work and their training datasets, these tokens are usually used for grounding purposes - meaning, the bounding box identifies the region, and by labeling the object reference within that bounding box, you are providing it more context. Does it work better than a bounding box alone? Does it work better than just saying "replace the church with a castle" without any spatial tokens? Don't know yet. Let's find out.
 
-## v1.4.4 - Dual-Encoding Architecture Implementation
+## v1.4.4 - Critical Coordinate System Fix & Dual-Encoding Architecture
+
+### Fixed
+- **CRITICAL: Double image optimization causing coordinate mismatch** - Fixed issue where both JavaScript spatial editor AND Python node were optimizing image resolution, causing coordinates to target wrong locations
+  - **Root cause:** JavaScript editor optimized image to one resolution, but Python node re-optimized to potentially different resolution
+  - **Solution:** Changed `optimize_resolution` default to `False` in QwenSpatialTokenGenerator
+  - **User guidance:** Added warnings in both debug outputs when double optimization detected
+- **JavaScript spatial editor coordinate system** - Now properly matches what the encoder will see:
+  - Automatically finds closest Qwen resolution (same algorithm as Python node)
+  - Resizes and pads image to match encoder's view
+  - Normalizes coordinates using optimized dimensions
+  - Enhanced debug output showing optimization process
+- **Coordinate accuracy** - Spatial edits now target correct image regions instead of appearing in center
+- **Resolution-independent editing** - Works correctly across all input image sizes and aspect ratios
+- **Redundant spatial editor removal** - Eliminated duplicate spatial editor from QwenVLTextEncoder token analyzer
 
 ### Added
 - **Dual-encoding architecture** in QwenVLTextEncoder following Qwen-Image technical report:
@@ -19,6 +82,10 @@
 - **Enhanced conditioning metadata** with dual encoding data for improved sampler integration
 - **Automatic activation** when both edit_image and VAE are provided to QwenVLTextEncoder
 - **Technical report compliance** - implementation now matches paper's dual-encoding methodology for ~90% architectural capability
+- **Modernized UI styling** across all interfaces to match spatial editor's dark theme:
+  - Token analyzer interface: Dark background with backdrop blur, modern inputs/buttons
+  - Testing interface: Complete dark theme overhaul with consistent styling
+  - Custom dialogs: Modern dark modal styling with proper contrast ratios
 
 ### Changed
 - **Native-quality vision processing** using existing infrastructure:
@@ -29,11 +96,18 @@
 - **Conditioning fusion** now explicitly labeled and organized for better downstream processing
 
 ### Technical Details
-- Maintains full backward compatibility - dual encoding activates automatically when VAE is connected
-- Leverages existing vision processing infrastructure without architectural changes
-- Combines semantic understanding (high-level) with structural features (low-level) as per paper
-- Debug logging provides insight into dual-encoding feature generation and fusion process
-- Zero workflow changes required - enhancement is transparent to existing setups
+- **Coordinate System Fix:**
+  - Added `QWEN_RESOLUTIONS` array to JavaScript matching Python implementation
+  - Added `findClosestResolution()` method using same aspect ratio matching logic
+  - Added `optimizeImageForQwen()` method that resizes/pads images with black borders
+  - Updated `generateTokens()` to normalize coordinates using optimized dimensions
+  - Enhanced debug output to show coordinate transformation process
+- **Dual-Encoding Architecture:**
+  - Maintains full backward compatibility - dual encoding activates automatically when VAE is connected
+  - Leverages existing vision processing infrastructure without architectural changes
+  - Combines semantic understanding (high-level) with structural features (low-level) as per paper
+  - Debug logging provides insight into dual-encoding feature generation and fusion process
+  - Zero workflow changes required - enhancement is transparent to existing setups
 
 *This implementation achieves approximately 90% of the Qwen-Image paper's architectural capabilities within ComfyUI's framework.*
 

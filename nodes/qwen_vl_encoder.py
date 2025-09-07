@@ -41,9 +41,9 @@ def apply_rope_fix():
     try:
         import comfy.ldm.qwen_image.model as qwen_model
 
-        # Check if the model has QwenEmbedRope (it might not exist)
+        # Check if the model has QwenEmbedRope (it might not exist in native models)
         if not hasattr(qwen_model, 'QwenEmbedRope'):
-            logger.info("QwenEmbedRope not found, skipping RoPE fix")
+            logger.debug("QwenEmbedRope not found, skipping RoPE fix (expected for native models)")
             return
 
         original_expand = qwen_model.QwenEmbedRope._expand_pos_freqs_if_needed
@@ -127,20 +127,20 @@ class QwenVLTextEncoder:
     QWEN_RESOLUTIONS = [
         # Square resolutions
         (1024, 1024), (1328, 1328),
-        
+
         # Common landscape ratios (optimized for quality)
         (1328, 800), (1456, 720), (1584, 1056), (1920, 1080),  # 16:9
         (2048, 1024), (1344, 768), (1536, 640),
-        
+
         # Common portrait ratios
         (800, 1328), (720, 1456), (1056, 1584), (1080, 1920),  # 9:16
         (1024, 2048), (768, 1344), (640, 1536),
-        
+
         # Original DiffSynth-Studio resolutions for compatibility
         (672, 1568), (688, 1504), (752, 1392), (832, 1248),
         (880, 1184), (944, 1104), (1104, 944), (1184, 880),
         (1248, 832), (1392, 752), (1504, 688), (1568, 672),
-        
+
         # Smaller resolutions for low VRAM
         (512, 512), (768, 768), (512, 768), (768, 512),
         (1024, 768), (768, 1024), (1024, 512), (512, 1024)
@@ -213,7 +213,7 @@ ALWAYS connect VAE to this node for reference latents!
         context_latent = None
         original_text = text
         dual_encoding_data = None
-        
+
         # No resolution controls needed - images will be processed optimally
 
         # Prepare edit_image if in edit mode
@@ -229,27 +229,27 @@ ALWAYS connect VAE to this node for reference latents!
             if vae is not None:
                 # Reconstructive path - standard VAE encoding
                 ref_latent = vae.encode(image[:, :, :, :3])
-                
+
                 # DUAL ENCODING: Semantic path using native-level processing
                 try:
                     from .qwen_vision_processor import QwenVisionProcessor
                     from .qwen_processor import Qwen2VLProcessor
                     from .qwen_custom_tokenizer import MultiFrameVisionEmbedder
-                    
+
                     # Create advanced vision features (native-quality processing)
                     vision_processor = QwenVisionProcessor()
-                    qwen_processor = Qwen2VLProcessor() 
+                    qwen_processor = Qwen2VLProcessor()
                     embedder = MultiFrameVisionEmbedder()
-                    
+
                     # Process image through semantic vision pipeline
                     image_list = [image[0]]  # Remove batch dimension for processor
                     semantic_patches, semantic_grid = vision_processor.create_vision_patches(image_list)
-                    
+
                     # Create semantic embeddings (paper's semantic path)
                     semantic_embeddings = embedder.embed_vision_patches(
                         semantic_patches, semantic_grid, vision_model=None
                     )
-                    
+
                     # Store dual encoding data for conditioning fusion (paper architecture)
                     dual_encoding_data = {
                         "semantic_embeddings": semantic_embeddings,  # High-level understanding
@@ -259,16 +259,16 @@ ALWAYS connect VAE to this node for reference latents!
                         "fusion_method": "mmdit_compatible",  # Paper's MMDiT fusion
                         "has_dual_encoding": True
                     }
-                    
+
                     if debug_mode:
                         logger.info(f"[Encoder] Dual encoding - Semantic patches: {semantic_patches.shape}")
                         logger.info(f"[Encoder] Dual encoding - Reconstructive latent: {ref_latent.shape}")
                         logger.info(f"[Encoder] Dual encoding - Semantic grid: {semantic_grid}")
-                        
+
                 except ImportError:
                     logger.warning("[Encoder] Advanced vision processing not available, using standard VAE only")
                     ref_latent = vae.encode(image[:, :, :, :3])
-                    
+
                 if debug_mode:
                     logger.info(f"[Encoder] Encoded edit_image reference latent shape: {ref_latent.shape}")
 
@@ -351,7 +351,7 @@ ALWAYS connect VAE to this node for reference latents!
 
         if all_ref_latents:
             conditioning_updates["reference_latents"] = all_ref_latents
-            
+
         if conditioning_updates and COMFY_AVAILABLE:
             conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
             if debug_mode:
@@ -399,15 +399,13 @@ class QwenLowresFixNode:
                     "default": 0.5,
                     "min": 0.0,
                     "max": 1.0,
-                    "step": 0.01,
-                    "tooltip": "How much to refine? 0.3-0.5=subtle polish | 0.5-0.7=moderate | 0.7+=heavy changes"
-                }),
+                    "step": 0.01,                }),
                 "upscale_factor": ("FLOAT", {
                     "default": 1.5,
                     "min": 1.0,
                     "max": 4.0,
                     "step": 0.1,
-                    "tooltip": "How much bigger? 1.5x is usually perfect. 2x+ needs more VRAM."
+                    "tooltip": "Upscale by 1.5x recommended",
                 }),
             }
         }

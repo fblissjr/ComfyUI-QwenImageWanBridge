@@ -1,8 +1,7 @@
 """
-QwenNativeLoader - Direct Qwen2.5-VL model loading bypassing ComfyUI's CLIP system
+QwenNativeLoader - Direct Qwen2.5-VL model loading via transformers
 
-This module provides native model loading for Qwen2.5-VL models, eliminating
-ComfyUI's generic CLIP wrapper limitations and enabling full model capabilities.
+This WIP module provides native model loading for Qwen2.5-VL models
 
 Reference implementations:
 - DiffSynth-Engine: diffsynth_engine/pipelines/qwen_image.py
@@ -15,17 +14,50 @@ from typing import Tuple, Optional, Dict, Any
 
 try:
     from transformers import (
-        Qwen2VLForConditionalGeneration,
-        Qwen2VLProcessor,
         BitsAndBytesConfig,
         AutoConfig,
-        AutoModelForVision2Seq
+        AutoModelForVision2Seq,
+        AutoProcessor
     )
+
+    # Try to import Qwen2.5-VL classes (newer) - use AutoProcessor per official docs
+    try:
+        from transformers import Qwen2_5_VLForConditionalGeneration
+        QWEN25_AVAILABLE = True
+    except ImportError as e:
+        # Try alternative import path that might work
+        try:
+            import transformers.models.qwen2_5_vl.modeling_qwen2_5_vl as qwen25_module
+            Qwen2_5_VLForConditionalGeneration = qwen25_module.Qwen2_5_VLForConditionalGeneration
+            QWEN25_AVAILABLE = True
+        except Exception:
+            QWEN25_AVAILABLE = False
+
+    # Try to import Qwen2-VL classes (older)
+    try:
+        from transformers import Qwen2VLForConditionalGeneration, Qwen2VLProcessor
+        QWEN2_AVAILABLE = True
+    except ImportError:
+        QWEN2_AVAILABLE = False
+
     TRANSFORMERS_AVAILABLE = True
-    
+
     # Log transformers version for debugging
     import transformers
-    logging.info(f"transformers version: {transformers.__version__}")
+    logger = logging.getLogger(__name__)
+    logger.info(f"transformers version: {transformers.__version__}")
+    logger.info(f"Qwen2.5-VL classes available: {QWEN25_AVAILABLE}")
+    logger.info(f"Qwen2-VL classes available: {QWEN2_AVAILABLE}")
+
+    # Try to determine correct class name - might be different
+    if not QWEN25_AVAILABLE:
+        try:
+            # Check if it's available under a different name
+            import transformers.models.qwen2_5_vl
+            available_classes = [name for name in dir(transformers.models.qwen2_5_vl) if 'Qwen' in name and 'Conditional' in name]
+            logger.info(f"Available Qwen2.5-VL classes in transformers: {available_classes}")
+        except Exception as e:
+            logger.info(f"Could not inspect qwen2_5_vl module: {e}")
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
     logging.warning("transformers library not available - QwenNativeLoader disabled")
@@ -38,16 +70,16 @@ logger = logging.getLogger(__name__)
 
 class QwenNativeLoader:
     """
-    Direct Qwen2.5-VL model loader eliminating ComfyUI's generic CLIP wrapper
-    
+    Direct Qwen2.5-VL model loader via transformers
+
     Features:
-    - Direct transformers model loading (no ComfyUI CLIP interference)
-    - Custom device placement and memory optimization  
+    - Direct transformers model loading
+    - Custom device placement and memory optimization
     - Quantization support (4bit, 8bit)
     - Low VRAM mode for resource-constrained systems
     - Proper Qwen2VLProcessor integration
     """
-    
+
     @classmethod
     def INPUT_TYPES(cls):
         if not TRANSFORMERS_AVAILABLE:
@@ -56,20 +88,20 @@ class QwenNativeLoader:
                     "error": ("STRING", {"default": "transformers library required"}),
                 }
             }
-        
+
         # Get local models from text_encoders folder
         models = folder_paths.get_filename_list("text_encoders")
         # Filter for directories (not .safetensors files) - show all directories
         local_models = [m for m in models if not m.endswith('.safetensors')]
-        
+
         # Add common HuggingFace repo options
         hf_repos = [
             "Qwen/Qwen2.5-VL-7B-Instruct",
-            "Qwen/Qwen2.5-VL-3B-Instruct", 
+            "Qwen/Qwen2.5-VL-3B-Instruct",
             "Qwen/Qwen2-VL-7B-Instruct",
             "Qwen/Qwen2-VL-2B-Instruct"
         ]
-        
+
         # Combine local and HF options
         all_options = local_models + hf_repos
         if not all_options:
@@ -90,7 +122,7 @@ class QwenNativeLoader:
                     "tooltip": "Device placement. Auto uses ComfyUI's device management"
                 }),
                 "dtype": (["auto", "fp16", "fp32", "bf16"], {
-                    "default": "auto", 
+                    "default": "auto",
                     "tooltip": "Model precision. Auto matches ComfyUI settings"
                 }),
                 "low_vram": ("BOOLEAN", {
@@ -102,7 +134,7 @@ class QwenNativeLoader:
                     "tooltip": "Quantization for memory reduction. Requires bitsandbytes"
                 }),
                 "model_variant": (["base", "edit", "edit-distill"], {
-                    "default": "edit", 
+                    "default": "edit",
                     "tooltip": "Model variant if multiple available"
                 }),
                 "trust_remote_code": ("BOOLEAN", {
@@ -115,22 +147,14 @@ class QwenNativeLoader:
                 }),
             }
         }
-    
+
     RETURN_TYPES = ("QWEN_MODEL", "QWEN_PROCESSOR", "QWEN_CONFIG")
     RETURN_NAMES = ("model", "processor", "config")
     FUNCTION = "load_qwen_native"
     CATEGORY = "QwenImage/Native"
     TITLE = "Qwen Native Loader"
     DESCRIPTION = """
-Load Qwen2.5-VL models directly, bypassing ComfyUI's CLIP system.
-
-This enables:
-- Full Qwen2VLProcessor functionality (better spatial understanding)
-- All 22 special tokens from tokenizer analysis
-- Context image support for ControlNet workflows
-- No vision processing bugs (2x performance improvement)
-- Entity control and spatial reference tokens
-- Direct model optimization and quantization
+Load Qwen2.5-VL models directly via transformers
 """
 
     def _get_device_map(self, device: str, low_vram: bool) -> Optional[str]:
@@ -166,7 +190,7 @@ This enables:
         """Get quantization configuration if requested"""
         if quantization == "none":
             return None
-        
+
         try:
             if quantization == "4bit":
                 return BitsAndBytesConfig(
@@ -182,11 +206,11 @@ This enables:
             return None
 
     def load_qwen_native(
-        self, 
+        self,
         model_path: str,
         auto_download: bool = True,
         device: str = "auto",
-        dtype: str = "auto", 
+        dtype: str = "auto",
         low_vram: bool = False,
         quantization: str = "none",
         model_variant: str = "edit",
@@ -195,14 +219,14 @@ This enables:
     ) -> Tuple[Any, Any, Any]:
         """
         Load Qwen2.5-VL model and processor directly from transformers
-        
+
         Returns:
             Tuple of (model, processor, config) for native processing
         """
-        
+
         if not TRANSFORMERS_AVAILABLE:
             raise RuntimeError("transformers library is required for QwenNativeLoader")
-        
+
         # Determine if this is a local path or HuggingFace repo
         if "/" in model_path and not model_path.startswith("/"):
             # Looks like HuggingFace repo (e.g., "Qwen/Qwen2.5-VL-7B-Instruct")
@@ -231,10 +255,10 @@ This enables:
                     final_model_path = hf_path
                 else:
                     raise RuntimeError(f"Local model directory not found: {final_model_path}")
-        
+
         logger.info(f"Loading model from: {final_model_path}")
         logger.info(f"Settings: device={device}, dtype={dtype}, low_vram={low_vram}, quantization={quantization}")
-        
+
         # Log file structure for debugging
         import os
         if os.path.exists(final_model_path):
@@ -250,40 +274,40 @@ This enables:
                 logger.warning(f"Could not list directory contents: {list_error}")
         else:
             logger.info(f"Path does not exist locally: {final_model_path}")
-        
+
         # Prepare loading arguments
         load_kwargs = {
-            "torch_dtype": self._get_dtype(dtype),
+            "dtype": self._get_dtype(dtype),
             "trust_remote_code": trust_remote_code,
         }
-        
+
         # Device mapping
         device_map = self._get_device_map(device, low_vram)
         if device_map:
             load_kwargs["device_map"] = device_map
-        
+
         # Quantization
         quantization_config = self._get_quantization_config(quantization)
         if quantization_config:
             load_kwargs["quantization_config"] = quantization_config
-            # Don't specify torch_dtype with quantization
-            load_kwargs.pop("torch_dtype", None)
-        
+            # Don't specify dtype with quantization
+            load_kwargs.pop("dtype", None)
+
         # Cache directory
         if cache_dir:
             load_kwargs["cache_dir"] = cache_dir
-        
+
         try:
             # Load model - this is the core difference from ComfyUI's approach
             # We load directly instead of going through ComfyUI's CLIP wrapper
             logger.info("Loading Qwen2.5-VL model...")
             logger.info(f"Model path: {final_model_path}")
             logger.info(f"Load kwargs: {load_kwargs}")
-            
+
             # Try to load config first to verify compatibility
             try:
                 config = AutoConfig.from_pretrained(
-                    final_model_path, 
+                    final_model_path,
                     trust_remote_code=trust_remote_code
                 )
                 logger.info(f"Model config loaded: {config.model_type}")
@@ -293,59 +317,89 @@ This enables:
             except Exception as config_error:
                 logger.warning(f"Could not load config: {config_error}")
                 config = None
-            
-            # Try different loading approaches based on config
+
+            # Determine correct model class based on config
             model = None
+            processor = None
             loading_errors = []
-            
-            # Approach 1: Direct Qwen2VL class
-            try:
-                logger.info("Attempting to load with Qwen2VLForConditionalGeneration...")
-                model = Qwen2VLForConditionalGeneration.from_pretrained(
-                    final_model_path,
-                    **load_kwargs
-                )
-                logger.info("Successfully loaded with Qwen2VLForConditionalGeneration")
-            except Exception as e1:
-                loading_errors.append(f"Qwen2VLForConditionalGeneration: {e1}")
-                logger.warning(f"Failed with Qwen2VLForConditionalGeneration: {e1}")
-            
-            # Approach 2: AutoModel if direct class failed
+
+            # Check model type from config to use correct class
+            model_type = getattr(config, 'model_type', 'unknown') if config else 'unknown'
+            logger.info(f"Detected model type: {model_type}")
+
+            if model_type == 'qwen2_5_vl' and QWEN25_AVAILABLE:
+                # Use Qwen2.5-VL classes - official docs recommend AutoProcessor
+                try:
+                    logger.info("Loading Qwen2.5-VL model with Qwen2_5VLForConditionalGeneration...")
+                    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                        final_model_path,
+                        **load_kwargs
+                    )
+                    processor = AutoProcessor.from_pretrained(
+                        final_model_path,
+                        trust_remote_code=trust_remote_code,
+                        cache_dir=cache_dir if cache_dir else None,
+                        use_fast=False
+                    )
+                    logger.info("Successfully loaded Qwen2.5-VL model with AutoProcessor")
+                except Exception as e1:
+                    loading_errors.append(f"Qwen2_5VLForConditionalGeneration: {e1}")
+                    logger.warning(f"Failed with Qwen2_5VLForConditionalGeneration: {e1}")
+
+            elif model_type == 'qwen2_vl' and QWEN2_AVAILABLE:
+                # Use Qwen2-VL classes
+                try:
+                    logger.info("Loading Qwen2-VL model with Qwen2VLForConditionalGeneration...")
+                    model = Qwen2VLForConditionalGeneration.from_pretrained(
+                        final_model_path,
+                        **load_kwargs
+                    )
+                    processor = Qwen2VLProcessor.from_pretrained(
+                        final_model_path,
+                        trust_remote_code=trust_remote_code,
+                        cache_dir=cache_dir if cache_dir else None,
+                        use_fast=False
+                    )
+                    logger.info("Successfully loaded Qwen2-VL model and processor")
+                except Exception as e2:
+                    loading_errors.append(f"Qwen2VLForConditionalGeneration: {e2}")
+                    logger.warning(f"Failed with Qwen2VLForConditionalGeneration: {e2}")
+
+            # Fallback to AutoModel if specific classes failed or unavailable
             if model is None:
                 try:
-                    logger.info("Attempting to load with AutoModelForVision2Seq...")
+                    logger.info("Attempting fallback with AutoModelForVision2Seq...")
                     model = AutoModelForVision2Seq.from_pretrained(
                         final_model_path,
                         **load_kwargs
                     )
-                    logger.info("Successfully loaded with AutoModelForVision2Seq")
-                except Exception as e2:
-                    loading_errors.append(f"AutoModelForVision2Seq: {e2}")
-                    logger.warning(f"Failed with AutoModelForVision2Seq: {e2}")
-            
-            # If both approaches failed, raise comprehensive error
+                    processor = AutoProcessor.from_pretrained(
+                        final_model_path,
+                        trust_remote_code=trust_remote_code,
+                        cache_dir=cache_dir if cache_dir else None,
+                        use_fast=False
+                    )
+                    logger.info("Successfully loaded with Auto classes")
+                except Exception as e3:
+                    loading_errors.append(f"AutoModelForVision2Seq: {e3}")
+                    logger.warning(f"Failed with AutoModelForVision2Seq: {e3}")
+
+            # If all approaches failed, raise comprehensive error
             if model is None:
                 error_details = "\n".join([f"  - {err}" for err in loading_errors])
                 raise RuntimeError(f"All model loading approaches failed:\n{error_details}")
-            
-            # Load processor - critical for proper vision token handling
-            # ComfyUI uses tokenizer-only path which degrades spatial understanding
-            logger.info("Loading Qwen2VL processor...")
-            processor = Qwen2VLProcessor.from_pretrained(
-                final_model_path,
-                trust_remote_code=trust_remote_code,
-                cache_dir=cache_dir if cache_dir else None
-            )
-            
+
+            # Processor should already be loaded above with the model
+
             # Set model to eval mode
             model.eval()
-            
+
             # Move to device if not using device_map
             if not device_map and device != "cpu":
                 target_device = model_management.get_torch_device() if device == "auto" else device
                 model = model.to(target_device)
                 logger.info(f"Moved model to device: {target_device}")
-            
+
             # Get configuration for reference
             config = {
                 "model_type": model.config.model_type,
@@ -356,17 +410,17 @@ This enables:
                 "quantization": quantization,
                 "memory_footprint": self._estimate_memory_footprint(model),
             }
-            
+
             logger.info("Successfully loaded Qwen native model and processor")
             logger.info(f"Model dtype: {model.dtype}")
             logger.info(f"Estimated memory footprint: {config['memory_footprint']:.1f}GB")
-            
+
             return (model, processor, config)
-            
+
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Failed to load Qwen model: {error_msg}")
-            
+
             # Provide specific guidance for common errors
             if "size mismatch" in error_msg:
                 if "3584" in error_msg and "1280" in error_msg:
@@ -391,7 +445,7 @@ This enables:
                 )
             else:
                 guidance = f"Model loading failed. Check that '{final_model_path}' contains a valid Qwen2.5-VL model."
-            
+
             raise RuntimeError(f"Model loading failed: {error_msg}\n\nGuidance: {guidance}")
 
     def _estimate_memory_footprint(self, model) -> float:

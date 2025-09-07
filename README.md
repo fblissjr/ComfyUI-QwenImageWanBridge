@@ -24,7 +24,7 @@ ComfyUI nodes for Qwen-Image-Edit for precise image editing via a visual spatial
 
 ---
 
-## Spatial Token Editor & Reference
+## Spatial Token Editor & Reference (TBD on how well this consistently works, but it's built inside Qwen2.5-VL)
 
 **New:** Visual spatial token editor with canvas-based region drawing for precise image editing control.
 
