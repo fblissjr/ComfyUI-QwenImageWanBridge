@@ -90,8 +90,6 @@ class QwenNativeLoader:
                     "default": False,
                     "tooltip": "Enable low VRAM optimizations (model offloading)"
                 }),
-            },
-            "optional": {
                 "quantization": (["none", "4bit", "8bit"], {
                     "default": "none",
                     "tooltip": "Quantization for memory reduction. Requires bitsandbytes"
