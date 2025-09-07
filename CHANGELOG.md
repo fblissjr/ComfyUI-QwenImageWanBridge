@@ -1,13 +1,13 @@
 # Changelog
 
-## v1.5.1 Spatial Editor Improvements ()
+## v1.5.1 Maybe better spatial editor improvements
 
 ### Added
 - Resolution handling in spatial editor
   - Three selection modes: Auto (best match), Recommended (top 5 suggestions), Custom (manual input)
   - Aspect-ratio aware recommendations sorted by similarity to source image
   - Real-time resolution info display showing original → target dimensions and aspect ratio changes
-  - Automatic re-optimization when resolution changes (clears existing regions for accuracy)
+  - Automatic re-optimization attempt when resolution changes (clears existing regions for accuracy)
   - Custom resolution validation with automatic 16-pixel alignment
   - Resolution section appears dynamically when image is loaded
   - Multiple resize strategies for different use cases:
@@ -22,12 +22,11 @@
   - Resolution handling now exclusively managed by JavaScript spatial editor
   - Simplified Python node focuses purely on token generation and template application
   - No more coordinate mismatch warnings - spatial editor handles all optimization
-  - Cleaner node interface with fewer confusing parameters
 
 ### Fixed
-- **Double optimization eliminated** - Spatial editor now single source of truth for image resolution
+- **Double resolution optimization fixed** - Spatial editor now single source of truth for image resolution
 - **Coordinate accuracy improved** - JavaScript and Python now use identical optimized dimensions
-- **User experience enhanced** - Clear resolution controls instead of hidden optimization conflicts
+- **User experience enhanced** - Clear resolution controls instead of hidden conflicts
 - **Custom resolution application** - Fixed bug where custom width/height inputs weren't being applied
 - **Resolution display bug** - Fixed "undefined" aspect ratio display in recommended resolutions dropdown
 - **Debug improvements** - Added comprehensive debug logging for resolution changes and method switching
@@ -43,11 +42,6 @@
   - Removed `QWEN_RESOLUTIONS` constant and `math` import
   - Simplified class description and parameter handling
   - Cleaner separation of concerns between JS and Python components
-
-### Documentation
-- **USAGE_GUIDE.md** - Comprehensive V1 vs V2 comparison with migration guidance
-- **Workflow examples** for both simple and advanced multi-image use cases
-- **Troubleshooting guide** for resolution, coordinate, and performance issues
 
 # September 2025 - v1.4.x General Notes
 **Experimental Feature Notice:** I haven't had a chance to test this thoroughly, but if you see issues, let me know. None of these tokens seem to be documented in the reference code that I could find in quick scans, but it does seem to work? The tokens were identified from the tokenizer config. That all said - this spatial editor node likely has issues, but the TL;DR of how to use it is that it takes a required input image and creates the prompt with the spatial tokens filled in for you. You can (and should) edit these on your own to finetune your edits.
