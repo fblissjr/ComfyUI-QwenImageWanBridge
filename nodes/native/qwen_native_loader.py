@@ -328,10 +328,11 @@ Load Qwen2.5-VL models directly via transformers
             logger.info(f"Detected model type: {model_type}")
 
             if model_type == 'qwen2_5_vl' and QWEN25_AVAILABLE:
-                # Use Qwen2.5-VL classes - official docs recommend AutoProcessor
+                # Try text encoder model first (like DiffSynth uses) for better conditioning quality
                 try:
-                    logger.info("Loading Qwen2.5-VL model with Qwen2_5VLForConditionalGeneration...")
-                    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    logger.info("Loading Qwen2.5-VL text encoder model with Qwen2_5_VLModel...")
+                    from transformers import Qwen2_5_VLModel
+                    model = Qwen2_5_VLModel.from_pretrained(
                         final_model_path,
                         **load_kwargs
                     )
@@ -341,10 +342,28 @@ Load Qwen2.5-VL models directly via transformers
                         cache_dir=cache_dir if cache_dir else None,
                         use_fast=False
                     )
-                    logger.info("Successfully loaded Qwen2.5-VL model with AutoProcessor")
-                except Exception as e1:
-                    loading_errors.append(f"Qwen2_5VLForConditionalGeneration: {e1}")
-                    logger.warning(f"Failed with Qwen2_5VLForConditionalGeneration: {e1}")
+                    logger.info("Successfully loaded Qwen2.5-VL text encoder model")
+                except Exception as e0:
+                    loading_errors.append(f"Qwen2_5_VLModel: {e0}")
+                    logger.warning(f"Failed with Qwen2_5_VLModel: {e0}")
+                    
+                    # Fallback to conditional generation model
+                    try:
+                        logger.info("Falling back to Qwen2.5-VL conditional generation model...")
+                        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                            final_model_path,
+                            **load_kwargs
+                        )
+                        processor = AutoProcessor.from_pretrained(
+                            final_model_path,
+                            trust_remote_code=trust_remote_code,
+                            cache_dir=cache_dir if cache_dir else None,
+                            use_fast=False
+                        )
+                        logger.info("Successfully loaded Qwen2.5-VL model with AutoProcessor")
+                    except Exception as e1:
+                        loading_errors.append(f"Qwen2_5VLForConditionalGeneration: {e1}")
+                        logger.warning(f"Failed with Qwen2_5VLForConditionalGeneration: {e1}")
 
             elif model_type == 'qwen2_vl' and QWEN2_AVAILABLE:
                 # Use Qwen2-VL classes

@@ -56,6 +56,17 @@ import comfy.conds as conds
 import comfy.model_management as model_management
 import comfy.utils
 
+try:
+    from ..node_helpers import node_helpers
+    NODE_HELPERS_AVAILABLE = True
+except ImportError:
+    try:
+        import node_helpers
+        NODE_HELPERS_AVAILABLE = True
+    except ImportError:
+        NODE_HELPERS_AVAILABLE = False
+        print("Warning: node_helpers not available for advanced conditioning")
+
 logger = logging.getLogger(__name__)
 
 # Template dropping indices from DiffSynth
@@ -437,31 +448,42 @@ FIXES APPLIED:
         # QwenImageTEModel.encode_token_weights() returns (out, pooled, extra)
         # The samplers expect raw tensors, not pre-wrapped CONDCrossAttn objects
 
-        # Prepare extra data for conditioning (like ComfyUI's QwenImageTEModel does)
-        extra_data = {}
+        # Start with basic conditioning format (like ComfyUI's text encoders)
+        conditioning = [[hidden_states, {}]]
 
         # Add attention mask if available (like ComfyUI's QwenImageTEModel does)
         if attention_mask is not None:
             # Remove attention mask if it's all ones (ComfyUI optimization)
             if attention_mask.sum() != torch.numel(attention_mask):
-                extra_data["attention_mask"] = attention_mask
+                conditioning[0][1]["attention_mask"] = attention_mask
 
-        # Add reference latents (edit_image or edit_images path)
+        # Prepare conditioning updates (like V1 encoder does)
+        conditioning_updates = {}
+
+        # Add reference latents using V1 approach
+        all_ref_latents = []
         if ref_latents is not None:
             if isinstance(ref_latents, list):
-                # Multi-image case: list of latents
-                extra_data["reference_latents"] = ref_latents
+                all_ref_latents.extend(ref_latents)
             else:
-                # Single image case: wrap in list for consistency
-                extra_data["reference_latents"] = [ref_latents]
+                all_ref_latents.append(ref_latents)
 
         # Add context latents (DiffSynth-style ControlNet path)
         if context_latents is not None:
-            extra_data["context_latents"] = [context_latents]
+            all_ref_latents.append(context_latents)
 
-        # Return raw tensor format like ComfyUI's text encoders: [[tensor, extra_data]]
-        # The CONDCrossAttn wrapping happens later in ComfyUI's conditioning pipeline
-        return [[hidden_states, extra_data]]
+        # Apply conditioning updates using V1's method if available
+        if all_ref_latents:
+            conditioning_updates["reference_latents"] = all_ref_latents
+
+        if conditioning_updates and NODE_HELPERS_AVAILABLE:
+            # Use same method as V1 encoder for proper reference latent integration
+            conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
+        elif all_ref_latents:
+            # Fallback: add to extra_data
+            conditioning[0][1]["reference_latents"] = all_ref_latents
+
+        return conditioning
 
     def _extract_masked_hidden(self, hidden_states: torch.Tensor, mask: torch.Tensor):
         """Extract hidden states based on attention mask, following DiffSynth pattern."""
@@ -603,16 +625,24 @@ FIXES APPLIED:
             # DiffSynth uses pipe.text_encoder which is the model's language_model component
             # We need to access the text encoder part of the full model
             with torch.no_grad():
-                # Get the text encoder/language model component (like DiffSynth's pipe.text_encoder)
+                # Use the appropriate model component based on model type
+                # If we have Qwen2_5_VLModel (text encoder), use it directly 
+                # If we have Qwen2_5_VLForConditionalGeneration, extract language_model
                 if hasattr(qwen_model, 'language_model'):
+                    # Conditional generation model - extract text encoder component
                     text_encoder = qwen_model.language_model
-                elif hasattr(qwen_model, 'model'):
-                    text_encoder = qwen_model.model
+                    model_arch = "conditional_generation"
+                elif 'Qwen2_5_VLModel' in str(type(qwen_model)):
+                    # Text encoder model - use directly (like DiffSynth)
+                    text_encoder = qwen_model
+                    model_arch = "text_encoder" 
                 else:
-                    text_encoder = qwen_model  # Fallback
+                    # Fallback
+                    text_encoder = qwen_model
+                    model_arch = "fallback"
 
                 if debug_vision:
-                    logger.info(f"Using text encoder component: {type(text_encoder)}")
+                    logger.info(f"Using {model_arch} architecture: {type(text_encoder)}")
 
                 if 'pixel_values' in model_inputs:
                     # DiffSynth line 538: with pixel values - call text encoder directly
