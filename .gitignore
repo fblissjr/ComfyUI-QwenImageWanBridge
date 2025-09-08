@@ -21,7 +21,8 @@ config/
 training/
 .claude/
 internal/
-coderef/
 docs/
 Documentation/
 nodes/archive
+archive/
+coderef/
