@@ -1,10 +1,15 @@
-*Despite the name, this is becoming more of a Qwen Image Edit repo, though I'm still bullish on Qwen Image and WAN video playing a big role together for video generation (and video/keyframe editing)*
+*Despite the name, this is becoming more of an experimental Qwen Image Edit repo, though I'm still bullish on Qwen Image and WAN video playing a big role together for video generation (and video/keyframe editing)*
 
-# ComfyUI Qwen Image Edit Nodes
+# Experimental/Research ComfyUI Qwen Image Edit Nodes (and eventually + Wan)
 
-ComfyUI nodes for Qwen-Image-Edit for precise image editing via a visual spatial editor, system prompt modifications, multi-reference support, and other fun features.
+This is an **EXPERIMENTAL** research repo with custom nodes for Qwen-Image-Edit for precise image editing via a visual spatial editor, system prompt modifications, multi-reference support, and other fun features. Expect this code to change often, and expect many things to just not work well at all. That said - expect transparency and hopefully some ideas others can use to form new ideas and directions.
 
 **[Changelog](CHANGELOG.md)**
+
+**Key Updates**
+## v1.5.2 Got the coordinates wrong - also, not sure they work. Exploring annotated images.
+- Spatial tokens now use absolute pixel coordinates instead of normalized 0-1 values
+- **Reference**: https://github.com/QwenLM/Qwen2.5-VL/blob/main/cookbooks/spatial_understanding.ipynb
 
 ## Table of Contents
 
@@ -24,43 +29,29 @@ ComfyUI nodes for Qwen-Image-Edit for precise image editing via a visual spatial
 
 ---
 
-## Spatial Token Editor & Reference (TBD on how well this consistently works, but it's built inside Qwen2.5-VL)
-
-**New:** Visual spatial token editor with canvas-based region drawing for precise image editing control.
+## Spatial Token Editor & Reference (TBD on how well this consistently works, or if it's any better than natural language, but it's built inside Qwen2.5-VL's tokenizer)
 
 **Note:** I haven't had a chance to test this thoroughly, but if you see issues, let me know. None of these tokens seem to be documented in the reference code that I could find in quick scans, but it does seem to work for the most part. The tokens were identified from the tokenizer config. That all said - this spatial editor node likely has issues.
 
 **TL;DR:** The core output is that it takes a required input image and creates the prompt with the spatial tokens filled in for you. You can (and should) edit these on your own to finetune your edits.
 
-The `QwenSpatialTokenGenerator` provides an interactive interface for creating Qwen-Image-Edit spatial tokens:
-
-- **Visual editor:** Canvas-based drawing for bounding boxes, polygons, and object reference points
-- **Automatic token generation:** Proper Qwen2.5-VL formatting with normalized coordinates
-- **Flexible output:** Optional object_ref labels (checkbox controlled) for pure coordinates or labeled regions
-- **Editable integration:** Spatial tokens appear in base_prompt field for user modification
-- **Dual output:** Plain prompt (editable) + formatted_prompt (template applied)
-- **Region management:** Individual delete buttons and inline label editing for each region
-- **Resolution optimization:** Built-in image resizing to optimal Qwen resolutions
-
-**Token Usage Theory:** I'm uncertain if a bounding box token on its own works better than a bounding box with an object reference, but based on how vision LLMs work and their training datasets, these tokens are usually used for grounding purposes - meaning, the bounding box identifies the region, and by labeling the object reference within that bounding box, you are providing it more context. Does it work better than a bounding box alone? Does it work better than just saying "replace the church with a castle" without any spatial tokens? Don't know yet. Let's find out.
-
 **Supported Spatial Tokens:**
 - **`<|object_ref_start|>...<|object_ref_end|>`** - Reference specific objects by description
-- **`<|box_start|>x1,y1,x2,y2<|box_end|>`** - Target rectangular regions (normalized 0-1 coordinates)
+- **`<|box_start|>x1,y1,x2,y2<|box_end|>`** - Target rectangular regions (absolute pixel coordinates)
 - **`<|quad_start|>x1,y1,x2,y2,x3,y3,x4,y4<|quad_end|>`** - Define complex quadrilateral areas
 
-These bounding box coordinates represent **normalized rectangular regions** in an image, using the format `(x1, y1, x2, y2)` where all values range from 0.0 to 1.0.
+These bounding box coordinates represent **absolute pixel positions** in an image, using the format `(x1, y1, x2, y2)` where values are actual pixel coordinates.
 
 **Coordinate system:**
-- `(0.0, 0.0)` = top-left corner of the image
-- `(1.0, 1.0)` = bottom-right corner of the image
-- `x1, y1` = top-left corner of the bounding box
-- `x2, y2` = bottom-right corner of the bounding box
+- `(0, 0)` = top-left corner of the image
+- `(width, height)` = bottom-right corner of the image
+- `x1, y1` = top-left corner of the bounding box (in pixels)
+- `x2, y2` = bottom-right corner of the bounding box (in pixels)
 
-**Examples from above**
-- `0.2,0.3,0.8,0.7` = rectangle from 20% right, 30% down → 80% right, 70% down (center region)
-- `0.0,0.0,0.5,1.0` = rectangle from top-left → 50% width, full height (left half of image)
-- `0.1,0.0,0.9,0.4` = rectangle from 10% right, top edge → 90% right, 40% down (upper banner area)
+**Examples for a 1024x1024 image:**
+- `200,300,800,700` = rectangle from pixel (200,300) → (800,700) (center region)
+- `0,0,512,1024` = rectangle from top-left → 512 pixels right, full height (left half)
+- `100,0,900,400` = rectangle from (100,0) → (900,400) (upper banner area)
 
 *[Examples and usage patterns →](#spatial-token-examples)*
 
@@ -175,10 +166,10 @@ KSampler → QwenLowresFixNode → Final Image
 
 ## Advanced Usage
 
-**Spatial Reference Tokens** (Phase 3 roadmap):
+**Spatial Reference Tokens:**
 ```
 "Change <|object_ref_start|>the red car<|object_ref_end|> to blue"
-"Replace <|box_start|>0.2,0.3,0.8,0.7<|box_end|> with flowers"
+"Replace <|box_start|>200,300,800,700<|box_end|> with flowers"
 ```
 
 **Denoise Guidelines:**
@@ -197,26 +188,26 @@ Target specific objects by description:
 ```
 
 ### Box Coordinates - Precise Region Control
-Target rectangular areas with normalized coordinates (0-1):
+Target rectangular areas with absolute pixel coordinates:
 ```
-"Fill <|box_start|>0.2,0.3,0.8,0.7<|box_end|> with blooming cherry blossoms"
-"Replace the content in <|box_start|>0.0,0.0,0.5,1.0<|box_end|> with a mountain landscape"
-"Add storm clouds to <|box_start|>0.1,0.0,0.9,0.4<|box_end|>"
+"Fill <|box_start|>200,300,800,700<|box_end|> with blooming cherry blossoms"
+"Replace the content in <|box_start|>0,0,512,1024<|box_end|> with a mountain landscape"
+"Add storm clouds to <|box_start|>100,0,900,400<|box_end|>"
 ```
 
 ### Quadrilateral - Complex Shape Targeting
-Define irregular areas with four corner points:
+Define irregular areas with four corner points (absolute pixel coordinates):
 ```
-"Paint graffiti art within <|quad_start|>0.1,0.2,0.6,0.1,0.8,0.7,0.2,0.8<|quad_end|>"
-"Transform <|quad_start|>0.3,0.1,0.9,0.2,0.7,0.9,0.1,0.6<|quad_end|> into stained glass"
+"Paint graffiti art within <|quad_start|>100,200,600,100,800,700,200,800<|quad_end|>"
+"Transform <|quad_start|>300,100,900,200,700,900,100,600<|quad_end|> into stained glass"
 ```
 
 ### Combined Usage - Multiple Token Types
-Mix different tokens for complex edits:
+Mix different tokens for complex edits (absolute pixel coordinates):
 ```
-"Change <|object_ref_start|>the building<|object_ref_end|> in <|box_start|>0.4,0.2,1.0,0.8<|box_end|> to Gothic architecture"
-"Make <|object_ref_start|>the tree<|object_ref_end|> seasonal: spring leaves in <|quad_start|>0.2,0.1,0.8,0.0,0.9,0.6,0.1,0.7<|quad_end|>"
-"Replace <|object_ref_start|>the sky<|object_ref_end|> above <|box_start|>0.0,0.0,1.0,0.4<|box_end|> with aurora borealis"
+"Change <|object_ref_start|>the building<|object_ref_end|> in <|box_start|>400,200,1024,800<|box_end|> to Gothic architecture"
+"Make <|object_ref_start|>the tree<|object_ref_end|> seasonal: spring leaves in <|quad_start|>200,100,800,0,900,600,100,700<|quad_end|>"
+"Replace <|object_ref_start|>the sky<|object_ref_end|> above <|box_start|>0,0,1024,400<|box_end|> with aurora borealis"
 ```
 
 ### Multi-Object Coordination

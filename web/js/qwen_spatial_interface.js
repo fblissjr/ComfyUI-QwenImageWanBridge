@@ -19,6 +19,7 @@ class QwenSpatialInterface {
     this.polygonPoints = [];
     this.imageScale = 1;
     this.imageOffset = { x: 0, y: 0 };
+    this.node = null; // Store reference to the Python node
     
     // Qwen resolutions for coordinate optimization
     this.QWEN_RESOLUTIONS = [
@@ -36,6 +37,10 @@ class QwenSpatialInterface {
   }
 
   createInterface(node = null) {
+    console.log("=== CREATE INTERFACE START ===");
+    console.log(`Node provided: ${!!node}`);
+    this.node = node; // Store node reference for bidirectional sync
+    
     const dialog = $el("div", {
       parent: document.body,
       style: {
@@ -448,6 +453,12 @@ class QwenSpatialInterface {
 
     this.setupEventListeners(dialog, node);
     this.setupCanvas(dialog);
+    
+    // Try to auto-load connected image
+    setTimeout(() => {
+      this.loadImageFromConnectedNode(dialog);
+    }, 500);
+    
     return dialog;
   }
 
@@ -660,36 +671,52 @@ class QwenSpatialInterface {
   }
 
   loadImage(file, dialog) {
+    console.log("=== SPATIAL INTERFACE: LOAD IMAGE START ===");
+    console.log(`Loading file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`);
+    
     const reader = new FileReader();
     reader.onload = (e) => {
+      console.log(`FileReader loaded: ${e.target.result.length} characters`);
       // Store original image source for re-optimization
       this.originalImageSrc = e.target.result;
+      console.log("Stored original image source for re-optimization");
       
       const img = new Image();
       img.onload = () => {
+        console.log(`Original image loaded: ${img.width}x${img.height}`);
         // Show resolution section now that image is loaded
         dialog.querySelector('#resolutionSection').style.display = 'block';
         
         // Get current resize method (default to 'pad')
         const resizeMethodSelect = dialog.querySelector("#resizeMethod");
         const resizeMethod = resizeMethodSelect ? resizeMethodSelect.value : 'pad';
+        console.log(`Using resize method: ${resizeMethod}`);
         
         // Optimize the image for Qwen coordinate system
+        console.log("Starting image optimization for Qwen...");
         const optimizedData = this.optimizeImageForQwen(img, null, null, resizeMethod);
         
         // Create new image from optimized canvas
         this.currentImage = new Image();
         this.currentImage.onload = () => {
+          console.log(`Optimized image loaded: ${this.currentImage.width}x${this.currentImage.height}`);
+          console.log(`Optimization data - scale: ${optimizedData.scale}, offset: (${optimizedData.offsetX},${optimizedData.offsetY})`);
+          console.log(`Final dimensions - original: ${this.originalDimensions.width}x${this.originalDimensions.height}, optimized: ${this.optimizedDimensions.width}x${this.optimizedDimensions.height}`);
+          
           this.imageScale = 1;
           this.regions = [];
+          console.log("Calling updateCanvas, updateRegionsList, updateResolutionInfo...");
           this.updateCanvas(dialog);
           this.updateRegionsList(dialog);
           this.updateResolutionInfo(dialog);
           this.updateDebug(`Original: ${this.originalDimensions.width}x${this.originalDimensions.height}px`, dialog);
           this.updateDebug(`Optimized: ${this.optimizedDimensions.width}x${this.optimizedDimensions.height}px`, dialog);
           this.updateDebug(`Scale: ${optimizedData.scale.toFixed(3)}, Offset: (${optimizedData.offsetX.toFixed(0)},${optimizedData.offsetY.toFixed(0)})`, dialog);
-          this.updateDebug(`IMPORTANT: Set optimize_resolution=False in Python node to avoid double optimization!`, dialog);
+          this.updateDebug(`Image loaded and optimized - draw regions to generate tokens`, dialog);
+          
+          console.log("=== SPATIAL INTERFACE: LOAD IMAGE COMPLETE ===");
         };
+        console.log("Setting optimized canvas as image source...");
         this.currentImage.src = optimizedData.canvas.toDataURL();
         
         // Store optimization data for coordinate calculations
@@ -985,115 +1012,315 @@ class QwenSpatialInterface {
   }
 
   generateTokens(dialog) {
+    console.log("=== GENERATE TOKENS START ===");
+    console.log(`generateTokens called: image=${!!this.currentImage}, regions=${this.regions.length}`);
+    
     this.updateDebug(`generateTokens called: image=${!!this.currentImage}, regions=${this.regions.length}`, dialog);
     
     if (!this.currentImage) {
+      console.log("No image loaded - cannot generate tokens");
       dialog.querySelector('#spatialTokensOutput').value = '';
       this.updateDebug("No image loaded - cannot generate tokens", dialog);
       return;
     }
     
     if (this.regions.length === 0) {
+      console.log("No regions to generate tokens from");
       dialog.querySelector('#spatialTokensOutput').value = '';
       this.updateDebug("No regions to generate tokens from", dialog);
       return;
     }
     
-    // Use optimized dimensions for coordinate normalization
+    // Use optimized dimensions for coordinate calculation
     const imageWidth = this.optimizedDimensions.width || this.currentImage.width;
     const imageHeight = this.optimizedDimensions.height || this.currentImage.height;
     
+    // Calculate native resolution dimensions (multiples of 28 for ViT patches)
+    const nativeWidth = Math.ceil(imageWidth / 28) * 28;
+    const nativeHeight = Math.ceil(imageHeight / 28) * 28;
+    
+    console.log(`Using dimensions for coordinate calculation: ${imageWidth}x${imageHeight}`);
+    console.log(`Native ViT dimensions (multiples of 28): ${nativeWidth}x${nativeHeight}`);
+    console.log(`Current image dimensions: ${this.currentImage.width}x${this.currentImage.height}`);
+    console.log(`Optimized dimensions: ${this.optimizedDimensions.width}x${this.optimizedDimensions.height}`);
+    
     this.updateDebug(`Using dimensions for normalization: ${imageWidth}x${imageHeight}`, dialog);
     
-    const tokens = this.regions.map(region => {
+    console.log(`Processing ${this.regions.length} regions for token generation...`);
+    const tokens = this.regions.map((region, index) => {
+      console.log(`Processing region ${index + 1}: ${region.type} "${region.label}"`);
+      
       if (region.type === 'bounding_box') {
         const [x1, y1, x2, y2] = region.coords;
-        const normX1 = (x1 / imageWidth).toFixed(3);
-        const normY1 = (y1 / imageHeight).toFixed(3);
-        const normX2 = (x2 / imageWidth).toFixed(3);
-        const normY2 = (y2 / imageHeight).toFixed(3);
         
-        this.updateDebug(`Box ${region.label}: (${x1},${y1},${x2},${y2}) → (${normX1},${normY1},${normX2},${normY2})`, dialog);
+        // COMPREHENSIVE COORDINATE DEBUGGING (FIXED: Using absolute pixels with native scaling)
+        console.log(`=== COORDINATE DEBUG: ${region.label} ===`);
+        console.log(`Raw canvas coordinates: (${x1},${y1},${x2},${y2})`);
+        console.log(`Canvas dimensions: ${imageWidth}x${imageHeight}`);
+        console.log(`Native ViT dimensions: ${nativeWidth}x${nativeHeight}`);
         
-        // Make object_ref optional for bounding boxes
+        // Scale coordinates to native ViT resolution (what model actually sees)
+        const scaleX = nativeWidth / imageWidth;
+        const scaleY = nativeHeight / imageHeight;
+        
+        const nativeX1 = Math.round(x1 * scaleX);
+        const nativeY1 = Math.round(y1 * scaleY);
+        const nativeX2 = Math.round(x2 * scaleX);
+        const nativeY2 = Math.round(y2 * scaleY);
+        
+        console.log(`Scale factors: X=${scaleX.toFixed(3)}, Y=${scaleY.toFixed(3)}`);
+        console.log(`Native coordinates: (${nativeX1},${nativeY1},${nativeX2},${nativeY2})`);
+        console.log(`Box size: ${nativeX2-nativeX1}x${nativeY2-nativeY1} native pixels`);
+        console.log(`=== END COORDINATE DEBUG ===`);
+        
+        this.updateDebug(`Box ${region.label}: native(${nativeX1},${nativeY1},${nativeX2},${nativeY2})`, dialog);
+        
+        // Use Qwen-Image Edit format with native ViT coordinates
+        let token;
         if (region.includeObjectRef !== false) {
-          return `<|object_ref_start|>${region.label}<|object_ref_end|> at <|box_start|>${normX1},${normY1},${normX2},${normY2}<|box_end|>`;
+          token = `<|object_ref_start|>${region.label}<|object_ref_end|> at <|box_start|>${nativeX1},${nativeY1},${nativeX2},${nativeY2}<|box_end|>`;
+          console.log(`Generated bounding box token with object ref: ${token}`);
         } else {
-          return `<|box_start|>${normX1},${normY1},${normX2},${normY2}<|box_end|>`;
+          token = `<|box_start|>${nativeX1},${nativeY1},${nativeX2},${nativeY2}<|box_end|>`;
+          console.log(`Generated bounding box token without object ref: ${token}`);
         }
+        return token;
         
       } else if (region.type === 'object_reference') {
-        // Object reference is just a label, no coordinates
-        return `<|object_ref_start|>${region.label}<|object_ref_end|>`;
+        console.log(`Object reference - label only: ${region.label}`);
+        // Object reference is just a label with no coordinates
+        const token = `<|object_ref_start|>${region.label}<|object_ref_end|>`;
+        console.log(`Generated object reference token: ${token}`);
+        return token;
         
       } else if (region.type === 'polygon') {
-        const normalizedPoints = region.coords.map(([x, y]) => 
-          `${(x / imageWidth).toFixed(3)},${(y / imageHeight).toFixed(3)}`
-        ).join(' ');
+        console.log(`Polygon with ${region.coords.length} points: ${JSON.stringify(region.coords)}`);
         
-        this.updateDebug(`Polygon ${region.label}: ${region.coords.length} points normalized`, dialog);
+        // Convert to native ViT coordinates for quad format
+        // Format: (x1,y1),(x2,y2),(x3,y3),(x4,y4) like the Chinese example
+        const nativePoints = region.coords.map(([x, y]) => {
+          const nativeX = Math.round(x * (nativeWidth / imageWidth));
+          const nativeY = Math.round(y * (nativeHeight / imageHeight));
+          return `(${nativeX},${nativeY})`;
+        }).join(',');
         
-        // Make object_ref optional for polygons/quads
+        console.log(`Native ViT polygon coordinates: ${nativePoints}`);
+        
+        this.updateDebug(`Polygon ${region.label}: ${region.coords.length} points scaled to native`, dialog);
+        
+        // Use quad format with native coordinates - format: <|quad_start|>(x1,y1),(x2,y2),...<|quad_end|>
+        let token;
         if (region.includeObjectRef !== false) {
-          return `<|object_ref_start|>${region.label}<|object_ref_end|> outlined by <|quad_start|>${normalizedPoints}<|quad_end|>`;
+          token = `<|object_ref_start|>${region.label}<|object_ref_end|><|quad_start|>${nativePoints}<|quad_end|>`;
+          console.log(`Generated polygon token with object ref: ${token}`);
         } else {
-          return `<|quad_start|>${normalizedPoints}<|quad_end|>`;
+          token = `<|quad_start|>${nativePoints}<|quad_end|>`;
+          console.log(`Generated polygon token without object ref: ${token}`);
         }
+        return token;
       }
       
+      console.log(`Unknown region type: ${region.type}`);
       return ''; // fallback
     }).filter(token => token); // remove empty tokens
     
+    console.log(`Generated ${tokens.length} tokens before joining`);
+    console.log(`Individual tokens:`, tokens);
     const spatialTokens = tokens.join(' ');
+    console.log(`Final spatial tokens: ${spatialTokens.length} characters`);
+    console.log(`Final spatial tokens content: ${spatialTokens}`);
+    
     dialog.querySelector('#spatialTokensOutput').value = spatialTokens;
     this.updateDebug(`Generated ${tokens.length} spatial tokens`, dialog);
+    console.log("=== GENERATE TOKENS END ===");
     
-    // Update base_prompt widget with spatial tokens for easy editing
+    // Auto-sync spatial tokens to Python node
+    const syncSuccess = this.syncSpatialTokensToNode();
+    if (syncSuccess) {
+      console.log("Spatial tokens auto-synced to Python node");
+    } else {
+      console.log("Failed to auto-sync spatial tokens");
+    }
+    
+    // Update base_prompt widget with spatial tokens for easy editing  
     this.updateBasePromptWithTokens(spatialTokens);
   }
 
   updateBasePromptWithTokens(spatialTokens) {
-    if (!this.node || !this.node.widgets) return;
+    console.log("=== UPDATE BASE PROMPT WITH TOKENS START ===");
+    console.log(`Node: ${!!this.node}, has widgets: ${!!(this.node && this.node.widgets)}`);
+    
+    if (!this.node || !this.node.widgets) {
+      console.log("No node or widgets available for base prompt update");
+      return;
+    }
     
     const basePromptWidget = this.node.widgets.find(w => w.name === 'base_prompt');
-    if (!basePromptWidget) return;
+    console.log(`Base prompt widget found: ${!!basePromptWidget}`);
+    
+    if (!basePromptWidget) {
+      console.log("No base_prompt widget found");
+      return;
+    }
     
     // Get current base prompt, removing any existing spatial tokens
     let currentPrompt = basePromptWidget.value || '';
+    console.log(`Current base prompt: ${currentPrompt.length} characters`);
+    console.log(`Current base prompt content: ${currentPrompt}`);
     
-    // Remove existing spatial tokens (anything with <|...|> patterns)
-    currentPrompt = currentPrompt.replace(/<\|[^|]+\|>/g, '').trim();
+    // Remove existing spatial tokens (anything with <|...|> patterns) and coordinate text
+    let cleanPrompt = currentPrompt.replace(/<\|[^|]+\|>/g, '').trim();
+    // Also remove coordinate text patterns like "object at 28,296,321,690"
+    cleanPrompt = cleanPrompt.replace(/\b\w+\s+at\s+\d+,\d+,\d+,\d+\b/g, '').trim();
+    // Remove extra whitespace
+    cleanPrompt = cleanPrompt.replace(/\s+/g, ' ').trim();
+    
+    console.log(`Clean prompt after token removal: ${cleanPrompt.length} characters`);
+    console.log(`Clean prompt content: ${cleanPrompt}`);
     
     // Combine base prompt with spatial tokens
     const combinedPrompt = spatialTokens ? 
-      `${currentPrompt} ${spatialTokens}`.trim() : 
-      currentPrompt;
+      `${cleanPrompt} ${spatialTokens}`.trim() : 
+      cleanPrompt;
+      
+    console.log(`Combined prompt: ${combinedPrompt.length} characters`);
+    console.log(`Combined prompt content: ${combinedPrompt}`);
       
     basePromptWidget.value = combinedPrompt;
     this.node.setDirtyCanvas(true, true);
+    console.log("Base prompt widget updated and node marked as dirty");
+    console.log("=== UPDATE BASE PROMPT WITH TOKENS END ===");
+  }
+
+  loadImageFromConnectedNode(dialog) {
+    console.log("=== LOAD IMAGE FROM CONNECTED NODE START ===");
+    
+    if (!this.node) {
+      console.log("No node reference available");
+      return;
+    }
+
+    // Look for connected image input
+    const imageInput = this.node.inputs?.find(input => input.name === "image");
+    
+    if (!imageInput || !imageInput.link) {
+      console.log("No image input connected to node");
+      this.updateDebugMessage("No image connected - please connect an image to the node and upload it in this interface", dialog);
+      return;
+    }
+
+    console.log(`Found connected image input: ${imageInput.name}`);
+    
+    // Get the connected node and output  
+    const link = this.node.graph.links[imageInput.link];
+    if (!link) {
+      console.log("Link not found");
+      return;
+    }
+    
+    const sourceNode = this.node.graph.getNodeById(link.origin_id);
+    
+    if (!sourceNode) {
+      console.log(`Source node ${link.origin_id} not found`);
+      return;
+    }
+
+    console.log(`Found source node: ${sourceNode.title || sourceNode.type}`);
+    
+    // Show helpful message about the connected image
+    const sourceInfo = `${sourceNode.title || sourceNode.type}`;
+    this.updateDebugMessage(`Image connected from: ${sourceInfo}`, dialog);
+    this.updateDebugMessage(`Please upload the same image in this interface for spatial editing`, dialog);
+    this.updateDebugMessage(`The coordinates will be automatically matched to the connected image`, dialog);
+    
+    console.log("=== LOAD IMAGE FROM CONNECTED NODE END ===");
+  }
+
+  updateDebugMessage(message, dialog) {
+    if (dialog && dialog.querySelector) {
+      const debugOutput = dialog.querySelector("#debugOutput");
+      if (debugOutput) {
+        const timestamp = new Date().toLocaleTimeString();
+        debugOutput.textContent += `${timestamp}: ${message}\n`;
+        debugOutput.scrollTop = debugOutput.scrollHeight;
+        debugOutput.style.display = 'block';
+      }
+    }
+  }
+
+  syncSpatialTokensToNode() {
+    console.log("=== SYNC SPATIAL TOKENS TO NODE START ===");
+    
+    if (!this.node) {
+      console.log("No node reference available");
+      return false;
+    }
+
+    // Get current spatial tokens
+    const spatialTokensOutput = document.querySelector("#spatialTokensOutput");
+    const spatialTokens = spatialTokensOutput ? spatialTokensOutput.value : "";
+    
+    console.log(`Syncing spatial tokens: ${spatialTokens.length} characters`);
+    console.log(`Tokens content: ${spatialTokens}`);
+
+    // Find the spatial_tokens widget
+    const spatialTokensWidget = this.node.widgets?.find(w => w.name === "spatial_tokens");
+    
+    if (spatialTokensWidget) {
+      console.log("Found spatial_tokens widget - updating value");
+      spatialTokensWidget.value = spatialTokens;
+      this.node.setDirtyCanvas(true, true);
+      console.log("Spatial tokens synced to Python node");
+      return true;
+    } else {
+      console.log("No spatial_tokens widget found");
+      return false;
+    }
   }
 
   sendToNode(node, dialog) {
+    console.log("=== SEND TO NODE START ===");
     const tokens = dialog.querySelector("#spatialTokensOutput").value;
-    if (!tokens) return;
+    console.log(`Tokens to send: ${tokens.length} characters`);
+    console.log(`Tokens content: ${tokens}`);
+    
+    if (!tokens) {
+      console.log("No tokens to send - aborting");
+      return;
+    }
 
+    console.log(`Node object: ${!!node}, has widgets: ${!!(node && node.widgets)}`);
+    
     // Try to find a text widget in the connected node
     if (node && node.widgets) {
+      console.log(`Node has ${node.widgets.length} widgets`);
+      console.log(`Widget names: ${node.widgets.map(w => w.name).join(', ')}`);
+      
       const textWidget = node.widgets.find(
         (w) =>
           w.name === "text" || w.name === "prompt" || w.name === "coordinates",
       );
 
       if (textWidget) {
+        console.log(`Found compatible widget: ${textWidget.name}`);
+        console.log(`Widget current value: ${textWidget.value?.length || 0} characters`);
         textWidget.value = tokens;
+        console.log(`Widget updated with ${tokens.length} characters`);
         node.setDirtyCanvas(true, true);
+        console.log("Node canvas marked as dirty");
         this.updateDebug(
           `Sent tokens to node widget: ${textWidget.name}`,
           dialog,
         );
+        console.log("=== SEND TO NODE SUCCESS ===");
       } else {
+        console.log("No compatible text widget found");
         this.updateDebug("No compatible text widget found in node", dialog);
+        console.log("=== SEND TO NODE FAILED - NO WIDGET ===");
       }
+    } else {
+      console.log("No node or no widgets available");
+      console.log("=== SEND TO NODE FAILED - NO NODE ===");
     }
   }
 
@@ -1435,10 +1662,13 @@ class QwenSpatialInterface {
   }
 
   optimizeImageForQwen(img, targetWidth = null, targetHeight = null, resizeMethod = 'pad') {
-    console.log(`optimizeImageForQwen called: target=${targetWidth}x${targetHeight}, method=${resizeMethod}`);
+    console.log("=== OPTIMIZE IMAGE FOR QWEN START ===");
+    console.log(`Input parameters - target: ${targetWidth}x${targetHeight}, method: ${resizeMethod}`);
+    console.log(`Input image dimensions: ${img.width}x${img.height}`);
     
     // Store original dimensions
     this.originalDimensions = { width: img.width, height: img.height };
+    console.log(`Stored original dimensions: ${this.originalDimensions.width}x${this.originalDimensions.height}`);
     
     // Use provided target resolution or find optimal one
     let targetW, targetH;
@@ -1447,6 +1677,7 @@ class QwenSpatialInterface {
       targetH = targetHeight;
       console.log(`Using provided target: ${targetW}x${targetH}`);
     } else {
+      console.log("No target provided - finding closest Qwen resolution...");
       [targetW, targetH] = this.findClosestResolution(img.width, img.height);
       console.log(`Auto-selected target: ${targetW}x${targetH}`);
     }
@@ -1455,31 +1686,38 @@ class QwenSpatialInterface {
     console.log(`Initial optimized dimensions set: ${targetW}x${targetH}`);
     
     // Create optimized canvas
+    console.log("Creating optimized canvas...");
     const optimizedCanvas = document.createElement('canvas');
     optimizedCanvas.width = targetW;
     optimizedCanvas.height = targetH;
+    console.log(`Canvas created: ${optimizedCanvas.width}x${optimizedCanvas.height}`);
     const ctx = optimizedCanvas.getContext('2d');
     
     let scale, scaledW, scaledH, offsetX, offsetY;
+    console.log(`Applying resize method: ${resizeMethod}`);
     
     switch (resizeMethod) {
       case 'stretch':
+        console.log("Applying stretch method - distorting aspect ratio to exact dimensions");
         // Stretch to exact dimensions (distort aspect ratio)
         scale = 1; // Not meaningful for stretch
         scaledW = targetW;
         scaledH = targetH;
         offsetX = 0;
         offsetY = 0;
+        console.log(`Stretch parameters - scaledW: ${scaledW}, scaledH: ${scaledH}`);
         ctx.drawImage(img, 0, 0, targetW, targetH);
         break;
         
       case 'crop':
+        console.log("Applying crop method - scale to fill and center crop");
         // Scale to fill and center crop
         scale = Math.max(targetW / img.width, targetH / img.height);
         scaledW = img.width * scale;
         scaledH = img.height * scale;
         offsetX = (targetW - scaledW) / 2;
         offsetY = (targetH - scaledH) / 2;
+        console.log(`Crop parameters - scale: ${scale}, scaledW: ${scaledW}, scaledH: ${scaledH}, offset: (${offsetX}, ${offsetY})`);
         
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, targetW, targetH);
@@ -1487,10 +1725,12 @@ class QwenSpatialInterface {
         break;
         
       case 'resize':
+        console.log("Applying resize method - scale maintaining aspect ratio");
         // Scale maintaining aspect ratio (may not fill exact target)
         scale = Math.min(targetW / img.width, targetH / img.height);
         scaledW = img.width * scale;
         scaledH = img.height * scale;
+        console.log(`Resize parameters - scale: ${scale}, scaledW: ${scaledW}, scaledH: ${scaledH}`);
         // Update target dimensions to actual final dimensions
         this.optimizedDimensions = { width: Math.round(scaledW), height: Math.round(scaledH) };
         optimizedCanvas.width = Math.round(scaledW);
@@ -1504,12 +1744,14 @@ class QwenSpatialInterface {
         
       case 'pad':
       default:
+        console.log("Applying pad method (default) - scale to fit with black padding");
         // Scale to fit with padding (original behavior)
         scale = Math.min(targetW / img.width, targetH / img.height);
         scaledW = img.width * scale;
         scaledH = img.height * scale;
         offsetX = (targetW - scaledW) / 2;
         offsetY = (targetH - scaledH) / 2;
+        console.log(`Pad parameters - scale: ${scale}, scaledW: ${scaledW}, scaledH: ${scaledH}, offset: (${offsetX}, ${offsetY})`);
         
         ctx.fillStyle = 'black';
         ctx.fillRect(0, 0, targetW, targetH);
@@ -1527,8 +1769,12 @@ class QwenSpatialInterface {
       resizeMethod: resizeMethod
     };
     
-    console.log(`optimizeImageForQwen result:`, result);
-    console.log(`Canvas actual size: ${optimizedCanvas.width}x${optimizedCanvas.height}`);
+    console.log("Creating optimization result object...");
+    console.log(`Result - canvas: ${optimizedCanvas.width}x${optimizedCanvas.height}`);
+    console.log(`Result - scale: ${result.scale}, offset: (${result.offsetX}, ${result.offsetY})`);
+    console.log(`Result - target dimensions: ${result.targetWidth}x${result.targetHeight}`);
+    console.log(`Result - resize method: ${result.resizeMethod}`);
+    console.log("=== OPTIMIZE IMAGE FOR QWEN END ===");
     
     return result;
   }
@@ -1558,6 +1804,19 @@ app.registerExtension({
           : undefined;
 
         const node = this;
+
+        // Expose Python bridge to JavaScript
+        if (!window.QwenSpatialTokenGenerator) {
+          window.QwenSpatialTokenGenerator = {
+            store_optimized_image: (nodeId, base64Data) => {
+              console.log(`Bridge: Storing optimized image for node ${nodeId}`);
+              // Store in global storage
+              window._qwen_spatial_storage = window._qwen_spatial_storage || {};
+              window._qwen_spatial_storage[nodeId] = base64Data;
+              console.log(`Bridge: Stored in global storage`);
+            }
+          };
+        }
 
         setTimeout(() => {
           const interfaceBtn = node.addWidget(

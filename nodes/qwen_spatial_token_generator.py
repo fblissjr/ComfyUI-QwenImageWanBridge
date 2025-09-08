@@ -5,19 +5,32 @@ Pure spatial token generation without templates or assumptions
 
 import json
 import pathlib
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageColor
 import numpy as np
 import torch
 from typing import Dict, List, Any, Tuple, Optional
 import logging
 import folder_paths
 import comfy.utils
+import base64
+import io
 
+# Set up detailed logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Global storage for JS-Python communication
+_node_image_storage = {}
 
 class QwenSpatialTokenGenerator:
     """Generate spatial tokens from image coordinates and labels"""
 
+    def __init__(self):
+        self.loaded_image_data = None  # Store loaded image data (base64)
+        self.optimized_image_data = None  # Store optimized image from JS
+        self.node_id = id(self)  # Unique identifier for this node instance
+    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -49,8 +62,8 @@ class QwenSpatialTokenGenerator:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("image", "prompt", "formatted_prompt", "debug_info")
+    RETURN_TYPES = ("IMAGE", "STRING", "STRING", "STRING", "STRING") 
+    RETURN_NAMES = ("annotated_image", "prompt", "formatted_prompt", "simple_prompt", "debug_info")
     FUNCTION = "generate_tokens"
     CATEGORY = "Qwen/Spatial"
     OUTPUT_NODE = True
@@ -59,99 +72,173 @@ class QwenSpatialTokenGenerator:
                        spatial_tokens="", additional_regions=""):
         """Generate complete formatted prompt with spatial tokens"""
 
+        logger.info("=== QWEN SPATIAL TOKEN GENERATOR START ===")
+        logger.info(f"Inputs - base_prompt length: {len(base_prompt)}, template_mode: {template_mode}, debug_mode: {debug_mode}")
+        logger.info(f"Inputs - spatial_tokens length: {len(spatial_tokens)}, additional_regions length: {len(additional_regions)}")
+        
+        # Log input image details
+        logger.info(f"Input image tensor shape: {image.shape}")
+        logger.info(f"Input image tensor dtype: {image.dtype}")
+        logger.info(f"Input image tensor min/max: {image.min().item():.4f}/{image.max().item():.4f}")
+
         debug_info = []
         debug_info.append("=== SPATIAL TOKEN GENERATOR ===")
 
         try:
-            # Process input image (no resolution optimization - handled by spatial editor)
-            debug_info.append("Processing input image (no resolution optimization)")
+            # Convert input image to PIL for processing
+            logger.info("Converting input tensor to PIL image")
+            debug_info.append("Processing input image")
             pil_image = self._tensor_to_pil(image)
+            logger.info(f"PIL image size: {pil_image.size}")
+            logger.info(f"PIL image mode: {pil_image.mode}")
 
             img_width, img_height = pil_image.size
-            debug_info.append(f"Final image size: {img_width}x{img_height}")
+            debug_info.append(f"Working image size: {img_width}x{img_height}")
+            logger.info(f"Working with image dimensions: {img_width}x{img_height}")
 
             # Use provided spatial tokens or process additional regions
             if spatial_tokens.strip():
-                debug_info.append("Using provided spatial tokens")
-                # Create a placeholder annotated image since tokens are already processed
+                logger.info(f"Using provided spatial tokens: {len(spatial_tokens)} characters")
+                logger.info("=== SPATIAL TOKENS COORDINATE DEBUGGING ===")
+                logger.info(f"Full spatial tokens: {spatial_tokens}")
+                
+                # Parse and debug coordinate extraction
+                self._debug_spatial_tokens(spatial_tokens, img_width, img_height, debug_info)
+                
+                debug_info.append("Using provided spatial tokens - drawing visual annotations")
+                # Parse spatial tokens and draw annotations for visual reference
                 annotated_image = pil_image.copy()
+                draw = ImageDraw.Draw(annotated_image)
+                self._draw_annotations_from_tokens(spatial_tokens, draw, img_width, img_height, debug_info)
+                logger.info("Drew visual annotations from spatial tokens")
             else:
+                logger.info("No spatial tokens provided - processing additional regions")
                 debug_info.append("No spatial tokens provided - processing additional regions")
 
                 # Parse additional regions from JSON
                 regions = []
+                logger.info("Parsing additional regions from JSON...")
 
                 if additional_regions.strip():
+                    logger.info(f"Additional regions JSON length: {len(additional_regions)} characters")
                     try:
                         additional = json.loads(additional_regions)
                         regions.extend(additional)
+                        logger.info(f"Successfully parsed {len(additional)} additional regions")
                         debug_info.append(f"Added {len(additional)} additional regions")
                     except json.JSONDecodeError as e:
+                        logger.error(f"JSON decode error: {e}")
                         debug_info.append(f"WARNING: Invalid additional regions JSON: {e}")
+                else:
+                    logger.info("No additional regions JSON provided")
 
                 # Process each region
                 tokens = []
+                logger.info(f"Creating annotated image copy for {len(regions)} regions...")
                 annotated_image = pil_image.copy()
                 draw = ImageDraw.Draw(annotated_image)
                 normalize_coords = True  # Always normalize coordinates to 0-1 range
+                logger.info(f"Coordinate normalization enabled: {normalize_coords}")
 
                 for i, region in enumerate(regions):
+                    logger.info(f"Processing region {i+1}/{len(regions)}: {region['type']} '{region['label']}'")
                     debug_info.append(f"\nRegion {i+1}: {region['type']} '{region['label']}'")
 
                     try:
                         if region['type'] == 'bounding_box':
+                            logger.info(f"Processing bounding box with coords: {region.get('coords', 'N/A')}")
                             token = self._process_bounding_box(region, img_width, img_height,
                                                              normalize_coords, draw, debug_info)
                         elif region['type'] == 'polygon':
+                            logger.info(f"Processing polygon with {len(region.get('coords', []))} points")
                             token = self._process_polygon(region, img_width, img_height,
                                                         normalize_coords, draw, debug_info)
                         elif region['type'] == 'object_reference':
+                            logger.info(f"Processing object reference at: {region.get('coords', 'N/A')}")
                             token = self._process_object_reference(region, debug_info)
                         else:
+                            logger.error(f"Unknown region type: {region['type']}")
                             debug_info.append(f"  ERROR: Unknown type '{region['type']}'")
                             continue
 
                         if token:
                             tokens.append(token)
+                            logger.info(f"Generated token: {token}")
                             debug_info.append(f"  Generated: {token}")
+                        else:
+                            logger.warning(f"No token generated for region {i+1}")
 
                     except Exception as e:
+                        logger.error(f"Error processing region {i+1}: {str(e)}", exc_info=True)
                         debug_info.append(f"  ERROR: {str(e)}")
                         continue
 
                 # Combine tokens
                 spatial_tokens = " ".join(tokens) if tokens else ""
+                logger.info(f"Combined {len(tokens)} tokens into spatial_tokens: {len(spatial_tokens)} characters")
                 debug_info.append(f"\nSpatial tokens: {spatial_tokens}")
 
             # Create complete prompt
+            logger.info("Creating complete prompt...")
             if spatial_tokens:
-                # Integrate spatial tokens into base prompt
-                complete_prompt = f"{base_prompt.strip()} {spatial_tokens}"
+                logger.info("Spatial tokens provided - checking if base_prompt already includes them")
+                # Check if base_prompt already contains spatial tokens (from JS interface)
+                if '<|' in base_prompt and '|>' in base_prompt:
+                    logger.info("Base prompt already contains spatial tokens - using as-is")
+                    complete_prompt = base_prompt.strip()
+                else:
+                    logger.info("Integrating spatial tokens into base prompt")
+                    complete_prompt = f"{base_prompt.strip()} {spatial_tokens}"
+                logger.info(f"Complete prompt length: {len(complete_prompt)}")
             else:
+                logger.info("No spatial tokens - using base prompt only")
                 complete_prompt = base_prompt.strip()
+                logger.info(f"Base prompt length: {len(complete_prompt)}")
 
             debug_info.append(f"Base prompt: {base_prompt}")
             debug_info.append(f"Complete prompt before template: {complete_prompt}")
 
             # Apply template formatting
+            logger.info(f"Applying template formatting: {template_mode}")
             formatted_prompt = self._apply_template(complete_prompt, template_mode, debug_info)
+            logger.info(f"Formatted prompt length: {len(formatted_prompt)}")
 
             # Convert final image back to tensor
+            logger.info("Converting annotated PIL image back to tensor...")
+            logger.info(f"Annotated image size: {annotated_image.size}, mode: {annotated_image.mode}")
             final_image = self._pil_to_tensor(annotated_image)
+            logger.info(f"Final tensor shape: {final_image.shape}")
+            logger.info(f"Final tensor dtype: {final_image.dtype}")
+            logger.info(f"Final tensor min/max: {final_image.min().item():.4f}/{final_image.max().item():.4f}")
 
             token_count = len(spatial_tokens.split("<|")) - 1 if spatial_tokens else 0
             debug_text = "\n".join(debug_info) if debug_mode else f"Generated prompt with spatial tokens"
+            logger.info(f"Debug mode: {debug_mode}, debug text length: {len(debug_text)}")
 
-            # Return both plain prompt (base_prompt contents) and formatted prompt
-            plain_prompt = base_prompt.strip()
+            # Create simple prompt (base prompt + spatial tokens for natural language)
+            simple_prompt = f"{base_prompt.strip()} {spatial_tokens}".strip()
+            
+            # Create clean prompt without spatial tokens (for annotated image approach)
+            clean_prompt = base_prompt.strip()
+            
+            logger.info(f"Returning outputs:")
+            logger.info(f"- annotated_image: {final_image.shape} tensor with visual region markers")  
+            logger.info(f"- prompt: {len(formatted_prompt)} chars (template + spatial tokens)")
+            logger.info(f"- formatted_prompt: {len(formatted_prompt)} chars (full formatted version)")
+            logger.info(f"- simple_prompt: {len(clean_prompt)} chars (clean for annotated image workflow)")
+            logger.info("=== QWEN SPATIAL TOKEN GENERATOR END ===")
 
-            return (final_image, plain_prompt, formatted_prompt, debug_text)
+            return (final_image, formatted_prompt, formatted_prompt, clean_prompt, debug_text)
 
         except Exception as e:
+            logger.error(f"CRITICAL ERROR in generate_tokens: {str(e)}", exc_info=True)
             error_msg = f"ERROR: {str(e)}"
             debug_info.append(error_msg)
             # Create a blank image as fallback
+            logger.info("Creating fallback blank tensor due to error")
             blank_tensor = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
+            logger.info(f"Fallback tensor shape: {blank_tensor.shape}")
+            logger.info("=== QWEN SPATIAL TOKEN GENERATOR END (ERROR) ===")
             return (blank_tensor, "", "", "\n".join(debug_info))
 
     def _process_bounding_box(self, region, img_width, img_height, normalize_coords, draw, debug_info):
@@ -180,10 +267,35 @@ class QwenSpatialTokenGenerator:
         x1, x2 = max(0, min(x1, x2)), min(img_width, max(x1, x2))
         y1, y2 = max(0, min(y1, y2)), min(img_height, max(y1, y2))
 
-        # Draw annotation
-        draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
+        # Draw enhanced annotation for visual reference
+        # Use different colors for different regions
+        colors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"]
+        color = colors[hash(label) % len(colors)]
+        
+        # Draw thick, visible rectangle
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=4)
+        
+        # Draw semi-transparent fill
+        from PIL import Image
+        overlay = Image.new('RGBA', (int(x2-x1), int(y2-y1)), (*ImageColor.getrgb(color), 30))
+        
         if include_object_ref:
-            draw.text((x1, y1-15), label, fill="red")
+            # Draw large, clear label
+            from PIL import ImageFont
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+            except:
+                font = ImageFont.load_default()
+            
+            # Background for text readability
+            text_bbox = draw.textbbox((0, 0), label, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            draw.rectangle([x1, y1-text_height-4, x1+text_width+8, y1], fill=color)
+            draw.text((x1+4, y1-text_height-2), label, fill="white", font=font)
+        
+        logger.info(f"Drew enhanced annotation: {color} box for '{label}' at ({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f})")
 
         # Generate normalized coordinates for token
         norm_x1, norm_y1 = x1 / img_width, y1 / img_height
@@ -269,19 +381,304 @@ class QwenSpatialTokenGenerator:
 
     def _tensor_to_pil(self, tensor):
         """Convert ComfyUI tensor to PIL"""
+        logger.debug(f"_tensor_to_pil: Input tensor shape: {tensor.shape}")
         if len(tensor.shape) == 4:
+            logger.debug("_tensor_to_pil: Removing batch dimension")
             tensor = tensor[0]
+        logger.debug(f"_tensor_to_pil: Working tensor shape: {tensor.shape}")
         np_image = tensor.cpu().numpy()
+        logger.debug(f"_tensor_to_pil: Numpy array shape: {np_image.shape}, dtype: {np_image.dtype}")
+        logger.debug(f"_tensor_to_pil: Numpy array min/max: {np_image.min():.4f}/{np_image.max():.4f}")
         if np_image.max() <= 1.0:
+            logger.debug("_tensor_to_pil: Scaling from 0-1 to 0-255")
             np_image = (np_image * 255).astype(np.uint8)
         else:
+            logger.debug("_tensor_to_pil: Converting to uint8 without scaling")
             np_image = np_image.astype(np.uint8)
-        return Image.fromarray(np_image)
+        logger.debug(f"_tensor_to_pil: Final numpy array dtype: {np_image.dtype}")
+        pil_image = Image.fromarray(np_image)
+        logger.debug(f"_tensor_to_pil: Output PIL image size: {pil_image.size}, mode: {pil_image.mode}")
+        return pil_image
 
     def _pil_to_tensor(self, pil_image):
         """Convert PIL to ComfyUI tensor"""
+        logger.debug(f"_pil_to_tensor: Input PIL image size: {pil_image.size}, mode: {pil_image.mode}")
         np_image = np.array(pil_image).astype(np.float32) / 255.0
-        return torch.from_numpy(np_image).unsqueeze(0)
+        logger.debug(f"_pil_to_tensor: Numpy array shape: {np_image.shape}, dtype: {np_image.dtype}")
+        logger.debug(f"_pil_to_tensor: Numpy array min/max: {np_image.min():.4f}/{np_image.max():.4f}")
+        tensor = torch.from_numpy(np_image).unsqueeze(0)
+        logger.debug(f"_pil_to_tensor: Output tensor shape: {tensor.shape}, dtype: {tensor.dtype}")
+        return tensor
+
+    def _base64_to_pil(self, base64_data):
+        """Convert base64 data to PIL image"""
+        logger.debug(f"_base64_to_pil: Input data length: {len(base64_data)} characters")
+        try:
+            # Remove data URL prefix if present
+            if base64_data.startswith('data:image'):
+                base64_data = base64_data.split(',', 1)[1]
+            
+            # Decode base64 to bytes
+            image_bytes = base64.b64decode(base64_data)
+            logger.debug(f"_base64_to_pil: Decoded to {len(image_bytes)} bytes")
+            
+            # Create PIL image from bytes
+            pil_image = Image.open(io.BytesIO(image_bytes))
+            logger.debug(f"_base64_to_pil: Created PIL image size: {pil_image.size}, mode: {pil_image.mode}")
+            return pil_image
+        except Exception as e:
+            logger.error(f"_base64_to_pil: Error converting base64 to PIL: {e}")
+            raise
+
+    def _pil_to_base64(self, pil_image):
+        """Convert PIL image to base64 data URL"""
+        logger.debug(f"_pil_to_base64: Input PIL image size: {pil_image.size}, mode: {pil_image.mode}")
+        try:
+            buffer = io.BytesIO()
+            pil_image.save(buffer, format='PNG')
+            buffer.seek(0)
+            base64_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            data_url = f"data:image/png;base64,{base64_data}"
+            logger.debug(f"_pil_to_base64: Created data URL length: {len(data_url)} characters")
+            return data_url
+        except Exception as e:
+            logger.error(f"_pil_to_base64: Error converting PIL to base64: {e}")
+            raise
+
+    def load_image_from_file(self, file_path):
+        """Load image from file path and store as base64"""
+        logger.info(f"Loading image from file: {file_path}")
+        try:
+            pil_image = Image.open(file_path)
+            logger.info(f"Loaded image size: {pil_image.size}, mode: {pil_image.mode}")
+            self.loaded_image_data = self._pil_to_base64(pil_image)
+            logger.info("Image stored as base64 data")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load image: {e}")
+            return False
+
+    def set_optimized_image(self, base64_data):
+        """Set optimized image data from JS interface"""
+        logger.info(f"Setting optimized image data: {len(base64_data)} characters")
+        self.optimized_image_data = base64_data
+        logger.info("Optimized image data stored")
+
+    def _debug_spatial_tokens(self, spatial_tokens, img_width, img_height, debug_info):
+        """Parse and debug spatial tokens to verify coordinate accuracy"""
+        import re
+        
+        logger.info("Parsing spatial tokens for coordinate debugging...")
+        
+        # Calculate native ViT dimensions (what the model actually sees)
+        native_width = ((img_width + 27) // 28) * 28  # Round up to multiple of 28
+        native_height = ((img_height + 27) // 28) * 28
+        
+        logger.info(f"Image dimensions: {img_width}x{img_height}")
+        logger.info(f"Native ViT dimensions (multiple of 28): {native_width}x{native_height}")
+        logger.info(f"Scale factors: X={native_width/img_width:.3f}, Y={native_height/img_height:.3f}")
+        
+        # Extract bounding box tokens with absolute pixel coordinates
+        box_pattern = r'<\|box_start\|>(\d+),(\d+),(\d+),(\d+)<\|box_end\|>'
+        box_matches = re.findall(box_pattern, spatial_tokens)
+        
+        # Extract object reference + box tokens with absolute pixels
+        obj_box_pattern = r'<\|object_ref_start\|>([^<]+)<\|object_ref_end\|>\s*at\s*<\|box_start\|>(\d+),(\d+),(\d+),(\d+)<\|box_end\|>'
+        obj_box_matches = re.findall(obj_box_pattern, spatial_tokens)
+        
+        # Extract quad tokens with native coordinates
+        quad_pattern = r'<\|quad_start\|>(\([^)]+\)(?:,\([^)]+\))*)<\|quad_end\|>'
+        quad_matches = re.findall(quad_pattern, spatial_tokens)
+        
+        logger.info(f"Found {len(box_matches)} standalone boxes, {len(obj_box_matches)} object+box combinations, {len(quad_matches)} quads")
+        
+        for i, (x1_str, y1_str, x2_str, y2_str) in enumerate(box_matches):
+            x1, y1, x2, y2 = int(x1_str), int(y1_str), int(x2_str), int(y2_str)
+            
+            # Verify coordinates are within native ViT bounds
+            valid_coords = (0 <= x1 <= native_width and 0 <= y1 <= native_height and 
+                          0 <= x2 <= native_width and 0 <= y2 <= native_height)
+            
+            # Calculate coverage on native dimensions
+            coverage_w = ((x2-x1)/native_width)*100
+            coverage_h = ((y2-y1)/native_height)*100
+            
+            logger.info(f"=== BOX {i+1} COORDINATE VERIFICATION (NATIVE ViT PIXELS) ===")
+            logger.info(f"Native pixel coords: ({x1},{y1},{x2},{y2})")
+            logger.info(f"Box size: {x2-x1}x{y2-y1} native pixels")
+            logger.info(f"Valid coordinates: {valid_coords}")
+            logger.info(f"Coverage: {coverage_w:.1f}% width, {coverage_h:.1f}% height")
+            
+            debug_info.append(f"BOX {i+1}: native_pixels({x1},{y1},{x2},{y2}) valid={valid_coords}")
+        
+        for i, (label, x1_str, y1_str, x2_str, y2_str) in enumerate(obj_box_matches):
+            x1, y1, x2, y2 = int(x1_str), int(y1_str), int(x2_str), int(y2_str)
+            
+            # Verify coordinates are within native ViT bounds
+            valid_coords = (0 <= x1 <= native_width and 0 <= y1 <= native_height and 
+                          0 <= x2 <= native_width and 0 <= y2 <= native_height)
+            
+            # Calculate coverage on native dimensions
+            coverage_w = ((x2-x1)/native_width)*100
+            coverage_h = ((y2-y1)/native_height)*100
+            
+            logger.info(f"=== OBJECT+BOX {i+1} '{label.strip()}' COORDINATE VERIFICATION (NATIVE ViT PIXELS) ===")
+            logger.info(f"Native pixel coords: ({x1},{y1},{x2},{y2})")
+            logger.info(f"Box size: {x2-x1}x{y2-y1} native pixels")
+            logger.info(f"Valid coordinates: {valid_coords}")
+            logger.info(f"Coverage: {coverage_w:.1f}% width, {coverage_h:.1f}% height")
+            
+            debug_info.append(f"OBJECT '{label.strip()}': native_pixels({x1},{y1},{x2},{y2}) valid={valid_coords}")
+        
+        # Debug quad tokens
+        for i, quad_coords in enumerate(quad_matches):
+            logger.info(f"=== QUAD {i+1} COORDINATE VERIFICATION ===")
+            logger.info(f"Quad coordinates: {quad_coords}")
+            debug_info.append(f"QUAD {i+1}: {quad_coords}")
+        
+        logger.info("=== SPATIAL TOKENS COORDINATE DEBUGGING COMPLETE ===")
+
+    def _draw_annotations_from_tokens(self, spatial_tokens, draw, img_width, img_height, debug_info):
+        """Parse spatial tokens and draw visual annotations"""
+        import re
+        
+        logger.info("Drawing annotations from spatial tokens...")
+        
+        # Calculate native ViT dimensions for coordinate scaling
+        native_width = ((img_width + 27) // 28) * 28  
+        native_height = ((img_height + 27) // 28) * 28
+        
+        scale_x = img_width / native_width  # Scale back from native to display
+        scale_y = img_height / native_height
+        
+        # Extract bounding box tokens
+        box_pattern = r'<\|box_start\|>(\d+),(\d+),(\d+),(\d+)<\|box_end\|>'
+        box_matches = re.findall(box_pattern, spatial_tokens)
+        
+        # Extract object reference + box tokens  
+        obj_box_pattern = r'<\|object_ref_start\|>([^<]+)<\|object_ref_end\|>\s*at\s*<\|box_start\|>(\d+),(\d+),(\d+),(\d+)<\|box_end\|>'
+        obj_box_matches = re.findall(obj_box_pattern, spatial_tokens)
+        
+        # Extract quad tokens
+        quad_pattern = r'<\|quad_start\|>(\([^)]+\)(?:,\([^)]+\))*)<\|quad_end\|>'
+        quad_matches = re.findall(quad_pattern, spatial_tokens)
+        
+        colors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"]
+        
+        # Draw standalone boxes
+        for i, (x1_str, y1_str, x2_str, y2_str) in enumerate(box_matches):
+            x1, y1, x2, y2 = int(x1_str), int(y1_str), int(x2_str), int(y2_str)
+            
+            # Scale from native to display coordinates
+            display_x1 = x1 * scale_x
+            display_y1 = y1 * scale_y
+            display_x2 = x2 * scale_x
+            display_y2 = y2 * scale_y
+            
+            color = colors[i % len(colors)]
+            draw.rectangle([display_x1, display_y1, display_x2, display_y2], outline=color, width=4)
+            logger.info(f"Drew standalone box {i+1}: {color} at ({display_x1:.0f},{display_y1:.0f},{display_x2:.0f},{display_y2:.0f})")
+        
+        # Draw object+box combinations
+        for i, (label, x1_str, y1_str, x2_str, y2_str) in enumerate(obj_box_matches):
+            x1, y1, x2, y2 = int(x1_str), int(y1_str), int(x2_str), int(y2_str)
+            
+            # Scale from native to display coordinates
+            display_x1 = x1 * scale_x
+            display_y1 = y1 * scale_y
+            display_x2 = x2 * scale_x
+            display_y2 = y2 * scale_y
+            
+            color = colors[(i + len(box_matches)) % len(colors)]
+            draw.rectangle([display_x1, display_y1, display_x2, display_y2], outline=color, width=4)
+            
+            # Draw label with background
+            try:
+                from PIL import ImageFont
+                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+            except:
+                font = ImageFont.load_default()
+            
+            text_bbox = draw.textbbox((0, 0), label.strip(), font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            draw.rectangle([display_x1, display_y1-text_height-4, display_x1+text_width+8, display_y1], fill=color)
+            draw.text((display_x1+4, display_y1-text_height-2), label.strip(), fill="white", font=font)
+            
+            logger.info(f"Drew object+box {i+1}: {color} '{label.strip()}' at ({display_x1:.0f},{display_y1:.0f},{display_x2:.0f},{display_y2:.0f})")
+        
+        # Extract standalone object references
+        obj_ref_pattern = r'<\|object_ref_start\|>([^<]+)<\|object_ref_end\|>'
+        obj_ref_matches = re.findall(obj_ref_pattern, spatial_tokens)
+        
+        # Draw standalone object references as points (no coordinates, just labels)
+        for i, label in enumerate(obj_ref_matches):
+            # Skip if this label also has a box (already drawn above)
+            if not any(label.strip() in match[0] for match in obj_box_matches):
+                color = colors[(i + len(box_matches) + len(obj_box_matches)) % len(colors)]
+                
+                # Draw a prominent circle in center of image as placeholder
+                center_x, center_y = img_width // 2, img_height // 2
+                radius = 20
+                
+                # Draw circle
+                draw.ellipse([center_x-radius, center_y-radius, center_x+radius, center_y+radius], 
+                           outline=color, fill=color, width=4)
+                
+                # Draw label
+                try:
+                    from PIL import ImageFont
+                    font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+                except:
+                    font = ImageFont.load_default()
+                
+                draw.text((center_x+radius+5, center_y-10), label.strip(), fill=color, font=font)
+                logger.info(f"Drew object reference {i+1}: {color} '{label.strip()}' at center ({center_x},{center_y})")
+        
+        # TODO: Add quad drawing support
+        if quad_matches:
+            logger.info(f"Found {len(quad_matches)} quad tokens - drawing not yet implemented")
+            
+        total_annotations = len(box_matches) + len(obj_box_matches) + len([l for l in obj_ref_matches if not any(l.strip() in m[0] for m in obj_box_matches)])
+        debug_info.append(f"Drew {total_annotations} visual annotations")
+        logger.info(f"Total annotations drawn: {total_annotations}")
+
+    def _get_js_optimized_image(self):
+        """Get optimized image data from JavaScript bridge via global storage"""
+        try:
+            logger.debug("Checking for JS bridge optimized image data...")
+            
+            # Check global storage for this node's image data
+            node_key = str(self.node_id)
+            if node_key in _node_image_storage:
+                logger.info(f"Found optimized image data for node {node_key} in global storage")
+                return _node_image_storage[node_key]
+            
+            # Try to get from JavaScript execution context if available
+            try:
+                import js2py
+                if hasattr(js2py, 'eval_js'):
+                    js_storage = js2py.eval_js(f'window._qwen_spatial_storage && window._qwen_spatial_storage["{node_key}"]')
+                    if js_storage:
+                        logger.info(f"Found optimized image data for node {node_key} in JS context")
+                        # Store it for future use
+                        _node_image_storage[node_key] = js_storage
+                        return js_storage
+            except:
+                pass  # js2py not available or JS context not accessible
+            
+            logger.debug(f"No optimized image found for node {node_key}")
+            return None
+        except Exception as e:
+            logger.debug(f"Error accessing JS bridge data: {e}")
+            return None
+
+    @classmethod 
+    def store_optimized_image(cls, node_id, base64_data):
+        """Store optimized image data from JavaScript (called via bridge)"""
+        logger.info(f"Storing optimized image for node {node_id}: {len(base64_data)} characters")
+        _node_image_storage[str(node_id)] = base64_data
 
     def _apply_template(self, prompt, template_mode, debug_info):
         """Apply template formatting to the complete prompt"""
@@ -330,3 +727,10 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "QwenSpatialTokenGenerator": "Qwen Spatial Token Generator"
 }
+
+# Expose class methods to JavaScript bridge
+def store_optimized_image_bridge(node_id, base64_data):
+    """JavaScript bridge function to store optimized image data"""
+    logger.info(f"JS Bridge: Storing optimized image for node {node_id}: {len(base64_data)} characters")
+    QwenSpatialTokenGenerator.store_optimized_image(node_id, base64_data)
+    return {"status": "success"}

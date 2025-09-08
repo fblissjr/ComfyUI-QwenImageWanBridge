@@ -174,3 +174,38 @@ except Exception as e:
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
 
 print(f"[QwenImageWanBridge] Total nodes loaded: {len(NODE_CLASS_MAPPINGS)}")
+
+# ============================================================================
+# STANDALONE ENGINE - Qwen Image Engine based on DiffSynth-Engine architecture
+# ============================================================================
+
+try:
+    from .engine.nodes.engine_loader import QwenEngineLoader
+    from .engine.nodes.engine_encoder import QwenEngineEncoder  
+    from .engine.nodes.engine_sampler import QwenEngineSampler
+
+    NODE_CLASS_MAPPINGS["QwenEngineLoader"] = QwenEngineLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenEngineLoader"] = "Qwen Engine Loader"
+
+    NODE_CLASS_MAPPINGS["QwenEngineEncoder"] = QwenEngineEncoder
+    NODE_DISPLAY_NAME_MAPPINGS["QwenEngineEncoder"] = "Qwen Engine Encoder"
+
+    NODE_CLASS_MAPPINGS["QwenEngineSampler"] = QwenEngineSampler
+    NODE_DISPLAY_NAME_MAPPINGS["QwenEngineSampler"] = "Qwen Engine Sampler"
+
+    print("[QwenImageWanBridge] Loaded Standalone Qwen Engine nodes (3 nodes)")
+    print("[QwenImageWanBridge] Based on DiffSynth-Engine architecture with proper reference latent handling")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Engine nodes: {e}")
+
+# ============================================================================
+# AUTO DEBUG TRACING - Apply patches automatically
+# ============================================================================
+
+try:
+    from .nodes import debug_patch
+    debug_patch.apply_debug_patches()
+    print("[QwenImageWanBridge] ✅ Debug patches applied - end-to-end tracing active")
+    print("[QwenImageWanBridge] Trace shows: Model Load → Conditioning → Sampler → Forward Pass")
+except Exception as e:
+    print(f"[QwenImageWanBridge] ❌ Debug patches failed: {e}")

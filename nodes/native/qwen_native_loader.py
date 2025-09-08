@@ -434,6 +434,25 @@ Load Qwen2.5-VL models directly via transformers
             logger.info(f"Model dtype: {model.dtype}")
             logger.info(f"Estimated memory footprint: {config['memory_footprint']:.1f}GB")
 
+            # COMPREHENSIVE DEBUG LOGGING - MODEL LOADING
+            logger.info("=== QWEN NATIVE MODEL LOADING TRACE ===")
+            logger.info(f"STEP 0 - MODEL LOADED:")
+            logger.info(f"  - Model type: {type(model)}")
+            logger.info(f"  - Model device: {next(model.parameters()).device}")
+            logger.info(f"  - Model dtype: {next(model.parameters()).dtype}")
+            logger.info(f"  - Processor type: {type(processor)}")
+            
+            # Check if model has the components we expect
+            logger.info(f"  - Has language_model: {hasattr(model, 'language_model')}")
+            if hasattr(model, 'language_model'):
+                logger.info(f"  - Language model type: {type(model.language_model)}")
+            logger.info(f"  - Has visual: {hasattr(model, 'visual')}")
+            
+            # Log model architecture details
+            total_params = sum(p.numel() for p in model.parameters())
+            logger.info(f"  - Total parameters: {total_params:,}")
+            logger.info("=== MODEL READY FOR ENCODING ===")
+
             return (model, processor, config)
 
         except Exception as e:

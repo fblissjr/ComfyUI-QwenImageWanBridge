@@ -1,6 +1,18 @@
 # Changelog
 
-## v1.5.1 Maybe better spatial editor improvements
+## v1.5.2 Got the coordinates wrong!
+
+### Fixed
+- Coordinate format corrected to use absolute pixels instead of normalized 0-1 values
+  - Still don't know if these actually help.
+  - Added Annotated images to see if that does anything.
+  - **Reference**: https://github.com/QwenLM/Qwen2.5-VL/blob/main/cookbooks/spatial_understanding.ipynb
+- **Coordinate debugging** with absolute pixel verification
+  - JavaScript logs show pixel coordinates and coverage percentages
+  - Python logs verify coordinates are within image bounds
+  - Cross-validation between JavaScript generation and Python parsing
+
+## v1.5.1 Maybe better spatial editor improvements (nope)
 
 ### Added
 - Resolution handling in spatial editor

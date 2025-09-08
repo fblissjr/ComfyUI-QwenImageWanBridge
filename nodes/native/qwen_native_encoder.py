@@ -73,17 +73,7 @@ logger = logging.getLogger(__name__)
 TEMPLATE_DROP_TEXT = 34    # DiffSynth: text-only template
 TEMPLATE_DROP_IMAGE = 64   # DiffSynth: image-edit template
 
-# Qwen resolutions for optimal processing
-QWEN_RESOLUTIONS = [
-    (256, 256), (280, 280), (336, 336), (392, 392), (448, 448), (504, 504),
-    (560, 560), (616, 616), (672, 672), (728, 728), (784, 784), (840, 840),
-    (896, 896), (952, 952), (1008, 1008), (1064, 1064), (1120, 1120), (1176, 1176),
-    (1232, 1232), (1288, 1288), (256, 1344), (280, 1232), (336, 1008), (392, 896),
-    (448, 784), (504, 672), (560, 616), (616, 560), (672, 504), (728, 448),
-    (784, 392), (840, 336), (896, 336), (952, 280), (1008, 280), (1064, 256),
-    (1120, 256), (1176, 224), (1232, 224), (1288, 224), (1344, 224), (1400, 224),
-    (1456, 224)
-]
+# Resolution handling removed - native encoder processes whatever resolution is provided
 
 class QwenNativeEncoder:
     """
@@ -175,11 +165,7 @@ class QwenNativeEncoder:
                     "tooltip": "Template optimization for different use cases"
                 }),
 
-                # Processing options
-                "resolution": (["auto"] + [f"{w}x{h}" for w, h in QWEN_RESOLUTIONS], {
-                    "default": "auto",
-                    "tooltip": "Target resolution. Auto finds optimal size."
-                }),
+                # Processing options removed resolution - native encoder processes whatever resolution is provided
                 "use_processor": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "Use Qwen2VLProcessor vs tokenizer-only (processor recommended)"
@@ -324,7 +310,7 @@ FIXES APPLIED:
     def _prepare_images(self, edit_image: Optional[torch.Tensor],
                        edit_images: Optional[torch.Tensor],
                        context_image: Optional[torch.Tensor],
-                       resolution: str, debug_vision: bool) -> Tuple[List, Optional[torch.Tensor]]:
+                       debug_vision: bool) -> Tuple[List, Optional[torch.Tensor]]:
         """Prepare images for processing"""
         images_for_processor = []
         context_latents = None
@@ -441,7 +427,7 @@ FIXES APPLIED:
     def _create_conditioning(self, hidden_states: torch.Tensor,
                            attention_mask: Optional[torch.Tensor] = None,
                            context_latents: Optional[torch.Tensor] = None,
-                           ref_latents = None) -> List:
+                           ref_latents = None, debug_vision: bool = False) -> List:
         """Create ComfyUI-compatible conditioning format, matching text encoder output format"""
 
         # ComfyUI's text encoders return raw tensors that get wrapped later in the pipeline
@@ -472,18 +458,85 @@ FIXES APPLIED:
         if context_latents is not None:
             all_ref_latents.append(context_latents)
 
-        # Apply conditioning updates using V1's method if available
+        # Try direct conditioning approach - avoid node_helpers complexity
         if all_ref_latents:
-            conditioning_updates["reference_latents"] = all_ref_latents
-
-        if conditioning_updates and NODE_HELPERS_AVAILABLE:
-            # Use same method as V1 encoder for proper reference latent integration
-            conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
-        elif all_ref_latents:
-            # Fallback: add to extra_data
+            # Direct approach: add reference_latents to extra_data without any method constraints
             conditioning[0][1]["reference_latents"] = all_ref_latents
+            # Don't specify reference_latents_method - let ComfyUI/model decide the best approach
+            if debug_vision:
+                logger.info("Added reference_latents directly to conditioning (no method constraint)")
 
+        # COMPREHENSIVE DEBUG LOGGING - END TO END TRACING
+        logger.info("=== NATIVE ENCODER END-TO-END TRACE ===")
+        logger.info(f"STEP 1 - CONDITIONING CREATED:")
+        logger.info(f"  - Tensor shape: {conditioning[0][0].shape}")
+        logger.info(f"  - Tensor dtype: {conditioning[0][0].dtype}")
+        logger.info(f"  - Tensor device: {conditioning[0][0].device}")
+        logger.info(f"  - Extra data keys: {list(conditioning[0][1].keys())}")
+        
+        if "reference_latents" in conditioning[0][1]:
+            ref_latents = conditioning[0][1]["reference_latents"]
+            logger.info(f"  - Reference latents count: {len(ref_latents)}")
+            for i, lat in enumerate(ref_latents):
+                logger.info(f"  - Reference latent {i}: shape={lat.shape}, dtype={lat.dtype}, device={lat.device}")
+                logger.info(f"  - Reference latent {i}: min={lat.min().item():.4f}, max={lat.max().item():.4f}, mean={lat.mean().item():.4f}")
+        
+        # Add a unique trace ID for this conditioning
+        import time
+        trace_id = f"native_encoder_{int(time.time()*1000) % 10000}"
+        conditioning[0][1]["trace_id"] = trace_id
+        logger.info(f"  - Assigned trace ID: {trace_id}")
+        logger.info("=== CONDITIONING HANDOFF TO COMFYUI ===")
+        
         return conditioning
+
+    def _create_diffsynth_style_encoder(self, qwen_model):
+        """Create a DiffSynth-style text encoder wrapper for optimal text encoding"""
+        
+        class DiffSynthStyleEncoder:
+            def __init__(self, base_model):
+                # Extract the actual text encoder component like DiffSynth does
+                if hasattr(base_model, 'language_model'):
+                    self.model = base_model.language_model  # From conditional generation model
+                elif 'Qwen2_5_VLModel' in str(type(base_model)):
+                    self.model = base_model  # Already text encoder
+                else:
+                    self.model = base_model  # Fallback
+                    
+                # Store device and dtype from original model
+                self.device = next(self.model.parameters()).device
+                self.dtype = next(self.model.parameters()).dtype
+            
+            def __call__(self, input_ids=None, attention_mask=None, pixel_values=None, 
+                        image_grid_thw=None, output_hidden_states=True, **kwargs):
+                """Forward pass mimicking DiffSynth's text encoder behavior"""
+                
+                # Call the model with exact same signature as DiffSynth
+                if pixel_values is not None and image_grid_thw is not None:
+                    # Image + text encoding (like DiffSynth does)
+                    outputs = self.model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask, 
+                        pixel_values=pixel_values,
+                        image_grid_thw=image_grid_thw,
+                        output_hidden_states=output_hidden_states
+                    )
+                else:
+                    # Text-only encoding (like DiffSynth does)
+                    outputs = self.model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        output_hidden_states=output_hidden_states
+                    )
+                
+                # Return in DiffSynth format: hidden_states tuple for [-1] indexing
+                if hasattr(outputs, 'hidden_states') and outputs.hidden_states:
+                    return outputs.hidden_states  # Return tuple for [-1] access
+                else:
+                    # Fallback: wrap last_hidden_state in tuple
+                    return (outputs.last_hidden_state,)
+        
+        return DiffSynthStyleEncoder(qwen_model)
 
     def _extract_masked_hidden(self, hidden_states: torch.Tensor, mask: torch.Tensor):
         """Extract hidden states based on attention mask, following DiffSynth pattern."""
@@ -510,7 +563,6 @@ FIXES APPLIED:
         chat_template: bool = True,
         system_prompt: str = "",
         template_style: str = "default",
-        resolution: str = "auto",
         use_processor: bool = True,
         template_dropping: str = "fixed",
         debug_tokens: bool = False,
@@ -557,7 +609,7 @@ FIXES APPLIED:
 
                 # Prepare images for processing
             images_for_processor, context_latents = self._prepare_images(
-                edit_image, edit_images, context_image, resolution, debug_vision
+                edit_image, edit_images, context_image, debug_vision
             )
 
             # Move context_latents to model device if needed
@@ -625,21 +677,10 @@ FIXES APPLIED:
             # DiffSynth uses pipe.text_encoder which is the model's language_model component
             # We need to access the text encoder part of the full model
             with torch.no_grad():
-                # Use the appropriate model component based on model type
-                # If we have Qwen2_5_VLModel (text encoder), use it directly 
-                # If we have Qwen2_5_VLForConditionalGeneration, extract language_model
-                if hasattr(qwen_model, 'language_model'):
-                    # Conditional generation model - extract text encoder component
-                    text_encoder = qwen_model.language_model
-                    model_arch = "conditional_generation"
-                elif 'Qwen2_5_VLModel' in str(type(qwen_model)):
-                    # Text encoder model - use directly (like DiffSynth)
-                    text_encoder = qwen_model
-                    model_arch = "text_encoder" 
-                else:
-                    # Fallback
-                    text_encoder = qwen_model
-                    model_arch = "fallback"
+                # Use DiffSynth's approach: create custom text encoder wrapper
+                # This gives us the exact same text encoding behavior as DiffSynth
+                text_encoder = self._create_diffsynth_style_encoder(qwen_model)
+                model_arch = "diffsynth_style"
 
                 if debug_vision:
                     logger.info(f"Using {model_arch} architecture: {type(text_encoder)}")
@@ -749,7 +790,8 @@ FIXES APPLIED:
                     hidden_states,
                     attention_mask=model_inputs.get("attention_mask"),
                     context_latents=context_latents,
-                    ref_latents=ref_latents
+                    ref_latents=ref_latents,
+                    debug_vision=debug_vision
                 )
 
                 # Update debug info
