@@ -7,6 +7,7 @@ import torch
 from typing import Dict, List, Tuple, Optional, Any
 import comfy.utils
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,9 @@ class QwenMultiReferenceHandler:
         # 'concat' and 'grid' are the primary spatial composition methods.
         return {
             "required": {
-                "reference_method": (["concat", "grid", "offset"], {
+                "reference_method": (["concat", "grid", "offset", "native_multi"], {
                     "default": "concat",
-                    "tooltip": "concat: side-by-side | grid: 2x2 layout | offset: weighted blend"
+                    "tooltip": "concat: side-by-side | grid: 2x2 layout | offset: weighted blend | native_multi: separate images for native processing"
                 }),
             },
             "optional": {
@@ -37,9 +38,9 @@ class QwenMultiReferenceHandler:
                     "default": "1.0,1.0,1.0,1.0",
                     "tooltip": "Weights for each image (comma-separated, used in 'offset' blend mode)"
                 }),
-                "resize_mode": (["match_first", "common_height", "common_width", "largest_dims"], {
-                    "default": "common_height", 
-                    "tooltip": "match_first: resize all to image1 size | common_height: same height, keep aspect (uniform in grid) | common_width: same width, keep aspect (uniform in grid) | largest_dims: resize all to largest dimensions"
+                "resize_mode": (["match_first", "common_height", "common_width", "largest_dims", "qwen_smart_resize", "diffsynth_auto_resize"], {
+                    "default": "qwen_smart_resize", 
+                    "tooltip": "match_first: resize all to image1 size | common_height: same height, keep aspect | common_width: same width, keep aspect | largest_dims: resize all to largest dimensions | qwen_smart_resize: Official Qwen 28px method | diffsynth_auto_resize: DiffSynth 32px method"
                 }),
                 "upscale_method": (["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {
                     "default": "bicubic",
@@ -48,9 +49,9 @@ class QwenMultiReferenceHandler:
             }
         }
 
-    # The output is now a single IMAGE tensor, making it directly usable.
+    # Output can be single composite or multiple separate images
     RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("composite_image",)
+    RETURN_NAMES = ("images",)
     FUNCTION = "create_composite_canvas"
     CATEGORY = "QwenImage/Reference"
     TITLE = "Multi-Reference Canvas Composer"
@@ -61,13 +62,72 @@ Resize modes:
 • common_height: same height, preserve aspect ratios (uniform dimensions in grid mode)  
 • common_width: same width, preserve aspect ratios (uniform dimensions in grid mode)
 • largest_dims: resize all to largest width/height found
+• qwen_smart_resize: official Qwen 28px alignment with smart pixel constraints
+• diffsynth_auto_resize: DiffSynth 32px alignment with target pixel area
 
 Composition methods:
 • 'concat' creates a side-by-side image
 • 'grid' creates a 2x2 image layout (requires uniform dimensions)
 • 'offset' creates a weighted blend
+• 'native_multi' keeps images separate for native Qwen2.5-VL processing
 
-The output is a single image tensor, ready for the QwenVLTextEncoder."""
+The output is either a single composite or multiple separate images."""
+
+    def qwen_smart_resize(self, width: int, height: int, min_pixels: int = 4 * 28 * 28, max_pixels: int = 16384 * 28 * 28, factor: int = 28) -> Tuple[int, int]:
+        """
+        Official Qwen smart_resize: maintains aspect ratio with 28-pixel alignment
+        Based on qwen_vl_utils.process_vision_info implementation
+        """
+        # Constants from official implementation
+        MAX_RATIO = 200
+        
+        # Check aspect ratio constraint
+        if max(height, width) / min(height, width) > MAX_RATIO:
+            raise ValueError(f"Aspect ratio must be smaller than {MAX_RATIO}, got {max(height, width) / min(height, width)}")
+        
+        # Round by factor helper functions
+        def round_by_factor(number: int, factor: int) -> int:
+            return round(number / factor) * factor
+        
+        def floor_by_factor(number: int, factor: int) -> int:
+            return math.floor(number / factor) * factor
+            
+        def ceil_by_factor(number: int, factor: int) -> int:
+            return math.ceil(number / factor) * factor
+        
+        # Initial alignment to factor
+        h_bar = max(factor, round_by_factor(height, factor))
+        w_bar = max(factor, round_by_factor(width, factor))
+        
+        # Adjust if exceeds max pixels
+        if h_bar * w_bar > max_pixels:
+            beta = math.sqrt((height * width) / max_pixels)
+            h_bar = max(factor, floor_by_factor(height / beta, factor))
+            w_bar = max(factor, floor_by_factor(width / beta, factor))
+        # Adjust if below min pixels
+        elif h_bar * w_bar < min_pixels:
+            beta = math.sqrt(min_pixels / (height * width))
+            h_bar = ceil_by_factor(height * beta, factor)
+            w_bar = ceil_by_factor(width * beta, factor)
+            
+        return w_bar, h_bar  # Return width, height
+    
+    def calculate_diffsynth_dimensions(self, width: int, height: int, target_pixels: int = 1048576) -> Tuple[int, int]:
+        """
+        DiffSynth-style auto-resize: maintains aspect ratio with 32-pixel alignment
+        Uses target pixel area (default 1024x1024 = 1048576 pixels)
+        """
+        aspect_ratio = width / height
+        
+        # Calculate dimensions to fit within target pixel area
+        optimal_width = math.sqrt(target_pixels * aspect_ratio)
+        optimal_height = optimal_width / aspect_ratio
+        
+        # Align to 32-pixel boundaries (VAE requirement)
+        aligned_width = round(optimal_width / 32) * 32
+        aligned_height = round(optimal_height / 32) * 32
+        
+        return aligned_width, aligned_height
 
     def create_composite_canvas(self, reference_method: str,
                                 image1: Optional[torch.Tensor] = None,
@@ -119,6 +179,49 @@ The output is a single image tensor, ready for the QwenVLTextEncoder."""
             target_h = max(img.shape[1] for img in images)
             target_w = max(img.shape[2] for img in images)
             logger.info(f"[Multi-Reference] Using largest dimensions: {target_w}x{target_h}")
+            
+        elif resize_mode == "qwen_smart_resize":
+            # Use official Qwen smart_resize for each image, then find common dimensions
+            qwen_dimensions = []
+            for img in images:
+                h, w = img.shape[1], img.shape[2]
+                qw, qh = self.qwen_smart_resize(w, h)
+                qwen_dimensions.append((qw, qh))
+            
+            # For uniform output, use the most common dimensions or average
+            if reference_method in ["grid", "native_multi"]:
+                # Need uniform dimensions - use average
+                avg_w = int(sum(dim[0] for dim in qwen_dimensions) / len(qwen_dimensions))
+                avg_h = int(sum(dim[1] for dim in qwen_dimensions) / len(qwen_dimensions))
+                # Ensure still 28-pixel aligned
+                target_w = round(avg_w / 28) * 28
+                target_h = round(avg_h / 28) * 28
+                logger.info(f"[Multi-Reference] Qwen smart resize (uniform): {target_w}x{target_h}")
+            else:
+                # Individual sizing will be handled in Step 2
+                logger.info(f"[Multi-Reference] Qwen smart resize (individual aspect ratios preserved)")
+                
+        elif resize_mode == "diffsynth_auto_resize":
+            # Use DiffSynth auto-resize for each image, then find common dimensions
+            diffsynth_dimensions = []
+            target_pixels = 1048576  # 1024x1024 default
+            for img in images:
+                h, w = img.shape[1], img.shape[2]
+                dw, dh = self.calculate_diffsynth_dimensions(w, h, target_pixels)
+                diffsynth_dimensions.append((dw, dh))
+            
+            # For uniform output, use average
+            if reference_method in ["grid", "native_multi"]:
+                # Need uniform dimensions - use average
+                avg_w = int(sum(dim[0] for dim in diffsynth_dimensions) / len(diffsynth_dimensions))
+                avg_h = int(sum(dim[1] for dim in diffsynth_dimensions) / len(diffsynth_dimensions))
+                # Ensure still 32-pixel aligned
+                target_w = round(avg_w / 32) * 32
+                target_h = round(avg_h / 32) * 32
+                logger.info(f"[Multi-Reference] DiffSynth auto resize (uniform): {target_w}x{target_h}")
+            else:
+                # Individual sizing will be handled in Step 2
+                logger.info(f"[Multi-Reference] DiffSynth auto resize (individual aspect ratios preserved)")
 
         # Step 2: Resize all images according to the chosen mode
         standardized_images = []
@@ -150,6 +253,27 @@ The output is a single image tensor, ready for the QwenVLTextEncoder."""
             elif resize_mode == "largest_dims":
                 # Stretch to largest dimensions (may distort)
                 new_w, new_h = target_w, target_h
+                
+            elif resize_mode == "qwen_smart_resize":
+                # Use official Qwen smart_resize method
+                h, w = img.shape[1], img.shape[2]
+                if reference_method in ["grid", "native_multi"]:
+                    # Use uniform target dimensions
+                    new_w, new_h = target_w, target_h
+                else:
+                    # Calculate optimal dimensions for each image individually
+                    new_w, new_h = self.qwen_smart_resize(w, h)
+                    
+            elif resize_mode == "diffsynth_auto_resize":
+                # Use DiffSynth auto-resize method
+                h, w = img.shape[1], img.shape[2]
+                if reference_method in ["grid", "native_multi"]:
+                    # Use uniform target dimensions
+                    new_w, new_h = target_w, target_h
+                else:
+                    # Calculate optimal dimensions for each image individually
+                    target_pixels = 1048576  # 1024x1024 default
+                    new_w, new_h = self.calculate_diffsynth_dimensions(w, h, target_pixels)
 
             # Resize the image
             resized_img_chw = comfy.utils.common_upscale(
@@ -195,5 +319,34 @@ The output is a single image tensor, ready for the QwenVLTextEncoder."""
             composite_image = torch.cat([row1, row2], dim=1) # Concatenate along the height dimension
             final_w, final_h = composite_image.shape[2], composite_image.shape[1]
             logger.info(f"[Multi-Reference] Final canvas size: {final_w}x{final_h}.")
+
+        elif reference_method == "native_multi":
+            # Return multiple separate images for native Qwen2.5-VL processing
+            logger.info(f"[Multi-Reference] Returning {len(standardized_images)} separate images for native processing.")
+            # For native_multi, we need uniform dimensions to stack properly
+            # Use the resize_mode to ensure all images have the same dimensions
+            if resize_mode in ["common_height", "common_width"] and len(standardized_images) > 1:
+                # Check if dimensions are actually uniform
+                first_shape = standardized_images[0].shape
+                shapes_match = all(img.shape == first_shape for img in standardized_images)
+                if not shapes_match:
+                    logger.warning(f"[Multi-Reference] native_multi requires uniform dimensions. Switching to 'largest_dims' resize mode.")
+                    # Re-standardize all images to largest dimensions
+                    target_h = max(img.shape[1] for img in images)
+                    target_w = max(img.shape[2] for img in images)
+                    
+                    standardized_images = []
+                    for i, img in enumerate(images):
+                        # Resize to largest dimensions
+                        resized_img_chw = comfy.utils.common_upscale(
+                            img.movedim(-1, 1), # HWC to CHW for upscale function
+                            target_w, target_h, upscale_method, "disabled"
+                        )
+                        standardized_images.append(resized_img_chw.movedim(1, -1)) # CHW to HWC
+                    
+                    logger.info(f"[Multi-Reference] Re-standardized all images to {target_w}x{target_h}")
+            
+            # Stack all images along batch dimension (now they should have matching dimensions)
+            composite_image = torch.cat(standardized_images, dim=0)
 
         return (composite_image,)

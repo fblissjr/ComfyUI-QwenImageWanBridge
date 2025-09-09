@@ -46,14 +46,14 @@ class QwenOptimalResolution:
     
     @classmethod
     def INPUT_TYPES(cls):
-        resize_modes = ["fit", "fill", "exact", "pad", "crop"]
+        resize_modes = ["fit", "fill", "exact", "pad", "crop", "qwen_smart_resize", "diffsynth_auto_resize"]
         
         return {
             "required": {
                 "image": ("IMAGE",),
                 "mode": (resize_modes, {
-                    "default": "fit",
-                    "tooltip": "fit: scale to fit inside | fill: scale to fill (crop) | exact: closest resolution | pad: add padding | crop: center crop"
+                    "default": "qwen_smart_resize",
+                    "tooltip": "fit: scale to fit inside | fill: scale to fill (crop) | exact: closest resolution | pad: add padding | crop: center crop | qwen_smart_resize: Official Qwen 28px method | diffsynth_auto_resize: DiffSynth 32px method"
                 }),
             },
             "optional": {
@@ -77,6 +77,62 @@ class QwenOptimalResolution:
     CATEGORY = "QwenImage/Utils"
     TITLE = "Qwen Optimal Resolution"
     DESCRIPTION = "Automatically resize images to Qwen-preferred resolutions"
+    
+    def qwen_smart_resize(self, width: int, height: int, min_pixels: int = 4 * 28 * 28, max_pixels: int = 16384 * 28 * 28, factor: int = 28) -> Tuple[int, int]:
+        """
+        Official Qwen smart_resize: maintains aspect ratio with 28-pixel alignment
+        Based on qwen_vl_utils.process_vision_info implementation
+        """
+        # Constants from official implementation
+        MAX_RATIO = 200
+        
+        # Check aspect ratio constraint
+        if max(height, width) / min(height, width) > MAX_RATIO:
+            raise ValueError(f"Aspect ratio must be smaller than {MAX_RATIO}, got {max(height, width) / min(height, width)}")
+        
+        # Round by factor helper
+        def round_by_factor(number: int, factor: int) -> int:
+            return round(number / factor) * factor
+        
+        def floor_by_factor(number: int, factor: int) -> int:
+            return math.floor(number / factor) * factor
+            
+        def ceil_by_factor(number: int, factor: int) -> int:
+            return math.ceil(number / factor) * factor
+        
+        # Initial alignment to factor
+        h_bar = max(factor, round_by_factor(height, factor))
+        w_bar = max(factor, round_by_factor(width, factor))
+        
+        # Adjust if exceeds max pixels
+        if h_bar * w_bar > max_pixels:
+            beta = math.sqrt((height * width) / max_pixels)
+            h_bar = max(factor, floor_by_factor(height / beta, factor))
+            w_bar = max(factor, floor_by_factor(width / beta, factor))
+        # Adjust if below min pixels
+        elif h_bar * w_bar < min_pixels:
+            beta = math.sqrt(min_pixels / (height * width))
+            h_bar = ceil_by_factor(height * beta, factor)
+            w_bar = ceil_by_factor(width * beta, factor)
+            
+        return w_bar, h_bar  # Return width, height
+    
+    def calculate_diffsynth_dimensions(self, width: int, height: int, target_pixels: int = 1048576) -> Tuple[int, int]:
+        """
+        DiffSynth-style auto-resize: maintains aspect ratio with 32-pixel alignment
+        Uses target pixel area (default 1024x1024 = 1048576 pixels)
+        """
+        aspect_ratio = width / height
+        
+        # Calculate dimensions to fit within target pixel area
+        optimal_width = math.sqrt(target_pixels * aspect_ratio)
+        optimal_height = optimal_width / aspect_ratio
+        
+        # Align to 32-pixel boundaries (VAE requirement)
+        aligned_width = round(optimal_width / 32) * 32
+        aligned_height = round(optimal_height / 32) * 32
+        
+        return aligned_width, aligned_height
     
     def find_closest_resolution(self, width: int, height: int, target_pixels: Optional[int] = None) -> Tuple[int, int]:
         """Find the closest Qwen resolution based on aspect ratio and target pixels"""
@@ -147,6 +203,8 @@ class QwenOptimalResolution:
         - exact: Use exact closest resolution (may distort)
         - pad: Keep image size, add padding to reach resolution
         - crop: Keep image size, crop to reach resolution
+        - qwen_smart_resize: Official Qwen method - 28px alignment with smart pixel constraints
+        - diffsynth_auto_resize: DiffSynth method - 32px alignment with target pixel area
         """
         
         # Get current dimensions
@@ -155,9 +213,19 @@ class QwenOptimalResolution:
         # Parse custom resolution if provided
         target_resolution = self.parse_custom_resolution(custom_resolution)
         
-        # If no custom resolution, find optimal
+        # If no custom resolution, find optimal based on mode
         if not target_resolution:
-            target_resolution = self.find_closest_resolution(width, height, target_pixels)
+            if mode == "qwen_smart_resize":
+                # Use official Qwen smart_resize with 28px alignment
+                min_pixels = 4 * 28 * 28  # 3136 pixels minimum
+                max_pixels = target_pixels or (16384 * 28 * 28)  # Use target_pixels or default max
+                target_resolution = self.qwen_smart_resize(width, height, min_pixels, max_pixels, factor=28)
+            elif mode == "diffsynth_auto_resize":
+                # Use DiffSynth-style calculation with 32px alignment
+                target_resolution = self.calculate_diffsynth_dimensions(width, height, target_pixels or 1048576)
+            else:
+                # Use existing preset-based selection
+                target_resolution = self.find_closest_resolution(width, height, target_pixels)
         
         target_w, target_h = target_resolution
         
@@ -167,6 +235,11 @@ class QwenOptimalResolution:
             scale = min(target_w / width, target_h / height)
             new_width = round(width * scale)
             new_height = round(height * scale)
+            
+        elif mode in ["qwen_smart_resize", "diffsynth_auto_resize"]:
+            # Direct resize to calculated optimal dimensions
+            new_width = target_w
+            new_height = target_h
             
         elif mode == "fill":
             # Scale to fill, maintaining aspect ratio (will crop)
@@ -239,6 +312,15 @@ class QwenOptimalResolution:
         info = f"Resized from {width}x{height} to {new_width}x{new_height} (mode: {mode})"
         if custom_resolution:
             info += f" | Custom: {custom_resolution}"
+        elif mode == "qwen_smart_resize":
+            actual_pixels = new_width * new_height
+            alignment = "28px"
+            info += f" | Official Qwen method ({alignment} alignment, {actual_pixels} pixels)"
+        elif mode == "diffsynth_auto_resize":
+            actual_pixels = new_width * new_height
+            target_pixels_val = target_pixels or 1048576
+            alignment = "32px"
+            info += f" | DiffSynth method ({alignment} alignment, target: {target_pixels_val}, actual: {actual_pixels})"
         else:
             info += f" | Auto-selected from Qwen resolutions"
         
@@ -247,30 +329,60 @@ class QwenOptimalResolution:
 
 class QwenResolutionSelector:
     """
-    Simple resolution selector for Qwen Empty Latent generation.
-    Provides dropdown of recommended resolutions.
+    Comprehensive resolution selector for Qwen Empty Latent generation.
+    Provides curated list of Qwen-optimized resolutions including:
+    - Square resolutions (512x512 to 1328x1328)
+    - Modern aspect ratios (16:9, 2:1, 9:16, 1:2)
+    - DiffSynth-Studio original resolutions
+    - Low VRAM options
     """
     
     RESOLUTIONS = {
         # Format: "Display Name": (width, height)
+        # Square resolutions
+        "Square - 512x512": (512, 512),
+        "Square - 768x768": (768, 768),
         "Square - 1024x1024": (1024, 1024),
         "Square - 1328x1328": (1328, 1328),
         
-        "Landscape - 1328x800": (1328, 800),
-        "Landscape - 1456x720": (1456, 720),
-        "Landscape - 1584x1056": (1584, 1056),
+        # Common modern aspect ratios
         "Landscape - 1920x1080 (16:9)": (1920, 1080),
+        "Landscape - 1584x1056": (1584, 1056),
+        "Landscape - 1456x720": (1456, 720),
+        "Landscape - 1328x800": (1328, 800),
         "Landscape - 2048x1024 (2:1)": (2048, 1024),
         "Landscape - 1344x768": (1344, 768),
         "Landscape - 1536x640": (1536, 640),
+        "Landscape - 1024x768": (1024, 768),
+        "Landscape - 1024x512": (1024, 512),
         
-        "Portrait - 800x1328": (800, 1328),
-        "Portrait - 720x1456": (720, 1456),
-        "Portrait - 1056x1584": (1056, 1584),
         "Portrait - 1080x1920 (9:16)": (1080, 1920),
+        "Portrait - 1056x1584": (1056, 1584),
+        "Portrait - 720x1456": (720, 1456),
+        "Portrait - 800x1328": (800, 1328),
         "Portrait - 1024x2048 (1:2)": (1024, 2048),
         "Portrait - 768x1344": (768, 1344),
         "Portrait - 640x1536": (640, 1536),
+        "Portrait - 768x1024": (768, 1024),
+        "Portrait - 512x1024": (512, 1024),
+        
+        # DiffSynth-Studio original resolutions
+        "DiffSynth - 672x1568": (672, 1568),
+        "DiffSynth - 688x1504": (688, 1504),
+        "DiffSynth - 752x1392": (752, 1392),
+        "DiffSynth - 832x1248": (832, 1248),
+        "DiffSynth - 880x1184": (880, 1184),
+        "DiffSynth - 944x1104": (944, 1104),
+        "DiffSynth - 1104x944": (1104, 944),
+        "DiffSynth - 1184x880": (1184, 880),
+        "DiffSynth - 1248x832": (1248, 832),
+        "DiffSynth - 1392x752": (1392, 752),
+        "DiffSynth - 1504x688": (1504, 688),
+        "DiffSynth - 1568x672": (1568, 672),
+        
+        # Smaller resolutions for low VRAM
+        "Low VRAM - 512x768": (512, 768),
+        "Low VRAM - 768x512": (768, 512),
     }
     
     @classmethod
@@ -304,7 +416,7 @@ class QwenResolutionSelector:
     FUNCTION = "get_resolution"
     CATEGORY = "QwenImage/Utils"
     TITLE = "Qwen Resolution Selector"
-    DESCRIPTION = "Select from Qwen-recommended resolutions"
+    DESCRIPTION = "Select from comprehensive list of Qwen-optimized resolutions including modern aspect ratios, DiffSynth presets, and low VRAM options"
     
     def get_resolution(self, resolution: str, custom_width: int = 0, custom_height: int = 0) -> Tuple[int, int, str]:
         """Get selected resolution or custom override"""
@@ -321,7 +433,25 @@ class QwenResolutionSelector:
         
         total_pixels = width * height
         megapixels = total_pixels / 1_000_000
-        info += f" | {megapixels:.2f}MP"
+        aspect_ratio = width / height
+        
+        # Determine aspect ratio category
+        if abs(aspect_ratio - 1.0) < 0.05:
+            aspect_desc = "Square"
+        elif abs(aspect_ratio - 16/9) < 0.05:
+            aspect_desc = "16:9"
+        elif abs(aspect_ratio - 9/16) < 0.05:
+            aspect_desc = "9:16"
+        elif abs(aspect_ratio - 2.0) < 0.05:
+            aspect_desc = "2:1"
+        elif abs(aspect_ratio - 0.5) < 0.05:
+            aspect_desc = "1:2"
+        elif aspect_ratio > 1.0:
+            aspect_desc = f"{aspect_ratio:.2f}:1"
+        else:
+            aspect_desc = f"1:{1/aspect_ratio:.2f}"
+            
+        info += f" | {aspect_desc} | {megapixels:.2f}MP"
         
         return (width, height, info)
 

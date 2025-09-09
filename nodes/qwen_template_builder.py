@@ -23,6 +23,7 @@ class QwenTemplateBuilderV2:
                 "template_mode": ([
                     "default_t2i",
                     "default_edit",
+                    "multi_image_edit",
                     "artistic",
                     "photorealistic",
                     "minimal_edit",
@@ -39,6 +40,12 @@ class QwenTemplateBuilderV2:
                     "multiline": True,
                     "default": "",
                     "tooltip": "Custom system prompt for custom modes"
+                }),
+                "num_images": ("INT", {
+                    "default": 1,
+                    "min": 1,
+                    "max": 4,
+                    "tooltip": "Number of images to process (generates correct number of <|image_pad|> tokens)"
                 }),
             }
         }
@@ -59,6 +66,11 @@ class QwenTemplateBuilderV2:
         },
         "default_edit": {
             "system": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",
+            "vision": True,
+            "mode": "image_edit"
+        },
+        "multi_image_edit": {
+            "system": "You are viewing multiple reference images. Analyze the key features of each image (color, shape, size, texture, objects, background). Follow the user's instruction to combine, transfer, or modify elements between the images. When the user references 'first image', 'second image', etc., use the corresponding image in sequence.",
             "vision": True,
             "mode": "image_edit"
         },
@@ -89,7 +101,7 @@ class QwenTemplateBuilderV2:
         }
     }
 
-    def build(self, prompt: str, template_mode: str, custom_system: str) -> Tuple[str, bool, str]:
+    def build(self, prompt: str, template_mode: str, custom_system: str, num_images: int) -> Tuple[str, bool, str]:
         """Build the formatted prompt"""
 
         # Handle raw mode
@@ -98,11 +110,11 @@ class QwenTemplateBuilderV2:
 
         # Handle custom modes
         if template_mode == "custom_t2i":
-            formatted = self._format_template(custom_system, prompt, False)
+            formatted = self._format_template(custom_system, prompt, False, num_images)
             return (formatted, True, "custom|text_to_image")
 
         if template_mode == "custom_edit":
-            formatted = self._format_template(custom_system, prompt, True)
+            formatted = self._format_template(custom_system, prompt, True, num_images)
             return (formatted, True, "custom|image_edit")
 
         # Handle preset templates
@@ -111,21 +123,24 @@ class QwenTemplateBuilderV2:
             formatted = self._format_template(
                 template["system"],
                 prompt,
-                template["vision"]
+                template["vision"],
+                num_images
             )
             return (formatted, True, f"{template_mode}|{template['mode']}")
 
         # Fallback
         return (prompt, False, "unknown|text_to_image")
 
-    def _format_template(self, system: str, prompt: str, include_vision: bool) -> str:
+    def _format_template(self, system: str, prompt: str, include_vision: bool, num_images: int = 1) -> str:
         """Format the chat template"""
 
         result = f"<|im_start|>system\n{system}<|im_end|>\n"
         result += f"<|im_start|>user\n"
 
         if include_vision:
-            result += "<|vision_start|><|image_pad|><|vision_end|>"
+            # Generate multiple vision token sequences based on num_images
+            for i in range(num_images):
+                result += "<|vision_start|><|image_pad|><|vision_end|>"
 
         result += f"{prompt}<|im_end|>\n"
         result += f"<|im_start|>assistant\n"

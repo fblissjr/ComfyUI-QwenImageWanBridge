@@ -223,59 +223,89 @@ ALWAYS connect VAE to this node for reference latents!
 
             # Use input image as-is for vision processing (no resizing needed)
             image = edit_image
-            images_for_tokenizer = [image[:, :, :, :3]]
+            
+            # Handle multiple images from native_multi mode OR single composite from concat/grid
+            if image.shape[0] > 1:
+                # Multiple separate images (native_multi mode) - split them for individual processing
+                images_for_tokenizer = [image[i:i+1, :, :, :3] for i in range(image.shape[0])]
+                if debug_mode:
+                    logger.info(f"[Encoder] Detected {image.shape[0]} separate images (native_multi mode)")
+                    for i, img_tensor in enumerate(images_for_tokenizer):
+                        logger.info(f"[Encoder] Image {i+1} shape: {img_tensor.shape}, min/max values: {img_tensor.min():.3f}/{img_tensor.max():.3f}")
+            else:
+                # Single image (could be composite from concat/grid or actual single image)
+                images_for_tokenizer = [image[:, :, :, :3]]
+                if debug_mode:
+                    logger.info(f"[Encoder] Single image mode, shape: {image.shape} (could be composite from concat/grid)")
+                    logger.info(f"[Encoder] Image min/max values: {image.min():.3f}/{image.max():.3f}")
 
             # DUAL ENCODING: Process through both semantic and reconstructive paths
             if vae is not None:
                 # Reconstructive path - standard VAE encoding
-                ref_latent = vae.encode(image[:, :, :, :3])
+                if image.shape[0] > 1:
+                    # Handle multiple images - encode each separately then concatenate
+                    ref_latents = []
+                    for i in range(image.shape[0]):
+                        single_latent = vae.encode(image[i:i+1, :, :, :3])
+                        ref_latents.append(single_latent)
+                    ref_latent = torch.cat(ref_latents, dim=0)
+                    if debug_mode:
+                        logger.info(f"[Encoder] Encoded {image.shape[0]} images to reference latents shape: {ref_latent.shape}")
+                else:
+                    ref_latent = vae.encode(image[:, :, :, :3])
 
                 # DUAL ENCODING: Semantic path using native-level processing
-                try:
-                    from .qwen_vision_processor import QwenVisionProcessor
-                    from .qwen_processor import Qwen2VLProcessor
-                    from .qwen_custom_tokenizer import MultiFrameVisionEmbedder
+                # Note: Currently disabled for multi-image due to position embedding complexity
+                if image.shape[0] == 1:  # Only enable for single images
+                    try:
+                        from .qwen_vision_processor import QwenVisionProcessor
+                        from .qwen_processor import Qwen2VLProcessor
+                        from .qwen_custom_tokenizer import MultiFrameVisionEmbedder
 
-                    # Create advanced vision features (native-quality processing)
-                    vision_processor = QwenVisionProcessor()
-                    qwen_processor = Qwen2VLProcessor()
-                    embedder = MultiFrameVisionEmbedder()
+                        # Create advanced vision features (native-quality processing)
+                        vision_processor = QwenVisionProcessor()
+                        qwen_processor = Qwen2VLProcessor()
+                        embedder = MultiFrameVisionEmbedder()
 
-                    # Process image through semantic vision pipeline
-                    image_list = [image[0]]  # Remove batch dimension for processor
-                    semantic_patches, semantic_grid = vision_processor.create_vision_patches(image_list)
+                        # Process single image through semantic vision pipeline
+                        image_list = [image[0]]  # Remove batch dimension for processor
+                        semantic_patches, semantic_grid = vision_processor.create_vision_patches(image_list)
+                        
+                        # Create semantic embeddings (paper's semantic path)
+                        semantic_embeddings = embedder.embed_vision_patches(
+                            semantic_patches, semantic_grid, vision_model=None
+                        )
 
-                    # Create semantic embeddings (paper's semantic path)
-                    semantic_embeddings = embedder.embed_vision_patches(
-                        semantic_patches, semantic_grid, vision_model=None
-                    )
+                        # Store dual encoding data for conditioning fusion (paper architecture)
+                        dual_encoding_data = {
+                            "semantic_embeddings": semantic_embeddings,  # High-level understanding
+                            "semantic_patches": semantic_patches,
+                            "semantic_grid": semantic_grid,
+                            "reconstructive_latent": ref_latent,  # Low-level structure
+                            "fusion_method": "mmdit_compatible",  # Paper's MMDiT fusion
+                            "has_dual_encoding": True
+                        }
 
-                    # Store dual encoding data for conditioning fusion (paper architecture)
-                    dual_encoding_data = {
-                        "semantic_embeddings": semantic_embeddings,  # High-level understanding
-                        "semantic_patches": semantic_patches,
-                        "semantic_grid": semantic_grid,
-                        "reconstructive_latent": ref_latent,  # Low-level structure
-                        "fusion_method": "mmdit_compatible",  # Paper's MMDiT fusion
-                        "has_dual_encoding": True
-                    }
+                        if debug_mode:
+                            logger.info(f"[Encoder] Dual encoding - Semantic patches: {semantic_patches.shape}")
+                            logger.info(f"[Encoder] Dual encoding - Reconstructive latent: {ref_latent.shape}")
+                            logger.info(f"[Encoder] Dual encoding - Semantic grid: {semantic_grid}")
 
+                    except ImportError:
+                        logger.warning("[Encoder] Advanced vision processing not available, using standard VAE only")
+                else:
                     if debug_mode:
-                        logger.info(f"[Encoder] Dual encoding - Semantic patches: {semantic_patches.shape}")
-                        logger.info(f"[Encoder] Dual encoding - Reconstructive latent: {ref_latent.shape}")
-                        logger.info(f"[Encoder] Dual encoding - Semantic grid: {semantic_grid}")
-
-                except ImportError:
-                    logger.warning("[Encoder] Advanced vision processing not available, using standard VAE only")
-                    ref_latent = vae.encode(image[:, :, :, :3])
+                        logger.info(f"[Encoder] Multi-image mode: using standard VAE processing only (semantic processing disabled)")
 
                 if debug_mode:
                     logger.info(f"[Encoder] Encoded edit_image reference latent shape: {ref_latent.shape}")
 
         # Handle template application
         if use_custom_system_prompt:
+            # Template Builder handles vision token generation - don't override
             if debug_mode:
                 logger.info("[Encoder] Using custom formatted text from Template Builder")
+                logger.info(f"[Encoder] FULL CUSTOM PROMPT:\n" + "="*60 + "\n" + text + "\n" + "="*60)
         else:
             if mode == "text_to_image":
                 template = (
@@ -286,26 +316,46 @@ ALWAYS connect VAE to this node for reference latents!
                     "<|im_start|>assistant\n"
                 )
             else: # image_edit
+                # Generate vision tokens based on number of images
+                if len(images_for_tokenizer) > 1:
+                    vision_tokens = ""
+                    for i in range(len(images_for_tokenizer)):
+                        vision_tokens += f"<|vision_start|><|image_pad|><|vision_end|>"
+                    if debug_mode:
+                        logger.info(f"[Encoder] Generated {len(images_for_tokenizer)} <|image_pad|> tokens for multi-image")
+                else:
+                    vision_tokens = "<|vision_start|><|image_pad|><|vision_end|>"
+                
+                # Use original template, but insert the correct number of vision tokens
                 template = (
                     "<|im_start|>system\n"
                     "Describe the key features of the input image (color, shape, size, texture, objects, background), "
                     "then explain how the user's text instruction should alter or modify the image. "
                     "Generate a new image that meets the user's requirements while maintaining consistency "
                     "with the original input where appropriate.<|im_end|>\n"
-                    "<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{}<|im_end|>\n"
+                    "<|im_start|>user\n" + vision_tokens + "{}<|im_end|>\n"
                     "<|im_start|>assistant\n"
                 )
             text = template.format(original_text)
             if debug_mode:
                 logger.info(f"[Encoder] Applied default Qwen formatting for {mode}")
+                logger.info(f"[Encoder] FULL FORMATTED PROMPT:\n" + "="*60 + "\n" + text + "\n" + "="*60)
 
         # Tokenize
         if debug_mode:
             logger.info(f"[Encoder] Tokenizing with text: '{text[:50]}...' and {len(images_for_tokenizer)} images")
+            if len(images_for_tokenizer) > 1:
+                logger.info(f"[Encoder] Passing {len(images_for_tokenizer)} images to ComfyUI tokenizer:")
+                for i, img_tensor in enumerate(images_for_tokenizer):
+                    unique_pixels = torch.unique(img_tensor.flatten()[:100])[:5]  # Sample first few unique values
+                    logger.info(f"[Encoder] Image {i+1}: shape={img_tensor.shape}, unique_pixels_sample={unique_pixels}")
 
         # NOTE: The custom tokenizer logic for multi-frame has been removed, as the model
         # does not support it. The Canvas Composer node is the correct approach.
         tokens = clip.tokenize(text, images=images_for_tokenizer)
+        
+        if debug_mode:
+            logger.info(f"[Encoder] Tokenization complete. Token structure: {[key for key in tokens.keys()]}")
 
         # Handle token removal
         if token_removal == "diffsynth" and not use_custom_system_prompt:
@@ -339,7 +389,15 @@ ALWAYS connect VAE to this node for reference latents!
         conditioning_updates = {}
         all_ref_latents = []
         if ref_latent is not None:
-            all_ref_latents.append(ref_latent)
+            if image.shape[0] > 1:
+                # Multi-image: split batch dimension into individual latents
+                for i in range(ref_latent.shape[0]):
+                    all_ref_latents.append(ref_latent[i:i+1])  # Keep as [1, C, T, H, W]
+                if debug_mode:
+                    logger.info(f"[Encoder] Split multi-image reference latents into {len(all_ref_latents)} individual latents")
+            else:
+                # Single image
+                all_ref_latents.append(ref_latent)
         if context_latent is not None:
             all_ref_latents.append(context_latent)
 
@@ -351,6 +409,10 @@ ALWAYS connect VAE to this node for reference latents!
 
         if all_ref_latents:
             conditioning_updates["reference_latents"] = all_ref_latents
+            if debug_mode:
+                logger.info(f"[Encoder] Preparing {len(all_ref_latents)} reference latents for conditioning:")
+                for i, lat in enumerate(all_ref_latents):
+                    logger.info(f"[Encoder] Reference latent {i}: shape={lat.shape}, range=[{lat.min():.4f}, {lat.max():.4f}]")
 
         if conditioning_updates and COMFY_AVAILABLE:
             conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
