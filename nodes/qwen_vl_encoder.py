@@ -388,6 +388,8 @@ ALWAYS connect VAE to this node for reference latents!
         # Add reference and context latents to conditioning metadata
         conditioning_updates = {}
         all_ref_latents = []
+        
+        # Handle reference latents (from edit_image)
         if ref_latent is not None:
             if image.shape[0] > 1:
                 # Multi-image: split batch dimension into individual latents
@@ -398,8 +400,12 @@ ALWAYS connect VAE to this node for reference latents!
             else:
                 # Single image
                 all_ref_latents.append(ref_latent)
+        
+        # Handle context latent separately (ControlNet-style)
         if context_latent is not None:
-            all_ref_latents.append(context_latent)
+            conditioning_updates["context_latents"] = [context_latent]  # Separate from reference latents
+            if debug_mode:
+                logger.info(f"[Encoder] Added context latent separately: shape={context_latent.shape}, range=[{context_latent.min():.4f}, {context_latent.max():.4f}]")
 
         # DUAL ENCODING: Add semantic-reconstructive fusion data
         if dual_encoding_data is not None:
@@ -418,7 +424,10 @@ ALWAYS connect VAE to this node for reference latents!
             conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
             if debug_mode:
                 update_keys = list(conditioning_updates.keys())
+                ref_count = len(all_ref_latents) if all_ref_latents else 0
+                context_count = len(conditioning_updates.get("context_latents", []))
                 logger.info(f"[Encoder] Added conditioning updates: {update_keys}")
+                logger.info(f"[Encoder] Summary: {ref_count} reference latents, {context_count} context latents")
 
         if debug_mode:
             logger.info(f"[Encoder] Final conditioning created for mode: {mode}")
