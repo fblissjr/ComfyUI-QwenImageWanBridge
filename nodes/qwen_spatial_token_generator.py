@@ -50,12 +50,6 @@ class QwenSpatialTokenGenerator:
                     "default": "structured_json",
                     "tooltip": "structured_json: JSON commands (recommended) | xml_tags: HTML-like elements (most native) | natural_language: coordinate sentences | traditional_tokens: legacy format"
                 }),
-                "template_mode": ([
-                    "default_edit",
-                    "raw"
-                ], {
-                    "default": "default_edit"
-                }),
                 "debug_mode": ("BOOLEAN", {"default": False})
             }
         }
@@ -66,12 +60,12 @@ class QwenSpatialTokenGenerator:
     CATEGORY = "Qwen/Spatial"
     OUTPUT_NODE = True
 
-    def generate_tokens(self, image, output_format, template_mode, debug_mode,
+    def generate_tokens(self, image, output_format, debug_mode,
                        prompt=""):
         """Generate complete formatted prompt with spatial tokens"""
 
         logger.info("=== QWEN SPATIAL TOKEN GENERATOR START ===")
-        logger.info(f"Inputs - template_mode: {template_mode}, debug_mode: {debug_mode}")
+        logger.info(f"Inputs - debug_mode: {debug_mode}")
         logger.info(f"Inputs - prompt length: {len(prompt)}")
         
         # Log input image details
@@ -103,17 +97,31 @@ class QwenSpatialTokenGenerator:
                 # Check if this is JSON data from JavaScript interface
                 try:
                     json_data = json.loads(prompt)
+                    logger.info(f"Successfully parsed JSON data: {json_data}")
                     
                     # Check if it's clean JSON commands (already processed by JavaScript)
-                    if isinstance(json_data, list) and len(json_data) > 0 and all(isinstance(cmd, dict) and "action" in cmd for cmd in json_data):
-                        logger.info(f"Detected clean JSON commands from JavaScript (structured_json format)")
+                    if isinstance(json_data, list) and len(json_data) > 0 and all(isinstance(cmd, dict) for cmd in json_data):
+                        logger.info(f"Detected clean JSON commands list from JavaScript (structured_json format)")
                         debug_info.append(f"Using clean JSON commands from JavaScript ({len(json_data)} commands)")
                         
                         # JSON is already clean - just use it as-is and create visualization
                         annotated_image = pil_image.copy()
                         draw = ImageDraw.Draw(annotated_image)
+                        logger.info(f"About to draw annotations for {len(json_data)} commands")
                         self._draw_annotations_from_json_commands(json_data, draw, img_width, img_height, debug_info)
                         logger.info("Drew visual annotations from clean JSON commands")
+                    
+                    # Check if it's a single JSON command
+                    elif isinstance(json_data, dict) and any(key in json_data for key in ['bbox', 'point', 'polygon', 'quad', 'target_object', 'action']):
+                        logger.info(f"Detected single JSON command from JavaScript (structured_json format)")
+                        debug_info.append(f"Using single JSON command from JavaScript")
+                        
+                        # Wrap single command in a list and process
+                        annotated_image = pil_image.copy()
+                        draw = ImageDraw.Draw(annotated_image)
+                        logger.info(f"About to draw annotations for single command")
+                        self._draw_annotations_from_json_commands([json_data], draw, img_width, img_height, debug_info)
+                        logger.info("Drew visual annotations from single JSON command")
                     
                     # Check if it's raw region data that needs processing
                     elif isinstance(json_data, dict) and "regions" in json_data:
@@ -171,13 +179,8 @@ class QwenSpatialTokenGenerator:
                 
             logger.info(f"Complete prompt length: {len(complete_prompt)}")
 
-            debug_info.append(f"Generated prompt: {prompt}")
-            debug_info.append(f"Complete prompt before template: {complete_prompt}")
-
-            # Apply template formatting
-            logger.info(f"Applying template formatting: {template_mode}")
-            formatted_prompt = self._apply_template(complete_prompt, template_mode, debug_info)
-            logger.info(f"Formatted prompt length: {len(formatted_prompt)}")
+            debug_info.append(f"Generated prompt: {complete_prompt}")
+            debug_info.append(f"Raw output (no template applied)")
 
             # Convert final image back to tensor
             logger.info("Converting annotated PIL image back to tensor...")
@@ -576,60 +579,75 @@ class QwenSpatialTokenGenerator:
         
         colors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"]
         
+        annotations_drawn = 0
+        
         for i, command in enumerate(json_commands):
             color = colors[i % len(colors)]
+            logger.info(f"Processing command {i}: {command}")
             
             if 'bbox' in command:
                 x1, y1, x2, y2 = command['bbox']
                 
                 # Draw enhanced annotation
                 draw.rectangle([x1, y1, x2, y2], outline=color, width=4)
+                annotations_drawn += 1
                 
                 # Draw label if available
-                if command.get('target_object'):
-                    from PIL import ImageFont
-                    try:
-                        font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
-                    except:
-                        font = ImageFont.load_default()
-                    
-                    # Background for text readability
-                    text_bbox = draw.textbbox((0, 0), command['target_object'], font=font)
-                    text_width = text_bbox[2] - text_bbox[0]
-                    text_height = text_bbox[3] - text_bbox[1]
-                    
-                    draw.rectangle([x1, y1-text_height-4, x1+text_width+8, y1], fill=color)
-                    draw.text((x1+4, y1-text_height-2), command['target_object'], fill="white", font=font)
+                label = command.get('target_object') or command.get('target') or f"Region {i+1}"
+                from PIL import ImageFont
+                try:
+                    font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+                except:
+                    font = ImageFont.load_default()
                 
-                logger.info(f"Drew bbox command: {color} for '{command.get('target_object', 'unlabeled')}' at ({x1},{y1},{x2},{y2})")
+                # Background for text readability
+                text_bbox = draw.textbbox((0, 0), label, font=font)
+                text_width = text_bbox[2] - text_bbox[0]
+                text_height = text_bbox[3] - text_bbox[1]
+                
+                draw.rectangle([x1, y1-text_height-4, x1+text_width+8, y1], fill=color)
+                draw.text((x1+4, y1-text_height-2), label, fill="white", font=font)
+                
+                logger.info(f"Drew bbox command: {color} for '{label}' at ({x1},{y1},{x2},{y2})")
                 
             elif 'polygon' in command:
                 if len(command['polygon']) >= 3:
                     # Draw polygon
                     points = [(x, y) for x, y in command['polygon']]
                     draw.polygon(points, outline=color, width=2)
+                    annotations_drawn += 1
                     
                     # Draw label at first point
-                    if command.get('target_object') and points:
-                        draw.text((points[0][0], points[0][1]-15), command['target_object'], fill=color)
+                    label = command.get('target_object') or command.get('target') or f"Polygon {i+1}"
+                    if points:
+                        draw.text((points[0][0], points[0][1]-15), label, fill=color)
                     
-                    logger.info(f"Drew polygon command: {color} for '{command.get('target_object', 'unlabeled')}' with {len(points)} points")
+                    logger.info(f"Drew polygon command: {color} for '{label}' with {len(points)} points")
                 
             elif 'point' in command:
                 if len(command['point']) >= 2:
                     x, y = command['point'][:2]
                     
-                    # Draw a colored circle
-                    draw.ellipse([x-8, y-8, x+8, y+8], outline=color, fill=color, width=4)
+                    # Draw a colored circle (outline first, then fill)
+                    draw.ellipse([x-10, y-10, x+10, y+10], outline=color, width=4)
+                    draw.ellipse([x-8, y-8, x+8, y+8], fill=color)
+                    annotations_drawn += 1
                     
                     # Add a white center dot
                     draw.ellipse([x-3, y-3, x+3, y+3], fill="white")
                     
-                    # Label
-                    if command.get('target_object'):
-                        draw.text((x + 12, y - 5), command['target_object'], fill=color)
+                    # Label with font
+                    label = command.get('target_object') or command.get('target') or f"Point {i+1}"
+                    from PIL import ImageFont
+                    try:
+                        font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+                    except:
+                        font = ImageFont.load_default()
                     
-                    logger.info(f"Drew reference point command: {color} for '{command.get('target_object', 'unlabeled')}' at ({x},{y})")
+                    draw.text((x + 15, y - 8), label, fill=color, font=font)
+                    
+                    logger.info(f"Drew reference point command: {color} for '{label}' at ({x},{y})")
+                    
             elif 'quad' in command:
                 if len(command['quad']) >= 8:
                     # Convert flat list to coordinate pairs
@@ -637,14 +655,19 @@ class QwenSpatialTokenGenerator:
                     if len(points) >= 3:
                         # Draw polygon
                         draw.polygon(points, outline=color, width=2)
+                        annotations_drawn += 1
                         
                         # Draw label at first point
-                        if command.get('target_object') and points:
-                            draw.text((points[0][0], points[0][1]-15), command['target_object'], fill=color)
+                        label = command.get('target_object') or command.get('target') or f"Quad {i+1}"
+                        if points:
+                            draw.text((points[0][0], points[0][1]-15), label, fill=color)
                         
-                        logger.info(f"Drew quad command: {color} for '{command.get('target_object', 'unlabeled')}' with {len(points)} points")
+                        logger.info(f"Drew quad command: {color} for '{label}' with {len(points)} points")
+            else:
+                logger.info(f"Command {i} has no recognized coordinate fields (bbox, polygon, point, quad)")
         
-        debug_info.append(f"Drew {len(json_commands)} visual annotations from JSON commands")
+        logger.info(f"Total annotations drawn: {annotations_drawn} out of {len(json_commands)} commands")
+        debug_info.append(f"Drew {annotations_drawn} visual annotations from {len(json_commands)} JSON commands")
 
     def _draw_annotations_from_tokens(self, spatial_tokens, draw, img_width, img_height, debug_info):
         """Parse spatial tokens and draw visual annotations"""
