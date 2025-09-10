@@ -119,40 +119,9 @@ class QwenTemplateBuilderV2:
         }
     }
 
-    def _detect_spatial_format(self, prompt: str) -> str:
-        """Auto-detect spatial token format and suggest appropriate template"""
-        prompt_lower = prompt.lower().strip()
-        
-        # Check for JSON structure
-        if ('{' in prompt and '"action":' in prompt) or ('{' in prompt and '"bbox":' in prompt):
-            return "structured_json_edit"
-        
-        # Check for XML/HTML-like tags
-        if ('<region data-bbox=' in prompt or 'data-bbox=' in prompt or 
-            '<region data-polygon=' in prompt):
-            return "xml_spatial_edit"
-            
-        # Check for natural language with coordinates  
-        if ('bounding box [' in prompt or 'within the bounding box [' in prompt or
-            'polygon defined by points' in prompt):
-            return "natural_spatial_edit"
-            
-        # Check for traditional spatial tokens
-        if '<|object_ref_start|>' in prompt or '<|box_start|>' in prompt:
-            return "default_edit"
-            
-        # Default fallback
-        return None
 
     def build(self, prompt: str, template_mode: str, custom_system: str, num_images: int) -> Tuple[str, bool, str]:
         """Build the formatted prompt"""
-
-        # Auto-detect spatial format if using default_edit mode
-        if template_mode == "default_edit":
-            detected_format = self._detect_spatial_format(prompt)
-            if detected_format and detected_format != "default_edit":
-                template_mode = detected_format
-                print(f"[QwenTemplateBuilderV2] Auto-detected format: {detected_format}")
 
         # Handle raw mode
         if template_mode == "raw":

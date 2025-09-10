@@ -36,11 +36,6 @@ class QwenSpatialTokenGenerator:
         return {
             "required": {
                 "image": ("IMAGE", {"tooltip": "Input image for spatial editing"}),
-                "base_prompt": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "placeholder": "Your main editing instruction"
-                }),
                 "prompt": ("STRING", {
                     "multiline": True,
                     "default": "",
@@ -71,12 +66,12 @@ class QwenSpatialTokenGenerator:
     CATEGORY = "Qwen/Spatial"
     OUTPUT_NODE = True
 
-    def generate_tokens(self, image, base_prompt, output_format, template_mode, debug_mode,
+    def generate_tokens(self, image, output_format, template_mode, debug_mode,
                        prompt=""):
         """Generate complete formatted prompt with spatial tokens"""
 
         logger.info("=== QWEN SPATIAL TOKEN GENERATOR START ===")
-        logger.info(f"Inputs - base_prompt length: {len(base_prompt)}, template_mode: {template_mode}, debug_mode: {debug_mode}")
+        logger.info(f"Inputs - template_mode: {template_mode}, debug_mode: {debug_mode}")
         logger.info(f"Inputs - prompt length: {len(prompt)}")
         
         # Log input image details
@@ -98,20 +93,8 @@ class QwenSpatialTokenGenerator:
             img_width, img_height = pil_image.size
             debug_info.append(f"Working image size: {img_width}x{img_height}")
             logger.info(f"Working with image dimensions: {img_width}x{img_height}")
-
-            # Check if base_prompt contains raw JSON region data (common when using JavaScript interface)
-            js_region_data = None
-            if base_prompt.strip().startswith('{ "regions":') or base_prompt.strip().startswith('{"regions":'):
-                try:
-                    js_region_data = json.loads(base_prompt.strip())
-                    if isinstance(js_region_data, dict) and "regions" in js_region_data:
-                        logger.info("Detected JavaScript region data in base_prompt - clearing base_prompt")
-                        base_prompt = ""  # Clear raw JSON from base_prompt
-                        debug_info.append("Cleared raw JSON region data from base_prompt")
-                except (json.JSONDecodeError, KeyError):
-                    pass  # Not JSON region data in base_prompt
             
-            # Use provided prompt or process additional regions
+            # Use provided prompt
             if prompt.strip():
                 logger.info(f"Using provided prompt: {len(prompt)} characters")
                 logger.info("=== PROMPT COORDINATE DEBUGGING ===")
@@ -169,48 +152,25 @@ class QwenSpatialTokenGenerator:
                         # Just use the original image
                         annotated_image = pil_image.copy()
                         logger.info(f"Accepted {output_format} format tokens (no coordinate parsing for visualization)")
-            elif js_region_data:
-                # Handle case where region data was found in base_prompt but not in spatial_tokens
-                logger.info("Using JavaScript region data from base_prompt")
-                debug_info.append(f"Processing {len(js_region_data['regions'])} regions from base_prompt JavaScript interface")
-                
-                # Generate formatted output from base_prompt region data
-                spatial_tokens = self._generate_format(js_region_data['regions'], img_width, img_height, output_format, debug_info)
-                logger.info(f"Generated formatted output from base_prompt: {len(spatial_tokens)} characters")
-                
-                # Put the clean formatted output in prompt field
-                prompt = spatial_tokens
-                debug_info.append("Populated base_prompt with clean formatted output from base_prompt region data")
-                
-                # Create annotated image for visualization
-                annotated_image = pil_image.copy()
-                draw = ImageDraw.Draw(annotated_image)
-                self._draw_annotations_from_regions(js_region_data['regions'], draw, img_width, img_height, debug_info)
-                logger.info("Drew visual annotations from base_prompt region data")
             else:
-                logger.info("No prompt provided - using base prompt only")
-                debug_info.append("No prompt provided - using base prompt only")
+                logger.info("No prompt provided")
+                debug_info.append("No prompt provided")
                 
                 # Just use the original image without annotations
                 annotated_image = pil_image.copy()
-                spatial_tokens = ""  # No spatial tokens in this branch
-                complete_prompt = base_prompt.strip()
+                complete_prompt = ""
 
-            # Create complete prompt - combine base_prompt with processed prompt if both exist
+            # Create complete prompt
             logger.info("Creating complete prompt...")
-            if prompt.strip() and base_prompt.strip():
-                logger.info("Combining base prompt with generated spatial prompt")
-                complete_prompt = f"{base_prompt.strip()} {prompt.strip()}"
-            elif prompt.strip():
-                logger.info("Using generated spatial prompt only")
+            if prompt.strip():
+                logger.info("Using provided prompt")
                 complete_prompt = prompt.strip()
             else:
-                logger.info("Using base prompt only")
-                complete_prompt = base_prompt.strip()
+                logger.info("No prompt provided")
+                complete_prompt = ""
                 
             logger.info(f"Complete prompt length: {len(complete_prompt)}")
 
-            debug_info.append(f"Base prompt: {base_prompt}")
             debug_info.append(f"Generated prompt: {prompt}")
             debug_info.append(f"Complete prompt before template: {complete_prompt}")
 
@@ -664,9 +624,9 @@ class QwenSpatialTokenGenerator:
                     
                     logger.info(f"Drew polygon command: {color} for '{command.get('target', 'unlabeled')}' with {len(points)} points")
                 
-            elif 'reference_point' in command:
-                if len(command['reference_point']) >= 2:
-                    x, y = command['reference_point'][:2]
+            elif 'point' in command:
+                if len(command['point']) >= 2:
+                    x, y = command['point'][:2]
                     
                     # Draw a colored circle
                     draw.ellipse([x-8, y-8, x+8, y+8], outline=color, fill=color, width=4)

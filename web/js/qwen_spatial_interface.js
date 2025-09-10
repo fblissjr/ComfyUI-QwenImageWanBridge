@@ -1072,27 +1072,38 @@ class QwenSpatialInterface {
     
     // Generate clean formatted output directly in JavaScript
     if (this.outputFormat === "structured_json") {
-      // Generate clean JSON commands directly 
+      // Generate clean JSON commands in the format from your examples
       const jsonCommands = this.regions.map(region => {
         const command = {
-          action: "edit_region",
-          target: region.label || "selected area",
-          instruction: `modify the ${region.label || 'selected area'}`,
-          preserve: "background, lighting, other objects"
+          action: ""
         };
         
         if (region.type === 'bounding_box') {
-          command.bbox = region.coords;
+          // Ensure correct bbox format: [x1, y1, x2, y2] with integers
+          // x1 < x2 and y1 < y2 (top-left to bottom-right)
+          const [x1, y1, x2, y2] = region.coords;
+          const minX = Math.min(x1, x2);
+          const maxX = Math.max(x1, x2);
+          const minY = Math.min(y1, y2);
+          const maxY = Math.max(y1, y2);
+          command.bbox = [Math.round(minX), Math.round(minY), Math.round(maxX), Math.round(maxY)];
         } else if (region.type === 'polygon') {
-          command.polygon = region.coords;
+          // Round polygon coordinates to integers
+          command.quad = region.coords.map(coord => [Math.round(coord[0]), Math.round(coord[1])]).flat();
         } else if (region.type === 'object_reference') {
-          command.reference_point = Array.isArray(region.coords) ? region.coords : [region.coords[0], region.coords[1]];
+          // Round point coordinates to integers
+          const coords = Array.isArray(region.coords) ? region.coords : [region.coords[0], region.coords[1]];
+          command.point = [Math.round(coords[0]), Math.round(coords[1])];
         }
         
         return command;
       });
       
-      const spatialTokens = JSON.stringify(jsonCommands, null, 2);
+      // Format exactly like your example with prompt wrapper
+      const spatialTokens = this.regions.map((region, index) => {
+        const cmd = jsonCommands[index];
+        return 'Perform the following replacement and keep the rest of the image unchanged:\n\'{\n  "action": "",\n  "target_object": "' + (region.label || 'object') + '",\n  "new_object": "",\n  "bbox": [' + cmd.bbox.join(', ') + ']\n}\'';
+      }).join('\n\n');
       console.log(`Generated clean structured JSON:`, spatialTokens);
       
       // Put clean JSON in the output area
