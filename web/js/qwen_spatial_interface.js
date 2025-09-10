@@ -452,16 +452,6 @@ class QwenSpatialInterface {
                             cursor: pointer;
                             font-size: 12px;
                         ">Copy</button>
-                        <button id="sendToNode" style="
-                            flex: 1;
-                            padding: 6px;
-                            background: rgba(0, 120, 255, 0.8);
-                            color: white;
-                            border: 1px solid rgba(0, 120, 255, 0.5);
-                            border-radius: 4px;
-                            cursor: pointer;
-                            font-size: 12px;
-                        ">Send to Node</button>
                     </div>
 
                     <div id="debugOutput" style="
@@ -618,10 +608,6 @@ class QwenSpatialInterface {
       }
     };
 
-    // Send to node
-    dialog.querySelector("#sendToNode").onclick = () => {
-      this.sendToNode(node, dialog);
-    };
 
     // Zoom controls
     dialog.querySelector("#zoomIn").onclick = () => {
@@ -1084,10 +1070,48 @@ class QwenSpatialInterface {
     
     console.log(`Processing ${this.regions.length} regions for token generation in ${this.outputFormat} format...`);
     
-    // For new formats, we'll pass region data to Python for processing
+    // Generate clean formatted output directly in JavaScript
+    if (this.outputFormat === "structured_json") {
+      // Generate clean JSON commands directly 
+      const jsonCommands = this.regions.map(region => {
+        const command = {
+          action: "edit_region",
+          target: region.label || "selected area",
+          instruction: `modify the ${region.label || 'selected area'}`,
+          preserve: "background, lighting, other objects"
+        };
+        
+        if (region.type === 'bounding_box') {
+          command.bbox = region.coords;
+        } else if (region.type === 'polygon') {
+          command.polygon = region.coords;
+        } else if (region.type === 'object_reference') {
+          command.reference_point = Array.isArray(region.coords) ? region.coords : [region.coords[0], region.coords[1]];
+        }
+        
+        return command;
+      });
+      
+      const spatialTokens = JSON.stringify(jsonCommands, null, 2);
+      console.log(`Generated clean structured JSON:`, spatialTokens);
+      
+      // Put clean JSON in the output area
+      dialog.querySelector('#spatialTokensOutput').value = spatialTokens;
+      this.updateDebug(`Generated ${this.regions.length} clean JSON commands`, dialog);
+      
+      // Auto-sync clean JSON to Python node
+      const syncSuccess = this.syncSpatialTokensToNode();
+      if (syncSuccess) {
+        console.log("Clean JSON auto-synced to Python node");
+      } else {
+        console.log("Failed to auto-sync clean JSON");
+      }
+      return;
+    }
+    
+    // For other new formats, pass region data to Python for processing
     if (this.outputFormat !== "traditional_tokens") {
       const regionData = {
-        format: this.outputFormat,
         regions: this.regions.map(region => ({
           ...region,
           // Ensure coordinates are properly formatted
@@ -1101,19 +1125,17 @@ class QwenSpatialInterface {
       const spatialTokens = JSON.stringify(regionData, null, 2);
       console.log(`Generated ${this.outputFormat} format data:`, spatialTokens);
       
+      // Put raw region data in spatial tokens field for Python processing
       dialog.querySelector('#spatialTokensOutput').value = spatialTokens;
       this.updateDebug(`Generated ${this.regions.length} regions in ${this.outputFormat} format`, dialog);
       
-      // Auto-sync to Python node
+      // Auto-sync to Python node - Python will generate the clean output
       const syncSuccess = this.syncSpatialTokensToNode();
       if (syncSuccess) {
         console.log("Spatial tokens auto-synced to Python node");
       } else {
         console.log("Failed to auto-sync spatial tokens");
       }
-      
-      // Update base_prompt widget with structured data
-      this.updateBasePromptWithTokens(spatialTokens);
       return;
     }
     
@@ -1213,8 +1235,8 @@ class QwenSpatialInterface {
       console.log("Failed to auto-sync spatial tokens");
     }
     
-    // Update base_prompt widget with spatial tokens for easy editing  
-    this.updateBasePromptWithTokens(spatialTokens);
+    // Do NOT populate base_prompt with raw JSON - let user add their own instructions
+    // this.updateBasePromptWithTokens(spatialTokens);
   }
 
   updateBasePromptWithTokens(spatialTokens) {
@@ -1334,66 +1356,31 @@ class QwenSpatialInterface {
     console.log(`Syncing spatial tokens: ${spatialTokens.length} characters`);
     console.log(`Tokens content: ${spatialTokens}`);
 
-    // Find the spatial_tokens widget
-    const spatialTokensWidget = this.node.widgets?.find(w => w.name === "spatial_tokens");
+    // Find the prompt widget
+    const promptWidget = this.node.widgets?.find(w => w.name === "prompt");
     
-    if (spatialTokensWidget) {
-      console.log("Found spatial_tokens widget - updating value");
-      spatialTokensWidget.value = spatialTokens;
+    if (promptWidget) {
+      console.log("Found prompt widget - updating value");
+      promptWidget.value = spatialTokens;
+      
+      // Mark node as needing execution to process the raw JSON
       this.node.setDirtyCanvas(true, true);
+      
+      // Force immediate execution to process the raw JSON into clean output
+      if (typeof app !== 'undefined' && app.queuePrompt) {
+        console.log("Triggering node execution to process raw JSON");
+        // This will trigger the Python processing
+        app.graph.setDirtyCanvas(true, true);
+      }
+      
       console.log("Spatial tokens synced to Python node");
       return true;
     } else {
-      console.log("No spatial_tokens widget found");
+      console.log("No prompt widget found");
       return false;
     }
   }
 
-  sendToNode(node, dialog) {
-    console.log("=== SEND TO NODE START ===");
-    const tokens = dialog.querySelector("#spatialTokensOutput").value;
-    console.log(`Tokens to send: ${tokens.length} characters`);
-    console.log(`Tokens content: ${tokens}`);
-    
-    if (!tokens) {
-      console.log("No tokens to send - aborting");
-      return;
-    }
-
-    console.log(`Node object: ${!!node}, has widgets: ${!!(node && node.widgets)}`);
-    
-    // Try to find a text widget in the connected node
-    if (node && node.widgets) {
-      console.log(`Node has ${node.widgets.length} widgets`);
-      console.log(`Widget names: ${node.widgets.map(w => w.name).join(', ')}`);
-      
-      const textWidget = node.widgets.find(
-        (w) =>
-          w.name === "text" || w.name === "prompt" || w.name === "coordinates",
-      );
-
-      if (textWidget) {
-        console.log(`Found compatible widget: ${textWidget.name}`);
-        console.log(`Widget current value: ${textWidget.value?.length || 0} characters`);
-        textWidget.value = tokens;
-        console.log(`Widget updated with ${tokens.length} characters`);
-        node.setDirtyCanvas(true, true);
-        console.log("Node canvas marked as dirty");
-        this.updateDebug(
-          `Sent tokens to node widget: ${textWidget.name}`,
-          dialog,
-        );
-        console.log("=== SEND TO NODE SUCCESS ===");
-      } else {
-        console.log("No compatible text widget found");
-        this.updateDebug("No compatible text widget found in node", dialog);
-        console.log("=== SEND TO NODE FAILED - NO WIDGET ===");
-      }
-    } else {
-      console.log("No node or no widgets available");
-      console.log("=== SEND TO NODE FAILED - NO NODE ===");
-    }
-  }
 
   addObjectReference(x, y, dialog) {
     const label = dialog.querySelector("#regionLabel").value || "object";

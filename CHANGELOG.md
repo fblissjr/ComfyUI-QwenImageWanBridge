@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.6.1 Spatial Token Generator Simplification
+
+### Simplified
+- **QwenSpatialTokenGenerator workflow streamlined**: Removed complex additional_regions processing
+- **Output reduced**: From 5 outputs to 3 (annotated_image, prompt, debug_info)
+- **Spatial tokens field**: Now hidden for JavaScript communication only
+- **User experience**: Base prompt field contains clean structured output for editing
+- **JavaScript integration**: Removed redundant base_prompt population with raw JSON
+- **Code cleanup**: Removed obsolete additional_regions parameter and processing logic
+- **Interface cleanup**: Removed redundant "Send to Node" button (auto-sync handles data transfer)
+
+### Fixed
+- **Raw JSON bug**: No longer shows raw region data in output fields
+- **Field redundancy**: Eliminated confusing multiple output fields
+- **JavaScript interface**: Cleaner data flow between spatial editor and Python node
+- **User workflow**: Spatial editor creates structured prompts in base_prompt for user modification
+- **Format field removed**: No longer wraps regions in redundant "format" object
+- **Send to Node removed**: Eliminated broken/redundant manual sync functionality
+- **Widget sync fixed**: JavaScript now properly syncs to the `prompt` widget instead of missing `spatial_tokens`
+- **Parameter naming**: Renamed internal `spatial_tokens` to `prompt` for consistency
+- **Prompt field visibility**: Made `prompt` field visible instead of hidden so JavaScript can access it
+- **Two-field workflow**: `base_prompt` for user instructions + `prompt` for generated spatial data
+
 ## v1.6.0 Experimental Structured Spatial Prompt Generation Inside Visual Spatial Editor
 
 ### New Default Output Format (Experimental)
