@@ -2,7 +2,7 @@
 
 ## v1.6.0 Structured Spatial Commands
 
-### Revolutionary Change: Default Output Format
+### Default Output Format
 - **NEW DEFAULT**: `structured_json` format replaces traditional spatial tokens
 - **Why**: Research shows Qwen2.5-VL was trained on JSON/XML structured data making these formats more native and effective
 - **Impact**: Much more precise and controllable image editing with semantic context
@@ -31,7 +31,7 @@
   ```
 - **Traditional Tokens**: Legacy format still available for backward compatibility
 
-### Enhanced Template Builder Integration
+### Template Builder Integration
 - **New template modes**: `structured_json_edit`, `xml_spatial_edit`, `natural_spatial_edit`
 - **Smart auto-detection**: Automatically selects appropriate template based on spatial token format
 - **Specialized system prompts**: Each format gets optimized instructions for best results
@@ -63,7 +63,7 @@
 - **Experimentation**: Switch between formats to compare effectiveness
 
 ### Backward Compatibility
-- Traditional spatial tokens remain fully supported
+- Traditional spatial tokens remain fully supported, though unsure if they actually do anything useful
 - Existing workflows continue to work unchanged
 - Format selection allows gradual migration
 - Debug mode helps understand format differences
