@@ -187,24 +187,15 @@ class QwenSpatialTokenGenerator:
             logger.info(f"Final tensor dtype: {final_image.dtype}")
             logger.info(f"Final tensor min/max: {final_image.min().item():.4f}/{final_image.max().item():.4f}")
 
-            token_count = len(spatial_tokens.split("<|")) - 1 if spatial_tokens else 0
-            debug_text = "\n".join(debug_info) if debug_mode else f"Generated prompt with spatial tokens"
+            debug_text = "\n".join(debug_info) if debug_mode else f"Generated prompt"
             logger.info(f"Debug mode: {debug_mode}, debug text length: {len(debug_text)}")
-
-            # Create simple prompt (base prompt + spatial tokens for natural language)
-            simple_prompt = f"{base_prompt.strip()} {spatial_tokens}".strip()
-            
-            # Create clean prompt without spatial tokens (for annotated image approach)
-            clean_prompt = base_prompt.strip()
             
             logger.info(f"Returning outputs:")
             logger.info(f"- annotated_image: {final_image.shape} tensor with visual region markers")  
-            logger.info(f"- prompt: {len(formatted_prompt)} chars (template + spatial tokens)")
-            logger.info(f"- formatted_prompt: {len(formatted_prompt)} chars (full formatted version)")
-            logger.info(f"- simple_prompt: {len(clean_prompt)} chars (clean for annotated image workflow)")
+            logger.info(f"- prompt: {len(complete_prompt)} chars")
             logger.info("=== QWEN SPATIAL TOKEN GENERATOR END ===")
 
-            return (final_image, prompt, debug_text)
+            return (final_image, complete_prompt, debug_text)
 
         except Exception as e:
             logger.error(f"CRITICAL ERROR in generate_tokens: {str(e)}", exc_info=True)
@@ -595,7 +586,7 @@ class QwenSpatialTokenGenerator:
                 draw.rectangle([x1, y1, x2, y2], outline=color, width=4)
                 
                 # Draw label if available
-                if command.get('target'):
+                if command.get('target_object'):
                     from PIL import ImageFont
                     try:
                         font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
@@ -603,14 +594,14 @@ class QwenSpatialTokenGenerator:
                         font = ImageFont.load_default()
                     
                     # Background for text readability
-                    text_bbox = draw.textbbox((0, 0), command['target'], font=font)
+                    text_bbox = draw.textbbox((0, 0), command['target_object'], font=font)
                     text_width = text_bbox[2] - text_bbox[0]
                     text_height = text_bbox[3] - text_bbox[1]
                     
                     draw.rectangle([x1, y1-text_height-4, x1+text_width+8, y1], fill=color)
-                    draw.text((x1+4, y1-text_height-2), command['target'], fill="white", font=font)
+                    draw.text((x1+4, y1-text_height-2), command['target_object'], fill="white", font=font)
                 
-                logger.info(f"Drew bbox command: {color} for '{command.get('target', 'unlabeled')}' at ({x1},{y1},{x2},{y2})")
+                logger.info(f"Drew bbox command: {color} for '{command.get('target_object', 'unlabeled')}' at ({x1},{y1},{x2},{y2})")
                 
             elif 'polygon' in command:
                 if len(command['polygon']) >= 3:
@@ -619,10 +610,10 @@ class QwenSpatialTokenGenerator:
                     draw.polygon(points, outline=color, width=2)
                     
                     # Draw label at first point
-                    if command.get('target') and points:
-                        draw.text((points[0][0], points[0][1]-15), command['target'], fill=color)
+                    if command.get('target_object') and points:
+                        draw.text((points[0][0], points[0][1]-15), command['target_object'], fill=color)
                     
-                    logger.info(f"Drew polygon command: {color} for '{command.get('target', 'unlabeled')}' with {len(points)} points")
+                    logger.info(f"Drew polygon command: {color} for '{command.get('target_object', 'unlabeled')}' with {len(points)} points")
                 
             elif 'point' in command:
                 if len(command['point']) >= 2:
@@ -635,10 +626,23 @@ class QwenSpatialTokenGenerator:
                     draw.ellipse([x-3, y-3, x+3, y+3], fill="white")
                     
                     # Label
-                    if command.get('target'):
-                        draw.text((x + 12, y - 5), command['target'], fill=color)
+                    if command.get('target_object'):
+                        draw.text((x + 12, y - 5), command['target_object'], fill=color)
                     
-                    logger.info(f"Drew reference point command: {color} for '{command.get('target', 'unlabeled')}' at ({x},{y})")
+                    logger.info(f"Drew reference point command: {color} for '{command.get('target_object', 'unlabeled')}' at ({x},{y})")
+            elif 'quad' in command:
+                if len(command['quad']) >= 8:
+                    # Convert flat list to coordinate pairs
+                    points = [(command['quad'][i], command['quad'][i+1]) for i in range(0, len(command['quad']), 2)]
+                    if len(points) >= 3:
+                        # Draw polygon
+                        draw.polygon(points, outline=color, width=2)
+                        
+                        # Draw label at first point
+                        if command.get('target_object') and points:
+                            draw.text((points[0][0], points[0][1]-15), command['target_object'], fill=color)
+                        
+                        logger.info(f"Drew quad command: {color} for '{command.get('target_object', 'unlabeled')}' with {len(points)} points")
         
         debug_info.append(f"Drew {len(json_commands)} visual annotations from JSON commands")
 

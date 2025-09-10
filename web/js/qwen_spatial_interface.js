@@ -1102,7 +1102,18 @@ class QwenSpatialInterface {
       // Format exactly like your example with prompt wrapper
       const spatialTokens = this.regions.map((region, index) => {
         const cmd = jsonCommands[index];
-        return 'Perform the following replacement and keep the rest of the image unchanged:\n\'{\n  "action": "",\n  "target_object": "' + (region.label || 'object') + '",\n  "new_object": "",\n  "bbox": [' + cmd.bbox.join(', ') + ']\n}\'';
+        let result = 'Perform the following replacement and keep the rest of the image unchanged:\n\'{\n  "action": "",\n  "target_object": "' + (region.label || 'object') + '",\n  "new_object": ""';
+        
+        if (cmd.bbox) {
+          result += ',\n  "bbox": [' + cmd.bbox.join(', ') + ']';
+        } else if (cmd.point) {
+          result += ',\n  "point": [' + cmd.point.join(', ') + ']';
+        } else if (cmd.quad) {
+          result += ',\n  "quad": [' + cmd.quad.join(', ') + ']';
+        }
+        
+        result += '\n}\'';
+        return result;
       }).join('\n\n');
       console.log(`Generated clean structured JSON:`, spatialTokens);
       
