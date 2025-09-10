@@ -41,6 +41,15 @@ class QwenSpatialTokenGenerator:
                     "default": "",
                     "placeholder": "Your main editing instruction"
                 }),
+                "output_format": ([
+                    "structured_json",
+                    "xml_tags",
+                    "natural_language", 
+                    "traditional_tokens"
+                ], {
+                    "default": "structured_json",
+                    "tooltip": "structured_json: JSON commands (recommended) | xml_tags: HTML-like elements (most native) | natural_language: coordinate sentences | traditional_tokens: legacy format"
+                }),
                 "template_mode": ([
                     "default_edit",
                     "raw"
@@ -53,7 +62,7 @@ class QwenSpatialTokenGenerator:
                 "spatial_tokens": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "placeholder": "Spatial tokens from editor (auto-populated) or manual: <|object_ref_start|>label<|object_ref_end|> at <|box_start|>x1,y1,x2,y2<|box_end|>"
+                    "placeholder": "Spatial tokens from editor (auto-populated) or manual input"
                 }),
                 "additional_regions": ("STRING", {
                     "multiline": True,
@@ -68,7 +77,7 @@ class QwenSpatialTokenGenerator:
     CATEGORY = "Qwen/Spatial"
     OUTPUT_NODE = True
 
-    def generate_tokens(self, image, base_prompt, template_mode, debug_mode,
+    def generate_tokens(self, image, base_prompt, output_format, template_mode, debug_mode,
                        spatial_tokens="", additional_regions=""):
         """Generate complete formatted prompt with spatial tokens"""
 
@@ -102,15 +111,41 @@ class QwenSpatialTokenGenerator:
                 logger.info("=== SPATIAL TOKENS COORDINATE DEBUGGING ===")
                 logger.info(f"Full spatial tokens: {spatial_tokens}")
                 
-                # Parse and debug coordinate extraction
-                self._debug_spatial_tokens(spatial_tokens, img_width, img_height, debug_info)
-                
-                debug_info.append("Using provided spatial tokens - drawing visual annotations")
-                # Parse spatial tokens and draw annotations for visual reference
-                annotated_image = pil_image.copy()
-                draw = ImageDraw.Draw(annotated_image)
-                self._draw_annotations_from_tokens(spatial_tokens, draw, img_width, img_height, debug_info)
-                logger.info("Drew visual annotations from spatial tokens")
+                # Check if this is JSON region data from JavaScript interface
+                try:
+                    region_data = json.loads(spatial_tokens)
+                    if isinstance(region_data, dict) and "format" in region_data and "regions" in region_data:
+                        logger.info(f"Detected JavaScript region data in {region_data['format']} format")
+                        debug_info.append(f"Processing {len(region_data['regions'])} regions from JavaScript interface")
+                        
+                        # Use the regions from JavaScript to generate formatted output
+                        spatial_tokens = self._generate_format(region_data['regions'], img_width, img_height, region_data['format'], debug_info)
+                        logger.info(f"Generated formatted output: {len(spatial_tokens)} characters")
+                        
+                        # Create annotated image for visualization
+                        annotated_image = pil_image.copy()
+                        draw = ImageDraw.Draw(annotated_image)
+                        self._draw_annotations_from_regions(region_data['regions'], draw, img_width, img_height, debug_info)
+                        logger.info("Drew visual annotations from region data")
+                    else:
+                        raise ValueError("Not region data format")
+                        
+                except (json.JSONDecodeError, ValueError, KeyError):
+                    # Not JSON region data, handle as regular spatial tokens
+                    if output_format == "traditional_tokens":
+                        self._debug_spatial_tokens(spatial_tokens, img_width, img_height, debug_info)
+                        debug_info.append("Using provided traditional spatial tokens - drawing visual annotations")
+                        # Parse spatial tokens and draw annotations for visual reference
+                        annotated_image = pil_image.copy()
+                        draw = ImageDraw.Draw(annotated_image)
+                        self._draw_annotations_from_tokens(spatial_tokens, draw, img_width, img_height, debug_info)
+                        logger.info("Drew visual annotations from spatial tokens")
+                    else:
+                        debug_info.append(f"Using provided {output_format} spatial tokens")
+                        # For non-traditional formats, we can't parse coordinates for visualization yet
+                        # Just use the original image
+                        annotated_image = pil_image.copy()
+                        logger.info(f"Accepted {output_format} format tokens (no coordinate parsing for visualization)")
             else:
                 logger.info("No spatial tokens provided - processing additional regions")
                 debug_info.append("No spatial tokens provided - processing additional regions")
@@ -173,10 +208,14 @@ class QwenSpatialTokenGenerator:
                         debug_info.append(f"  ERROR: {str(e)}")
                         continue
 
-                # Combine tokens
-                spatial_tokens = " ".join(tokens) if tokens else ""
-                logger.info(f"Combined {len(tokens)} tokens into spatial_tokens: {len(spatial_tokens)} characters")
-                debug_info.append(f"\nSpatial tokens: {spatial_tokens}")
+                # Generate tokens in selected format
+                if output_format == "traditional_tokens":
+                    spatial_tokens = " ".join(tokens) if tokens else ""
+                else:
+                    spatial_tokens = self._generate_format(regions, img_width, img_height, output_format, debug_info)
+                
+                logger.info(f"Generated {len(tokens) if output_format == 'traditional_tokens' else len(regions)} regions in {output_format} format: {len(spatial_tokens)} characters")
+                debug_info.append(f"\n{output_format} output: {spatial_tokens}")
 
             # Create complete prompt
             logger.info("Creating complete prompt...")
@@ -538,6 +577,70 @@ class QwenSpatialTokenGenerator:
         
         logger.info("=== SPATIAL TOKENS COORDINATE DEBUGGING COMPLETE ===")
 
+    def _draw_annotations_from_regions(self, regions, draw, img_width, img_height, debug_info):
+        """Draw visual annotations from JavaScript region data"""
+        
+        logger.info("Drawing annotations from JavaScript region data...")
+        
+        colors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"]
+        
+        for i, region in enumerate(regions):
+            color = colors[i % len(colors)]
+            
+            if region['type'] == 'bounding_box':
+                x1, y1, x2, y2 = region['coords']
+                
+                # Draw enhanced annotation
+                draw.rectangle([x1, y1, x2, y2], outline=color, width=4)
+                
+                # Draw label if available
+                if region.get('label'):
+                    from PIL import ImageFont
+                    try:
+                        font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+                    except:
+                        font = ImageFont.load_default()
+                    
+                    # Background for text readability
+                    text_bbox = draw.textbbox((0, 0), region['label'], font=font)
+                    text_width = text_bbox[2] - text_bbox[0]
+                    text_height = text_bbox[3] - text_bbox[1]
+                    
+                    draw.rectangle([x1, y1-text_height-4, x1+text_width+8, y1], fill=color)
+                    draw.text((x1+4, y1-text_height-2), region['label'], fill="white", font=font)
+                
+                logger.info(f"Drew bounding box: {color} for '{region.get('label', 'unlabeled')}' at ({x1},{y1},{x2},{y2})")
+                
+            elif region['type'] == 'polygon':
+                if len(region['coords']) >= 3:
+                    # Draw polygon
+                    points = [(x, y) for x, y in region['coords']]
+                    draw.polygon(points, outline=color, width=2)
+                    
+                    # Draw label at first point
+                    if region.get('label') and points:
+                        draw.text((points[0][0], points[0][1]-15), region['label'], fill=color)
+                    
+                    logger.info(f"Drew polygon: {color} for '{region.get('label', 'unlabeled')}' with {len(points)} points")
+                
+            elif region['type'] == 'object_reference':
+                if len(region['coords']) >= 2:
+                    x, y = region['coords'][:2]  # Take first two coordinates
+                    
+                    # Draw a colored circle
+                    draw.ellipse([x-8, y-8, x+8, y+8], outline=color, fill=color, width=4)
+                    
+                    # Add a white center dot
+                    draw.ellipse([x-3, y-3, x+3, y+3], fill="white")
+                    
+                    # Label
+                    if region.get('label'):
+                        draw.text((x + 12, y - 5), region['label'], fill=color)
+                    
+                    logger.info(f"Drew object reference: {color} for '{region.get('label', 'unlabeled')}' at ({x},{y})")
+        
+        debug_info.append(f"Drew {len(regions)} visual annotations from region data")
+
     def _draw_annotations_from_tokens(self, spatial_tokens, draw, img_width, img_height, debug_info):
         """Parse spatial tokens and draw visual annotations"""
         import re
@@ -679,6 +782,232 @@ class QwenSpatialTokenGenerator:
         """Store optimized image data from JavaScript (called via bridge)"""
         logger.info(f"Storing optimized image for node {node_id}: {len(base64_data)} characters")
         _node_image_storage[str(node_id)] = base64_data
+
+    def _generate_format(self, regions, img_width, img_height, output_format, debug_info):
+        """Generate spatial tokens in the specified format"""
+        
+        if output_format == "structured_json":
+            return self._generate_structured_json(regions, img_width, img_height, debug_info)
+        elif output_format == "xml_tags":
+            return self._generate_xml_tags(regions, img_width, img_height, debug_info)
+        elif output_format == "natural_language":
+            return self._generate_natural_language(regions, img_width, img_height, debug_info)
+        else:
+            debug_info.append(f"Unknown format: {output_format}, falling back to traditional tokens")
+            return ""
+
+    def _generate_structured_json(self, regions, img_width, img_height, debug_info):
+        """Generate structured JSON commands"""
+        
+        # Calculate native ViT dimensions
+        native_width = ((img_width + 27) // 28) * 28
+        native_height = ((img_height + 27) // 28) * 28
+        
+        commands = []
+        
+        for region in regions:
+            if region['type'] == 'bounding_box':
+                x1, y1, x2, y2 = region['coords']
+                
+                # Scale to native coordinates
+                scale_x = native_width / img_width
+                scale_y = native_height / img_height
+                native_x1 = round(x1 * scale_x)
+                native_y1 = round(y1 * scale_y)
+                native_x2 = round(x2 * scale_x)
+                native_y2 = round(y2 * scale_y)
+                
+                command = {
+                    "action": "edit_region",
+                    "target": region['label'],
+                    "bbox": [native_x1, native_y1, native_x2, native_y2],
+                    "instruction": f"modify the {region['label']}",
+                    "preserve": "background, lighting, other objects"
+                }
+                
+                if not region.get('includeObjectRef', True):
+                    # Remove target if object reference disabled
+                    del command['target']
+                    command['action'] = "edit_area"
+                
+                commands.append(command)
+                
+            elif region['type'] == 'polygon':
+                # Convert polygon points to native coordinates
+                native_points = []
+                scale_x = native_width / img_width
+                scale_y = native_height / img_height
+                
+                for x, y in region['coords']:
+                    native_x = round(x * scale_x)
+                    native_y = round(y * scale_y)
+                    native_points.append([native_x, native_y])
+                
+                command = {
+                    "action": "edit_polygon",
+                    "target": region['label'],
+                    "polygon": native_points,
+                    "instruction": f"modify the {region['label']}",
+                    "preserve": "background, lighting, other objects"
+                }
+                
+                if not region.get('includeObjectRef', True):
+                    del command['target']
+                    command['action'] = "edit_shape"
+                
+                commands.append(command)
+                
+            elif region['type'] == 'object_reference':
+                command = {
+                    "action": "reference_object", 
+                    "target": region['label'],
+                    "instruction": f"focus on the {region['label']}"
+                }
+                commands.append(command)
+        
+        if len(commands) == 1:
+            result = json.dumps(commands[0], indent=2)
+        else:
+            result = json.dumps({"directives": commands}, indent=2)
+        
+        debug_info.append(f"Generated {len(commands)} JSON command(s)")
+        return result
+
+    def _generate_xml_tags(self, regions, img_width, img_height, debug_info):
+        """Generate XML-like tags (most native to Qwen training)"""
+        
+        # Calculate native ViT dimensions
+        native_width = ((img_width + 27) // 28) * 28
+        native_height = ((img_height + 27) // 28) * 28
+        
+        xml_elements = []
+        
+        for region in regions:
+            if region['type'] == 'bounding_box':
+                x1, y1, x2, y2 = region['coords']
+                
+                # Scale to native coordinates
+                scale_x = native_width / img_width
+                scale_y = native_height / img_height
+                native_x1 = round(x1 * scale_x)
+                native_y1 = round(y1 * scale_y)
+                native_x2 = round(x2 * scale_x)
+                native_y2 = round(y2 * scale_y)
+                
+                if region.get('includeObjectRef', True):
+                    xml_element = f'<region data-bbox="{native_x1},{native_y1},{native_x2},{native_y2}">\n'
+                    xml_element += f'  <target>{region["label"]}</target>\n'
+                    xml_element += f'  <action>edit_region</action>\n'
+                    xml_element += f'  <instruction>modify the {region["label"]}</instruction>\n'
+                    xml_element += f'  <preserve>background, lighting, other objects</preserve>\n'
+                    xml_element += '</region>'
+                else:
+                    xml_element = f'<region data-bbox="{native_x1},{native_y1},{native_x2},{native_y2}">\n'
+                    xml_element += f'  <action>edit_area</action>\n'
+                    xml_element += f'  <instruction>modify this area</instruction>\n'
+                    xml_element += f'  <preserve>background, lighting, other objects</preserve>\n'
+                    xml_element += '</region>'
+                
+                xml_elements.append(xml_element)
+                
+            elif region['type'] == 'polygon':
+                # Format polygon points as coordinate pairs
+                scale_x = native_width / img_width
+                scale_y = native_height / img_height
+                coord_pairs = []
+                
+                for x, y in region['coords']:
+                    native_x = round(x * scale_x)
+                    native_y = round(y * scale_y)
+                    coord_pairs.append(f"({native_x},{native_y})")
+                
+                coords_str = ",".join(coord_pairs)
+                
+                if region.get('includeObjectRef', True):
+                    xml_element = f'<region data-polygon="{coords_str}">\n'
+                    xml_element += f'  <target>{region["label"]}</target>\n'
+                    xml_element += f'  <action>edit_polygon</action>\n'
+                    xml_element += f'  <instruction>modify the {region["label"]}</instruction>\n'
+                    xml_element += f'  <preserve>background, lighting, other objects</preserve>\n'
+                    xml_element += '</region>'
+                else:
+                    xml_element = f'<region data-polygon="{coords_str}">\n'
+                    xml_element += f'  <action>edit_shape</action>\n'
+                    xml_element += f'  <instruction>modify this shape</instruction>\n'
+                    xml_element += f'  <preserve>background, lighting, other objects</preserve>\n'
+                    xml_element += '</region>'
+                
+                xml_elements.append(xml_element)
+                
+            elif region['type'] == 'object_reference':
+                xml_element = f'<reference>\n'
+                xml_element += f'  <target>{region["label"]}</target>\n'
+                xml_element += f'  <action>reference_object</action>\n'
+                xml_element += f'  <instruction>focus on the {region["label"]}</instruction>\n'
+                xml_element += '</reference>'
+                xml_elements.append(xml_element)
+        
+        result = "\n\n".join(xml_elements)
+        debug_info.append(f"Generated {len(xml_elements)} XML element(s)")
+        return result
+
+    def _generate_natural_language(self, regions, img_width, img_height, debug_info):
+        """Generate natural language with coordinate references"""
+        
+        # Calculate native ViT dimensions
+        native_width = ((img_width + 27) // 28) * 28
+        native_height = ((img_height + 27) // 28) * 28
+        
+        sentences = []
+        
+        for region in regions:
+            if region['type'] == 'bounding_box':
+                x1, y1, x2, y2 = region['coords']
+                
+                # Scale to native coordinates
+                scale_x = native_width / img_width
+                scale_y = native_height / img_height
+                native_x1 = round(x1 * scale_x)
+                native_y1 = round(y1 * scale_y)
+                native_x2 = round(x2 * scale_x)
+                native_y2 = round(y2 * scale_y)
+                
+                bbox_str = f"[{native_x1},{native_y1},{native_x2},{native_y2}]"
+                
+                if region.get('includeObjectRef', True):
+                    sentence = f"Within the bounding box {bbox_str}, modify the {region['label']}. Preserve the background, lighting, and other objects."
+                else:
+                    sentence = f"Within the bounding box {bbox_str}, make changes to this area. Preserve the background, lighting, and other objects."
+                
+                sentences.append(sentence)
+                
+            elif region['type'] == 'polygon':
+                # Format polygon as coordinate list
+                scale_x = native_width / img_width
+                scale_y = native_height / img_height
+                coord_pairs = []
+                
+                for x, y in region['coords']:
+                    native_x = round(x * scale_x)
+                    native_y = round(y * scale_y)
+                    coord_pairs.append(f"({native_x},{native_y})")
+                
+                coords_str = ",".join(coord_pairs)
+                
+                if region.get('includeObjectRef', True):
+                    sentence = f"Within the polygon defined by points {coords_str}, modify the {region['label']}. Preserve the background, lighting, and other objects."
+                else:
+                    sentence = f"Within the polygon defined by points {coords_str}, make changes to this shape. Preserve the background, lighting, and other objects."
+                
+                sentences.append(sentence)
+                
+            elif region['type'] == 'object_reference':
+                sentence = f"Focus on the {region['label']} in the image."
+                sentences.append(sentence)
+        
+        result = " ".join(sentences)
+        debug_info.append(f"Generated {len(sentences)} natural language instruction(s)")
+        return result
 
     def _apply_template(self, prompt, template_mode, debug_info):
         """Apply template formatting to the complete prompt"""

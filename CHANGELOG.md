@@ -1,5 +1,73 @@
 # Changelog
 
+## v1.6.0 Structured Spatial Commands
+
+### Revolutionary Change: Default Output Format
+- **NEW DEFAULT**: `structured_json` format replaces traditional spatial tokens
+- **Why**: Research shows Qwen2.5-VL was trained on JSON/XML structured data making these formats more native and effective
+- **Impact**: Much more precise and controllable image editing with semantic context
+
+### Added: Advanced Output Formats
+- **Structured JSON** (new default): JSON command objects with action, target, bbox, instruction, and preserve directives
+  ```json
+  {
+    "action": "edit_region",
+    "target": "coffee mug",
+    "bbox": [312, 412, 762, 612],
+    "instruction": "change to red color, keep handle shape",
+    "preserve": "background, lighting, other objects"
+  }
+  ```
+- **XML Tags**: HTML-like elements with `data-bbox` attributes (most native to Qwen training)
+  ```xml
+  <region data-bbox="312,412,762,612">
+    <target>coffee mug</target>
+    <instruction>change to red color, keep handle shape</instruction>
+  </region>
+  ```
+- **Natural Language**: Coordinate-aware sentences for intuitive instructions
+  ```text
+  Within the bounding box [312,412,762,612], modify the coffee mug. Preserve background and lighting.
+  ```
+- **Traditional Tokens**: Legacy format still available for backward compatibility
+
+### Enhanced Template Builder Integration
+- **New template modes**: `structured_json_edit`, `xml_spatial_edit`, `natural_spatial_edit`
+- **Smart auto-detection**: Automatically selects appropriate template based on spatial token format
+- **Specialized system prompts**: Each format gets optimized instructions for best results
+- **Seamless workflow**: Copy from QwenSpatialTokenGenerator → QwenTemplateBuilderV2 → QwenVLTextEncoder
+
+### JavaScript Interface Improvements
+- **Format selection dropdown** with real-time help text
+- **Intelligent preprocessing**: JavaScript prepares region data for Python processing
+- **Enhanced debugging**: Format-aware logging and coordinate validation
+- **Visual annotations**: Works across all formats for region visualization
+
+### Technical Improvements
+- **Coordinate system consistency**: All formats use native ViT pixel coordinates (multiples of 28)
+- **Region data bridge**: JSON communication between JavaScript and Python
+- **Format-aware processing**: Python backend adapts to input format automatically
+- **Enhanced error handling**: Graceful fallbacks and comprehensive logging
+
+### Benefits of New Formats
+1. **More Semantic Control**: Specify what to preserve vs. what to change
+2. **Research-Based**: Leverages Qwen2.5-VL's training on structured document data
+3. **Programmatically Parseable**: Enables automation and batch processing
+4. **Multi-Step Composition**: Natural support for complex scene directives
+5. **Better User Intent**: Clear separation of action, target, and constraints
+
+### Migration Guide
+- **Existing workflows**: Traditional tokens still work, no breaking changes
+- **New projects**: Use structured_json for best results
+- **Template Builder**: Auto-detects format and applies appropriate template
+- **Experimentation**: Switch between formats to compare effectiveness
+
+### Backward Compatibility
+- Traditional spatial tokens remain fully supported
+- Existing workflows continue to work unchanged
+- Format selection allows gradual migration
+- Debug mode helps understand format differences
+
 ## v1.5.2 Got the coordinates wrong!
 
 ### Fixed

@@ -16,6 +16,7 @@ class QwenSpatialInterface {
     this.currentImage = null;
     this.isDrawing = false;
     this.drawingMode = "bounding_box";
+    this.outputFormat = "structured_json"; // New default format
     this.polygonPoints = [];
     this.imageScale = 1;
     this.imageOffset = { x: 0, y: 0 };
@@ -218,6 +219,34 @@ class QwenSpatialInterface {
                             <div>Original: <span id="originalSize">-</span></div>
                             <div>Target: <span id="targetSize">-</span></div>
                             <div>Aspect Ratio: <span id="aspectRatioInfo">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Output Format -->
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 500;">Output Format</h4>
+                        <select id="outputFormat" style="
+                            width: 100%;
+                            padding: 6px;
+                            background: rgba(255, 255, 255, 0.05);
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            border-radius: 4px;
+                            color: white;
+                            font-size: 12px;
+                        ">
+                            <option value="structured_json">Structured JSON (Recommended)</option>
+                            <option value="xml_tags">XML Tags (Most Native)</option>
+                            <option value="natural_language">Natural Language</option>
+                            <option value="traditional_tokens">Traditional Tokens</option>
+                        </select>
+                        
+                        <div style="
+                            margin-top: 4px;
+                            font-size: 10px;
+                            opacity: 0.6;
+                            line-height: 1.3;
+                        " id="formatHelp">
+                            JSON commands with semantic context for better control
                         </div>
                     </div>
 
@@ -472,6 +501,13 @@ class QwenSpatialInterface {
     dialog.querySelector("#imageUpload").onchange = (e) => {
       const file = e.target.files[0];
       if (file) this.loadImage(file, dialog);
+    };
+
+    // Output format change
+    dialog.querySelector("#outputFormat").onchange = (e) => {
+      this.outputFormat = e.target.value;
+      this.updateFormatHelp(dialog);
+      this.generateTokens(dialog); // Regenerate tokens in new format
     };
 
     // Spatial type change
@@ -1046,7 +1082,42 @@ class QwenSpatialInterface {
     
     this.updateDebug(`Using dimensions for normalization: ${imageWidth}x${imageHeight}`, dialog);
     
-    console.log(`Processing ${this.regions.length} regions for token generation...`);
+    console.log(`Processing ${this.regions.length} regions for token generation in ${this.outputFormat} format...`);
+    
+    // For new formats, we'll pass region data to Python for processing
+    if (this.outputFormat !== "traditional_tokens") {
+      const regionData = {
+        format: this.outputFormat,
+        regions: this.regions.map(region => ({
+          ...region,
+          // Ensure coordinates are properly formatted
+          coords: region.type === 'object_reference' ? 
+            (Array.isArray(region.coords) ? region.coords : [region.coords[0], region.coords[1]]) :
+            region.coords
+        }))
+      };
+      
+      // Send region data as JSON to be processed by Python
+      const spatialTokens = JSON.stringify(regionData, null, 2);
+      console.log(`Generated ${this.outputFormat} format data:`, spatialTokens);
+      
+      dialog.querySelector('#spatialTokensOutput').value = spatialTokens;
+      this.updateDebug(`Generated ${this.regions.length} regions in ${this.outputFormat} format`, dialog);
+      
+      // Auto-sync to Python node
+      const syncSuccess = this.syncSpatialTokensToNode();
+      if (syncSuccess) {
+        console.log("Spatial tokens auto-synced to Python node");
+      } else {
+        console.log("Failed to auto-sync spatial tokens");
+      }
+      
+      // Update base_prompt widget with structured data
+      this.updateBasePromptWithTokens(spatialTokens);
+      return;
+    }
+    
+    // Traditional token generation (existing logic)
     const tokens = this.regions.map((region, index) => {
       console.log(`Processing region ${index + 1}: ${region.type} "${region.label}"`);
       
@@ -1441,6 +1512,16 @@ class QwenSpatialInterface {
       object_reference: "Click on objects to mark them",
     };
     dialog.querySelector("#drawingHelp").textContent = help[this.drawingMode];
+  }
+
+  updateFormatHelp(dialog) {
+    const help = {
+      structured_json: "JSON commands with semantic context for better control",
+      xml_tags: "HTML-like elements with data-bbox attributes (most native to training)",
+      natural_language: "Coordinate-aware sentences for natural instructions",
+      traditional_tokens: "Legacy format with <|object_ref_start|> and <|box_start|> tokens"
+    };
+    dialog.querySelector("#formatHelp").textContent = help[this.outputFormat];
   }
 
   updateDynamicControls(dialog) {
