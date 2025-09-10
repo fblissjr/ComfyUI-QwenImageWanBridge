@@ -6,11 +6,6 @@ This is an **EXPERIMENTAL** research repo with custom nodes for Qwen-Image-Edit 
 
 **[Changelog](CHANGELOG.md)**
 
-**Key Updates**
-## v1.5.2 Got the coordinates wrong - also, not sure they work. Exploring annotated images.
-- Spatial tokens now use absolute pixel coordinates instead of normalized 0-1 values
-- **Reference**: https://github.com/QwenLM/Qwen2.5-VL/blob/main/cookbooks/spatial_understanding.ipynb
-
 ## Table of Contents
 
 ### Core Nodes
@@ -29,13 +24,19 @@ This is an **EXPERIMENTAL** research repo with custom nodes for Qwen-Image-Edit 
 
 ---
 
-## Spatial Token Editor & Reference (TBD on how well this consistently works, or if it's any better than natural language, but it's built inside Qwen2.5-VL's tokenizer)
+## Spatial Token Editor & Reference (Experimental - unknown if better than natural language)
 
-**Note:** I haven't had a chance to test this thoroughly, but if you see issues, let me know. None of these tokens seem to be documented in the reference code that I could find in quick scans, but it does seem to work for the most part. The tokens were identified from the tokenizer config. That all said - this spatial editor node likely has issues.
+**Note:** This is experimental. These tokens exist in Qwen2.5-VL's tokenizer but aren't documented. Whether they work better than natural language descriptions is unknown - this is for testing and experimentation.
 
-**TL;DR:** The core output is that it takes a required input image and creates the prompt with the spatial tokens filled in for you. You can (and should) edit these on your own to finetune your edits.
+**What it does:** Takes an image and generates structured spatial prompts with coordinates filled in automatically. You can (and should) edit the generated output to fine-tune your edits.
 
-**Supported Spatial Tokens:**
+**Output Formats (v1.6.0):**
+- **Structured JSON** (new default): Command objects with action, target, coordinates, and preservation instructions
+- **XML Tags**: HTML-like elements with data-bbox attributes
+- **Natural Language**: Coordinate-aware sentences
+- **Traditional Tokens**: Legacy spatial token format
+
+**Traditional Spatial Tokens:**
 - **`<|object_ref_start|>...<|object_ref_end|>`** - Reference specific objects by description
 - **`<|box_start|>x1,y1,x2,y2<|box_end|>`** - Target rectangular regions (absolute pixel coordinates)
 - **`<|quad_start|>x1,y1,x2,y2,x3,y3,x4,y4<|quad_end|>`** - Define complex quadrilateral areas
@@ -95,17 +96,17 @@ Combines up to 4 images with aspect ratio preservation to prevent distortion.
 - **Example:** Combine Mona Lisa + Shrek + fighting pose → Mona Lisa fighting Shrek in the specified pose
 
 ### QwenSpatialTokenGenerator
-Interactive spatial editing with visual region drawing interface.
+Experimental spatial editing with visual region drawing interface.
 - **Required image input:** Direct image connection with built-in resolution optimization
 - **"Open Spatial Editor" button:** Canvas-based drawing for bounding boxes, polygons, and object reference points
+- **Output format selection:** Choose between structured JSON (default), XML tags, natural language, or traditional tokens
 - **Individual region management:** Delete buttons and inline label editing for each created region
-- **Automatic token generation:** Proper Qwen2.5-VL formatting with normalized coordinates
-- **Optional object_ref labels:** Checkbox controlled - enable for labeled regions, disable for pure coordinates
-- **Editable spatial tokens:** Generated tokens appear in base_prompt field for user modification
+- **Experimental token generation:** Generates different prompt formats - effectiveness compared to natural language unknown
+- **Editable output:** Generated prompts appear in base_prompt field for user modification
 - **Dual output:** Plain prompt (base_prompt contents) + formatted_prompt (template applied)
 - **Integrated resolution optimization:** Built-in QwenOptimalResolution logic eliminates separate preprocessing
-- **Debug mode:** Detailed coordinate and token generation logging
-- **Use for:** Precise region-based editing with visual spatial token creation
+- **Debug mode:** Detailed coordinate and generation logging
+- **Use for:** Testing structured spatial prompts vs natural language descriptions
 - **Example:** Connect image → draw box around church → "Replace with castle" → generates optimized image + spatial tokens
 
 ### QwenLowresFixNode

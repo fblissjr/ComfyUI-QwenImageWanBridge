@@ -1,13 +1,13 @@
 # Changelog
 
-## v1.6.0 Structured Spatial Commands
+## v1.6.0 Experimental Structured Spatial Prompt Generation Inside Visual Spatial Editor
 
-### Default Output Format
+### New Default Output Format (Experimental)
 - **NEW DEFAULT**: `structured_json` format replaces traditional spatial tokens
-- **Why**: Research shows Qwen2.5-VL was trained on JSON/XML structured data making these formats more native and effective
-- **Impact**: Much more precise and controllable image editing with semantic context
+- **Theory**: Research suggests Qwen2.5-VL was trained on JSON/XML structured data, so these formats might be more compatible with the model's training
+- **Unknown**: Whether this actually works better than natural language prompts - purely for experimentation and testing
 
-### Added: Advanced Output Formats
+### Added: Experimental Output Formats
 - **Structured JSON** (new default): JSON command objects with action, target, bbox, instruction, and preserve directives
   ```json
   {
@@ -18,7 +18,7 @@
     "preserve": "background, lighting, other objects"
   }
   ```
-- **XML Tags**: HTML-like elements with `data-bbox` attributes (most native to Qwen training)
+- **XML Tags**: HTML-like elements with `data-bbox` attributes (hypothetically more compatible with Qwen training data)
   ```xml
   <region data-bbox="312,412,762,612">
     <target>coffee mug</target>
@@ -33,9 +33,9 @@
 
 ### Template Builder Integration
 - **New template modes**: `structured_json_edit`, `xml_spatial_edit`, `natural_spatial_edit`
-- **Smart auto-detection**: Automatically selects appropriate template based on spatial token format
-- **Specialized system prompts**: Each format gets optimized instructions for best results
-- **Seamless workflow**: Copy from QwenSpatialTokenGenerator → QwenTemplateBuilderV2 → QwenVLTextEncoder
+- **Auto-detection**: Attempts to select appropriate template based on spatial token format
+- **Format-specific system prompts**: Each format gets different instructions (effectiveness unknown)
+- **Workflow**: Copy from QwenSpatialTokenGenerator → QwenTemplateBuilderV2 → QwenVLTextEncoder
 
 ### JavaScript Interface Improvements
 - **Format selection dropdown** with real-time help text
@@ -49,18 +49,18 @@
 - **Format-aware processing**: Python backend adapts to input format automatically
 - **Enhanced error handling**: Graceful fallbacks and comprehensive logging
 
-### Benefits of New Formats
-1. **More Semantic Control**: Specify what to preserve vs. what to change
-2. **Research-Based**: Leverages Qwen2.5-VL's training on structured document data
-3. **Programmatically Parseable**: Enables automation and batch processing
-4. **Multi-Step Composition**: Natural support for complex scene directives
-5. **Better User Intent**: Clear separation of action, target, and constraints
+### Potential Benefits (Unverified)
+1. **More Semantic Control**: Structured format allows specifying what to preserve vs. what to change
+2. **Training Compatibility**: May align better with Qwen2.5-VL's structured document training data
+3. **Programmatically Parseable**: Easier automation and batch processing
+4. **Complex Instructions**: Structured format supports multi-step scene directives
+5. **Intent Clarity**: Separates action, target, and constraints - whether this helps the model is unknown
 
-### Migration Guide
+### Usage Notes
 - **Existing workflows**: Traditional tokens still work, no breaking changes
-- **New projects**: Use structured_json for best results
-- **Template Builder**: Auto-detects format and applies appropriate template
-- **Experimentation**: Switch between formats to compare effectiveness
+- **Testing**: Try structured_json to see if it works better for your use cases
+- **Template Builder**: Auto-detects format and applies different templates
+- **Experimentation**: Switch between formats to compare effectiveness (results may vary)
 
 ### Backward Compatibility
 - Traditional spatial tokens remain fully supported, though unsure if they actually do anything useful
