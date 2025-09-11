@@ -25,6 +25,20 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load encoder nodes: {e}")
 
+# Helper nodes
+try:
+    from .nodes.qwen_vl_helpers import QwenVLEmptyLatent, QwenVLImageToLatent
+    
+    NODE_CLASS_MAPPINGS["QwenVLEmptyLatent"] = QwenVLEmptyLatent
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLEmptyLatent"] = "Qwen VL Empty Latent"
+    
+    NODE_CLASS_MAPPINGS["QwenVLImageToLatent"] = QwenVLImageToLatent
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLImageToLatent"] = "Qwen VL Image to Latent"
+
+    print("[QwenImageWanBridge] Loaded Qwen VL helper nodes (2 nodes)")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load helper nodes: {e}")
+
 # Resolution helper nodes
 try:
     from .nodes.qwen_resolution_helper import (
@@ -126,6 +140,25 @@ try:
     print("[QwenImageWanBridge] Loaded Token Analysis nodes (3 nodes)")
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Token Analysis nodes: {e}")
+
+# ============================================================================
+# SPATIAL INPAINTING NODES - Mask-based inpainting system
+# ============================================================================
+
+try:
+    from .nodes.qwen_mask_processor import QwenMaskProcessor
+    from .nodes.qwen_inpaint_sampler import QwenInpaintSampler
+
+    NODE_CLASS_MAPPINGS["QwenMaskProcessor"] = QwenMaskProcessor
+    NODE_DISPLAY_NAME_MAPPINGS["QwenMaskProcessor"] = "Qwen Mask Processor"
+
+    NODE_CLASS_MAPPINGS["QwenInpaintSampler"] = QwenInpaintSampler
+    NODE_DISPLAY_NAME_MAPPINGS["QwenInpaintSampler"] = "Qwen Inpainting Sampler"
+
+    print("[QwenImageWanBridge] Loaded Spatial Inpainting nodes (2 nodes)")
+    print("[QwenImageWanBridge] FEATURES: Mask-based inpainting with diffusers blending pattern")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Spatial Inpainting nodes: {e}")
 
 # Note: Experimental multi-frame nodes have been archived
 # Use Multi-Reference Handler with "index" mode for multi-frame support
