@@ -10,18 +10,7 @@ import logging
 from typing import Optional, Dict, Any, Tuple, Union, List
 import folder_paths
 
-# Import our processor and custom tokenizer for proper multi-frame support
-try:
-    from .qwen_processor import Qwen2VLProcessor
-    PROCESSOR_AVAILABLE = True
-except ImportError:
-    PROCESSOR_AVAILABLE = False
-
-try:
-    from .qwen_custom_tokenizer import QwenMultiFrameTokenizer, MultiFrameVisionEmbedder
-    TOKENIZER_AVAILABLE = True
-except ImportError:
-    TOKENIZER_AVAILABLE = False
+# Simplified encoder - no longer needs complex processors
 
 logger = logging.getLogger(__name__)
 
@@ -119,32 +108,9 @@ class QwenVLCLIPLoader:
 
 class QwenVLTextEncoder:
     """
-    Text encoder for Qwen2.5-VL with all DiffSynth fixes
-    Uses ComfyUI's internal CLIP infrastructure for compatibility
+    Text encoder for Qwen2.5-VL - DiffSynth/Diffusers compatible
+    Handles single or multiple images with proper 32-pixel alignment
     """
-
-    # Resolution list combining DiffSynth-Studio resolutions with modern aspect ratios
-    QWEN_RESOLUTIONS = [
-        # Square resolutions
-        (1024, 1024), (1328, 1328),
-
-        # Common landscape ratios (optimized for quality)
-        (1328, 800), (1456, 720), (1584, 1056), (1920, 1080),  # 16:9
-        (2048, 1024), (1344, 768), (1536, 640),
-
-        # Common portrait ratios
-        (800, 1328), (720, 1456), (1056, 1584), (1080, 1920),  # 9:16
-        (1024, 2048), (768, 1344), (640, 1536),
-
-        # Original DiffSynth-Studio resolutions for compatibility
-        (672, 1568), (688, 1504), (752, 1392), (832, 1248),
-        (880, 1184), (944, 1104), (1104, 944), (1184, 880),
-        (1248, 832), (1392, 752), (1504, 688), (1568, 672),
-
-        # Smaller resolutions for low VRAM
-        (512, 512), (768, 768), (512, 768), (768, 512),
-        (1024, 768), (768, 1024), (1024, 512), (512, 1024)
-    ]
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -154,7 +120,7 @@ class QwenVLTextEncoder:
                 "text": ("STRING", {
                     "multiline": True,
                     "default": "A beautiful landscape",
-                    "tooltip": "Your prompt. Just write what you want, templates are applied automatically."
+                    "tooltip": "Your prompt"
                 }),
                 "mode": (["text_to_image", "image_edit"], {
                     "default": "image_edit",
@@ -163,25 +129,19 @@ class QwenVLTextEncoder:
             },
             "optional": {
                 "edit_image": ("IMAGE", {
-                    "tooltip": "Image to edit/reference. Can be a single image or a composite canvas from the Multi-Reference Composer."
-                }),
-                "context_image": ("IMAGE", {
-                    "tooltip": "Context/control image (ControlNet-style). Processed without vision tokens."
+                    "tooltip": "Single image or batch. For multiple images, use Image Batch node first."
                 }),
                 "vae": ("VAE", {
-                    "tooltip": "ALWAYS connect VAE! Encodes images for guidance."
+                    "tooltip": "Required for image editing - encodes reference latents"
                 }),
-                "use_custom_system_prompt": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "ON: Text from Template Builder (already formatted) | OFF: Apply default Qwen formatting"
-                }),
-                "token_removal": (["auto", "diffsynth", "none"], {
-                    "default": "auto",
-                    "tooltip": "Keep 'auto' unless you know why you need others. Auto=smart, diffsynth=exact compatibility, none=keep all"
+                "system_prompt": ("STRING", {
+                    "tooltip": "System prompt override from Template Builder (optional)",
+                    "multiline": True,
+                    "default": ""
                 }),
                 "debug_mode": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Shows detailed processing info in console. Turn on if things aren't working."
+                    "tooltip": "Show processing details in console"
                 }),
             }
         }
@@ -191,246 +151,126 @@ class QwenVLTextEncoder:
     FUNCTION = "encode"
     CATEGORY = "QwenImage/Encoding"
     TITLE = "Qwen2.5-VL Text Encoder"
-    DESCRIPTION = """
-Encodes text and images for Qwen Image generation.
+    DESCRIPTION = "DiffSynth/Diffusers-compatible encoder with 32-pixel alignment"
 
-KEY DECISION: What goes into KSampler.latent_image?
-• VAE Encode → KSampler = Preserve structure (denoise 0.3-0.7)
-• Empty Latent → KSampler = Full reimagining (denoise 0.9-1.0)
-
-ALWAYS connect VAE to this node for reference latents!
-"""
+    @staticmethod
+    def calculate_dimensions(target_area: int, aspect_ratio: float) -> tuple:
+        """Calculate dimensions matching target area while preserving aspect ratio.
+        Uses 32-pixel alignment for VAE compatibility (DiffSynth/Diffusers standard)."""
+        import math
+        width = math.sqrt(target_area * aspect_ratio)
+        height = width / aspect_ratio
+        width = round(width / 32) * 32
+        height = round(height / 32) * 32
+        return max(32, int(width)), max(32, int(height))
 
 
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
-              edit_image: Optional[torch.Tensor] = None, context_image: Optional[torch.Tensor] = None,
-              vae=None, use_custom_system_prompt: bool = False,
-              token_removal: str = "auto", debug_mode: bool = False) -> Tuple[Any]:
+              edit_image: Optional[torch.Tensor] = None,
+              vae=None, system_prompt: str = "", debug_mode: bool = False) -> Tuple[Any]:
 
-        images_for_tokenizer = []
-        ref_latent = None
-        context_latent = None
-        original_text = text
-        dual_encoding_data = None
+        """Encode text and images for Qwen Image generation.
+        Follows DiffSynth/Diffusers implementation with 32-pixel alignment."""
 
-        # No resolution controls needed - images will be processed optimally
+        import math
+        import comfy.utils
 
-        # Prepare edit_image if in edit mode
+        vision_images = []
+        ref_latents = []
+
+        # Process images if provided
         if mode == "image_edit" and edit_image is not None:
             if debug_mode:
-                logger.info(f"[Encoder] Input image/canvas shape: {edit_image.shape}")
+                logger.info(f"[Encoder] Input shape: {edit_image.shape}")
 
-            # Use input image as-is for vision processing (no resizing needed)
-            image = edit_image
-            
-            # Handle multiple images from native_multi mode OR single composite from concat/grid
-            if image.shape[0] > 1:
-                # Multiple separate images (native_multi mode) - split them for individual processing
-                images_for_tokenizer = [image[i:i+1, :, :, :3] for i in range(image.shape[0])]
-                if debug_mode:
-                    logger.info(f"[Encoder] Detected {image.shape[0]} separate images (native_multi mode)")
-                    for i, img_tensor in enumerate(images_for_tokenizer):
-                        logger.info(f"[Encoder] Image {i+1} shape: {img_tensor.shape}, min/max values: {img_tensor.min():.3f}/{img_tensor.max():.3f}")
-            else:
-                # Single image (could be composite from concat/grid or actual single image)
-                images_for_tokenizer = [image[:, :, :, :3]]
-                if debug_mode:
-                    logger.info(f"[Encoder] Single image mode, shape: {image.shape} (could be composite from concat/grid)")
-                    logger.info(f"[Encoder] Image min/max values: {image.min():.3f}/{image.max():.3f}")
+            # Convert batch tensor to list of images
+            images = [edit_image[i:i+1, :, :, :3] for i in range(edit_image.shape[0])]
 
-            # DUAL ENCODING: Process through both semantic and reconstructive paths
-            if vae is not None:
-                # Reconstructive path - standard VAE encoding
-                if image.shape[0] > 1:
-                    # Handle multiple images - encode each separately then concatenate
-                    ref_latents = []
-                    for i in range(image.shape[0]):
-                        single_latent = vae.encode(image[i:i+1, :, :, :3])
-                        ref_latents.append(single_latent)
-                    ref_latent = torch.cat(ref_latents, dim=0)
+            # Process each image with DiffSynth/Diffusers standard sizing
+            for i, img in enumerate(images):
+                # Get original dimensions
+                h, w = img.shape[1], img.shape[2]
+                aspect_ratio = w / h
+
+                # Resize for vision encoder (384x384 target area)
+                vision_w, vision_h = self.calculate_dimensions(384*384, aspect_ratio)
+                img_chw = img.movedim(-1, 1)  # HWC to CHW for upscale
+                vision_img = comfy.utils.common_upscale(img_chw, vision_w, vision_h, "bicubic", "disabled")
+                vision_images.append(vision_img.movedim(1, -1))  # CHW to HWC
+
+                if debug_mode:
+                    logger.info(f"[Encoder] Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}")
+
+                # Resize for VAE encoder (1024x1024 target area) if VAE provided
+                if vae is not None:
+                    vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio)
+                    vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
+                    vae_img_hwc = vae_img.movedim(1, -1)
+                    ref_latent = vae.encode(vae_img_hwc[:, :, :, :3])
+                    ref_latents.append(ref_latent)
+
                     if debug_mode:
-                        logger.info(f"[Encoder] Encoded {image.shape[0]} images to reference latents shape: {ref_latent.shape}")
-                else:
-                    ref_latent = vae.encode(image[:, :, :, :3])
+                        logger.info(f"[Encoder]        VAE: {vae_w}x{vae_h}, latent: {ref_latent.shape}")
 
-                # DUAL ENCODING: Semantic path using native-level processing
-                # Note: Currently disabled for multi-image due to position embedding complexity
-                if image.shape[0] == 1:  # Only enable for single images
-                    try:
-                        from .qwen_vision_processor import QwenVisionProcessor
-                        from .qwen_processor import Qwen2VLProcessor
-                        from .qwen_custom_tokenizer import MultiFrameVisionEmbedder
-
-                        # Create advanced vision features (native-quality processing)
-                        vision_processor = QwenVisionProcessor()
-                        qwen_processor = Qwen2VLProcessor()
-                        embedder = MultiFrameVisionEmbedder()
-
-                        # Process single image through semantic vision pipeline
-                        image_list = [image[0]]  # Remove batch dimension for processor
-                        semantic_patches, semantic_grid = vision_processor.create_vision_patches(image_list)
-                        
-                        # Create semantic embeddings (paper's semantic path)
-                        semantic_embeddings = embedder.embed_vision_patches(
-                            semantic_patches, semantic_grid, vision_model=None
-                        )
-
-                        # Store dual encoding data for conditioning fusion (paper architecture)
-                        dual_encoding_data = {
-                            "semantic_embeddings": semantic_embeddings,  # High-level understanding
-                            "semantic_patches": semantic_patches,
-                            "semantic_grid": semantic_grid,
-                            "reconstructive_latent": ref_latent,  # Low-level structure
-                            "fusion_method": "mmdit_compatible",  # Paper's MMDiT fusion
-                            "has_dual_encoding": True
-                        }
-
-                        if debug_mode:
-                            logger.info(f"[Encoder] Dual encoding - Semantic patches: {semantic_patches.shape}")
-                            logger.info(f"[Encoder] Dual encoding - Reconstructive latent: {ref_latent.shape}")
-                            logger.info(f"[Encoder] Dual encoding - Semantic grid: {semantic_grid}")
-
-                    except ImportError:
-                        logger.warning("[Encoder] Advanced vision processing not available, using standard VAE only")
-                else:
-                    if debug_mode:
-                        logger.info(f"[Encoder] Multi-image mode: using standard VAE processing only (semantic processing disabled)")
-
-                if debug_mode:
-                    logger.info(f"[Encoder] Encoded edit_image reference latent shape: {ref_latent.shape}")
-
-        # Handle template application
-        if use_custom_system_prompt:
-            # Template Builder handles vision token generation - don't override
+        # Determine system prompt to use
+        if system_prompt:
+            # Use the custom system prompt from Template Builder
+            system_text = system_prompt
             if debug_mode:
-                logger.info("[Encoder] Using custom formatted text from Template Builder")
-                logger.info(f"[Encoder] FULL CUSTOM PROMPT:\n" + "="*60 + "\n" + text + "\n" + "="*60)
+                logger.info("[Encoder] Using custom system prompt from Template Builder")
         else:
+            # Use default system prompts based on mode
             if mode == "text_to_image":
-                template = (
-                    "<|im_start|>system\n"
-                    "Describe the image by detailing the color, shape, size, texture, "
-                    "quantity, text, spatial relationships of the objects and background:<|im_end|>\n"
-                    "<|im_start|>user\n{}<|im_end|>\n"
-                    "<|im_start|>assistant\n"
-                )
-            else: # image_edit
-                # Generate vision tokens based on number of images
-                if len(images_for_tokenizer) > 1:
-                    vision_tokens = ""
-                    for i in range(len(images_for_tokenizer)):
-                        vision_tokens += f"<|vision_start|><|image_pad|><|vision_end|>"
-                    if debug_mode:
-                        logger.info(f"[Encoder] Generated {len(images_for_tokenizer)} <|image_pad|> tokens for multi-image")
-                else:
-                    vision_tokens = "<|vision_start|><|image_pad|><|vision_end|>"
-                
-                # Use original template, but insert the correct number of vision tokens
-                template = (
-                    "<|im_start|>system\n"
-                    "Describe the key features of the input image (color, shape, size, texture, objects, background), "
-                    "then explain how the user's text instruction should alter or modify the image. "
-                    "Generate a new image that meets the user's requirements while maintaining consistency "
-                    "with the original input where appropriate.<|im_end|>\n"
-                    "<|im_start|>user\n" + vision_tokens + "{}<|im_end|>\n"
-                    "<|im_start|>assistant\n"
-                )
-            text = template.format(original_text)
-            if debug_mode:
-                logger.info(f"[Encoder] Applied default Qwen formatting for {mode}")
-                logger.info(f"[Encoder] FULL FORMATTED PROMPT:\n" + "="*60 + "\n" + text + "\n" + "="*60)
+                system_text = ("Describe the image by detailing the color, shape, size, texture, "
+                              "quantity, text, spatial relationships of the objects and background:")
+            else:  # image_edit
+                system_text = ("Describe the key features of the input image (color, shape, size, texture, objects, background), "
+                              "then explain how the user's text instruction should alter or modify the image. "
+                              "Generate a new image that meets the user's requirements while maintaining consistency "
+                              "with the original input where appropriate.")
 
-        # Tokenize
-        if debug_mode:
-            logger.info(f"[Encoder] Tokenizing with text: '{text[:50]}...' and {len(images_for_tokenizer)} images")
-            if len(images_for_tokenizer) > 1:
-                logger.info(f"[Encoder] Passing {len(images_for_tokenizer)} images to ComfyUI tokenizer:")
-                for i, img_tensor in enumerate(images_for_tokenizer):
-                    unique_pixels = torch.unique(img_tensor.flatten()[:100])[:5]  # Sample first few unique values
-                    logger.info(f"[Encoder] Image {i+1}: shape={img_tensor.shape}, unique_pixels_sample={unique_pixels}")
-
-        # NOTE: The custom tokenizer logic for multi-frame has been removed, as the model
-        # does not support it. The Canvas Composer node is the correct approach.
-        tokens = clip.tokenize(text, images=images_for_tokenizer)
-        
-        if debug_mode:
-            logger.info(f"[Encoder] Tokenization complete. Token structure: {[key for key in tokens.keys()]}")
-
-        # Handle token removal
-        if token_removal == "diffsynth" and not use_custom_system_prompt:
-            drop_count = 34 if mode == "text_to_image" else 64
-            for key in tokens:
-                for i in range(len(tokens.get(key, []))):
-                    token_list = tokens[key][i]
-                    if len(token_list) > drop_count:
-                        tokens[key][i] = token_list[drop_count:]
-            if debug_mode:
-                logger.info(f"[Encoder] Dropped first {drop_count} tokens (DiffSynth style)")
-
-        elif token_removal == "none":
-            if debug_mode:
-                logger.info("[Encoder] Keeping all tokens (no removal)")
-
-        # Encode tokens using ComfyUI's method
-        conditioning = clip.encode_from_tokens_scheduled(tokens)
-
-        # Process context_image separately (ControlNet-style)
-        if context_image is not None and vae is not None:
-            if debug_mode:
-                logger.info(f"[Encoder] Processing context image: {context_image.shape}")
-
-            # Use context image as-is (no resizing needed)
-            context_latent = vae.encode(context_image[:, :, :, :3])
-            if debug_mode:
-                logger.info(f"[Encoder] Encoded context_image latent shape: {context_latent.shape}")
-
-        # Add reference and context latents to conditioning metadata
-        conditioning_updates = {}
-        all_ref_latents = []
-        
-        # Handle reference latents (from edit_image)
-        if ref_latent is not None:
-            if image.shape[0] > 1:
-                # Multi-image: split batch dimension into individual latents
-                for i in range(ref_latent.shape[0]):
-                    all_ref_latents.append(ref_latent[i:i+1])  # Keep as [1, C, T, H, W]
-                if debug_mode:
-                    logger.info(f"[Encoder] Split multi-image reference latents into {len(all_ref_latents)} individual latents")
+        # Build the formatted template WITHOUT system prompt to avoid it appearing in images
+        # DiffSynth drops the system tokens after encoding, but we'll just not include them
+        if mode == "text_to_image":
+            formatted_text = text  # Just the raw prompt for text-to-image
+        else:  # image_edit
+            # Multi-image with Picture X: format (DiffSynth/Diffusers standard)
+            if len(vision_images) > 1:
+                vision_prompt = "".join([
+                    f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
+                    for i in range(len(vision_images))
+                ])
+                formatted_text = f"{vision_prompt}{text}"
             else:
                 # Single image
-                all_ref_latents.append(ref_latent)
-        
-        # Handle context latent separately (ControlNet-style)
-        if context_latent is not None:
-            conditioning_updates["context_latents"] = [context_latent]  # Separate from reference latents
-            if debug_mode:
-                logger.info(f"[Encoder] Added context latent separately: shape={context_latent.shape}, range=[{context_latent.min():.4f}, {context_latent.max():.4f}]")
-
-        # DUAL ENCODING: Add semantic-reconstructive fusion data
-        if dual_encoding_data is not None:
-            conditioning_updates["dual_encoding"] = dual_encoding_data
-            if debug_mode:
-                logger.info("[Encoder] Added dual encoding data to conditioning (semantic + reconstructive)")
-
-        if all_ref_latents:
-            conditioning_updates["reference_latents"] = all_ref_latents
-            if debug_mode:
-                logger.info(f"[Encoder] Preparing {len(all_ref_latents)} reference latents for conditioning:")
-                for i, lat in enumerate(all_ref_latents):
-                    logger.info(f"[Encoder] Reference latent {i}: shape={lat.shape}, range=[{lat.min():.4f}, {lat.max():.4f}]")
-
-        if conditioning_updates and COMFY_AVAILABLE:
-            conditioning = node_helpers.conditioning_set_values(conditioning, conditioning_updates, append=True)
-            if debug_mode:
-                update_keys = list(conditioning_updates.keys())
-                ref_count = len(all_ref_latents) if all_ref_latents else 0
-                context_count = len(conditioning_updates.get("context_latents", []))
-                logger.info(f"[Encoder] Added conditioning updates: {update_keys}")
-                logger.info(f"[Encoder] Summary: {ref_count} reference latents, {context_count} context latents")
+                formatted_text = f"<|vision_start|><|image_pad|><|vision_end|>{text}"
 
         if debug_mode:
-            logger.info(f"[Encoder] Final conditioning created for mode: {mode}")
+            logger.info(f"[Encoder] Applied {mode} template for {len(vision_images) or 0} images")
+            if len(vision_images) > 0:
+                logger.info("[Encoder] Image ordering:")
+                for i, img in enumerate(vision_images):
+                    h, w = img.shape[1], img.shape[2]
+                    logger.info(f"  Picture {i+1}: {w}x{h} image")
+            logger.info(f"[Encoder] System prompt (not included in generation): {system_text[:100]}...")
+            logger.info(f"[Encoder] Text being tokenized: {formatted_text[:200]}...")
+
+        # Tokenize with vision support
+        tokens = clip.tokenize(formatted_text, images=vision_images if vision_images else [])
+
+        # Encode tokens to conditioning
+        conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+        # Add reference latents to conditioning if available
+        if ref_latents and COMFY_AVAILABLE:
+            conditioning = node_helpers.conditioning_set_values(
+                conditioning,
+                {"reference_latents": ref_latents},
+                append=True
+            )
+            if debug_mode:
+                logger.info(f"[Encoder] Added {len(ref_latents)} reference latents to conditioning")
 
         return (conditioning,)
 

@@ -25,7 +25,7 @@ class QwenTemplateBuilderV2:
                     "default_edit",
                     "multi_image_edit",
                     "structured_json_edit",
-                    "xml_spatial_edit", 
+                    "xml_spatial_edit",
                     "natural_spatial_edit",
                     "artistic",
                     "photorealistic",
@@ -34,15 +34,16 @@ class QwenTemplateBuilderV2:
                     "technical",
                     "custom_t2i",
                     "custom_edit",
-                    "raw"
+                    "raw",
+                    "show_all_prompts"
                 ], {
                     "default": "default_edit",
-                    "tooltip": "Choose template mode. Use structured_* modes for spatial token output from QwenSpatialTokenGenerator"
+                    "tooltip": "Choose template mode. Select 'show_all_prompts' to see all system prompts. Use custom_system field to override ANY template's system prompt."
                 }),
                 "custom_system": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "tooltip": "Custom system prompt for custom modes"
+                    "tooltip": "Override system prompt - works with ANY template mode (leave empty to use default). This overrides the built-in system prompt for any selected template."
                 }),
                 "num_images": ("INT", {
                     "default": 1,
@@ -53,8 +54,8 @@ class QwenTemplateBuilderV2:
             }
         }
 
-    RETURN_TYPES = ("STRING", "BOOLEAN", "STRING")
-    RETURN_NAMES = ("formatted_prompt", "use_with_encoder", "mode_info")
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("prompt", "system_prompt", "mode_info")
     FUNCTION = "build"
     CATEGORY = "QwenImage/Templates"
     TITLE = "Qwen Template Builder"
@@ -73,9 +74,10 @@ class QwenTemplateBuilderV2:
             "mode": "image_edit"
         },
         "multi_image_edit": {
-            "system": "You are viewing multiple reference images. Analyze the key features of each image (color, shape, size, texture, objects, background). Follow the user's instruction to combine, transfer, or modify elements between the images. When the user references 'first image', 'second image', etc., use the corresponding image in sequence.",
+            "system": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",
             "vision": True,
-            "mode": "image_edit"
+            "mode": "image_edit",
+            "use_picture_format": True
         },
         "artistic": {
             "system": "You are an experimental artist. Break conventions. Be bold and creative. Interpret the prompt with artistic freedom.",
@@ -120,51 +122,47 @@ class QwenTemplateBuilderV2:
     }
 
 
-    def build(self, prompt: str, template_mode: str, custom_system: str, num_images: int) -> Tuple[str, bool, str]:
-        """Build the formatted prompt"""
+    def build(self, prompt: str, template_mode: str, custom_system: str, num_images: int) -> Tuple[str, str, str]:
+        """Output the raw prompt and system prompt for the encoder to use"""
 
-        # Handle raw mode
+        # Handle show all prompts mode - displays all available system prompts
+        if template_mode == "show_all_prompts":
+            prompt_list = "=== AVAILABLE SYSTEM PROMPTS ===\n\n"
+            for name, template in self.TEMPLATES.items():
+                prompt_list += f"[{name}]:\n{template['system']}\n" + "="*50 + "\n\n"
+            prompt_list += "\nTO USE: Select a template above and optionally override with custom_system field"
+            # Return display in system prompt field for viewing
+            return (prompt, prompt_list, "info|display_only")
+
+        # Handle raw mode - no system prompt
         if template_mode == "raw":
-            return (prompt, False, "raw|no_template")
+            return (prompt, "", "raw|no_template")
 
         # Handle custom modes
         if template_mode == "custom_t2i":
-            formatted = self._format_template(custom_system, prompt, False, num_images)
-            return (formatted, True, "custom|text_to_image")
+            system = custom_system if custom_system else "Generate the image based on the description."
+            return (prompt, system, "custom|text_to_image")
 
         if template_mode == "custom_edit":
-            formatted = self._format_template(custom_system, prompt, True, num_images)
-            return (formatted, True, "custom|image_edit")
+            system = custom_system if custom_system else "Edit the image based on the instructions."
+            return (prompt, system, "custom|image_edit")
 
         # Handle preset templates
         if template_mode in self.TEMPLATES:
             template = self.TEMPLATES[template_mode]
-            formatted = self._format_template(
-                template["system"],
-                prompt,
-                template["vision"],
-                num_images
-            )
-            return (formatted, True, f"{template_mode}|{template['mode']}")
+            # Use custom_system override if provided, otherwise use template default
+            system_prompt = custom_system if custom_system else template["system"]
+            mode_info = f"{template_mode}|{template['mode']}"
 
-        # Fallback
-        return (prompt, False, "unknown|text_to_image")
+            # Add Picture format hint if needed
+            if template.get("use_picture_format", False) and num_images > 1:
+                mode_info += f"|picture_format_{num_images}"
 
-    def _format_template(self, system: str, prompt: str, include_vision: bool, num_images: int = 1) -> str:
-        """Format the chat template"""
+            return (prompt, system_prompt, mode_info)
 
-        result = f"<|im_start|>system\n{system}<|im_end|>\n"
-        result += f"<|im_start|>user\n"
+        # Fallback - no system prompt
+        return (prompt, "", "unknown|text_to_image")
 
-        if include_vision:
-            # Generate multiple vision token sequences based on num_images
-            for i in range(num_images):
-                result += "<|vision_start|><|image_pad|><|vision_end|>"
-
-        result += f"{prompt}<|im_end|>\n"
-        result += f"<|im_start|>assistant\n"
-
-        return result
 
 
 class QwenTemplateConnector:

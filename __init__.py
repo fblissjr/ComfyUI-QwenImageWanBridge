@@ -39,22 +39,7 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load helper nodes: {e}")
 
-# Resolution helper nodes
-try:
-    from .nodes.qwen_resolution_helper import (
-        QwenOptimalResolution,
-        QwenResolutionSelector
-    )
-
-    NODE_CLASS_MAPPINGS["QwenOptimalResolution"] = QwenOptimalResolution
-    NODE_DISPLAY_NAME_MAPPINGS["QwenOptimalResolution"] = "Qwen Optimal Resolution"
-
-    NODE_CLASS_MAPPINGS["QwenResolutionSelector"] = QwenResolutionSelector
-    NODE_DISPLAY_NAME_MAPPINGS["QwenResolutionSelector"] = "Qwen Resolution Selector"
-
-    print("[QwenImageWanBridge] Loaded resolution helper nodes")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load resolution nodes: {e}")
+# Resolution nodes removed - functionality integrated into encoder
 
 # Simplified template builder V2
 try:
@@ -73,54 +58,29 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load template nodes: {e}")
 
-# Qwen to Wan Bridge Nodes
+# Qwen-WAN Bridge nodes removed - not related to Qwen-Image-Edit
+
+# V2V nodes removed - not core functionality
+
+# Multi-Reference handler deprecated - use Image Batch node instead
+
+# EliGen Entity Control nodes (DiffSynth-Studio feature)
 try:
-    from .nodes.qwen_wan_keyframe_editor import (
-        QwenWANKeyframeEditor,
-        QwenWANKeyframeExtractor
+    from .nodes.qwen_eligen_entity_control import (
+        QwenEliGenEntityControl,
+        QwenEliGenMaskPainter
     )
 
-    NODE_CLASS_MAPPINGS["QwenWANKeyframeEditor"] = QwenWANKeyframeEditor
-    NODE_DISPLAY_NAME_MAPPINGS["QwenWANKeyframeEditor"] = "Qwen-WAN Keyframe Editor"
+    NODE_CLASS_MAPPINGS["QwenEliGenEntityControl"] = QwenEliGenEntityControl
+    NODE_DISPLAY_NAME_MAPPINGS["QwenEliGenEntityControl"] = "Qwen EliGen Entity Control"
 
-    NODE_CLASS_MAPPINGS["QwenWANKeyframeExtractor"] = QwenWANKeyframeExtractor
-    NODE_DISPLAY_NAME_MAPPINGS["QwenWANKeyframeExtractor"] = "Extract Keyframes for Editing"
+    NODE_CLASS_MAPPINGS["QwenEliGenMaskPainter"] = QwenEliGenMaskPainter
+    NODE_DISPLAY_NAME_MAPPINGS["QwenEliGenMaskPainter"] = "EliGen Mask Painter"
 
-    print("[QwenImageWanBridge] Loaded Qwen-WAN Bridge nodes")
+    print("[QwenImageWanBridge] Loaded EliGen Entity Control nodes (2 nodes)")
+    print("[QwenImageWanBridge] FEATURE: Precise spatial control with masks and per-region prompts")
 except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Qwen-WAN Bridge nodes: {e}")
-
-# Minimal Keyframe V2V nodes (Technical Parameters)
-try:
-    from .nodes.minimal_keyframe_v2v import (
-        MinimalKeyframeV2V,
-        DenoiseCurveVisualizer,
-        LatentStatisticsMonitor
-    )
-
-    NODE_CLASS_MAPPINGS["MinimalKeyframeV2V"] = MinimalKeyframeV2V
-    NODE_DISPLAY_NAME_MAPPINGS["MinimalKeyframeV2V"] = "Minimal Keyframe V2V (Technical)"
-
-    NODE_CLASS_MAPPINGS["DenoiseCurveVisualizer"] = DenoiseCurveVisualizer
-    NODE_DISPLAY_NAME_MAPPINGS["DenoiseCurveVisualizer"] = "Visualize Denoise Schedule"
-
-    NODE_CLASS_MAPPINGS["LatentStatisticsMonitor"] = LatentStatisticsMonitor
-    NODE_DISPLAY_NAME_MAPPINGS["LatentStatisticsMonitor"] = "Monitor Latent Statistics"
-
-    print("[QwenImageWanBridge] Loaded Minimal Keyframe V2V nodes")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Minimal Keyframe V2V nodes: {e}")
-
-# Multi-Reference nodes
-try:
-    from .nodes.qwen_multi_reference import QwenMultiReferenceHandler
-
-    NODE_CLASS_MAPPINGS["QwenMultiReferenceHandler"] = QwenMultiReferenceHandler
-    NODE_DISPLAY_NAME_MAPPINGS["QwenMultiReferenceHandler"] = "Multi-Reference Handler"
-
-    print("[QwenImageWanBridge] Loaded Multi-Reference handler")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Multi-Reference handler: {e}")
+    print(f"[QwenImageWanBridge] Failed to load EliGen nodes: {e}")
 
 # Token Analysis nodes
 try:
@@ -141,64 +101,14 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Token Analysis nodes: {e}")
 
-# ============================================================================
-# SPATIAL INPAINTING NODES - Mask-based inpainting system
-# ============================================================================
-
-try:
-    from .nodes.qwen_mask_processor import QwenMaskProcessor
-    from .nodes.qwen_inpaint_sampler import QwenInpaintSampler
-
-    NODE_CLASS_MAPPINGS["QwenMaskProcessor"] = QwenMaskProcessor
-    NODE_DISPLAY_NAME_MAPPINGS["QwenMaskProcessor"] = "Qwen Mask Processor"
-
-    NODE_CLASS_MAPPINGS["QwenInpaintSampler"] = QwenInpaintSampler
-    NODE_DISPLAY_NAME_MAPPINGS["QwenInpaintSampler"] = "Qwen Inpainting Sampler"
-
-    print("[QwenImageWanBridge] Loaded Spatial Inpainting nodes (2 nodes)")
-    print("[QwenImageWanBridge] FEATURES: Mask-based inpainting with diffusers blending pattern")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Spatial Inpainting nodes: {e}")
+# Inpainting nodes removed - not core to image edit
 
 # Note: Experimental multi-frame nodes have been archived
 # Use Multi-Reference Handler with "index" mode for multi-frame support
 
-# ============================================================================
-# PATCHES - Apply monkey patches for multi-frame support
-# ============================================================================
+# Patches removed - functionality integrated into main encoder
 
-try:
-    from .nodes import qwen_encoder_patch
-    print("[QwenImageWanBridge] Applied encoder patches for multi-frame support")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Could not apply patches: {e}")
-
-# ============================================================================
-# NATIVE NODES - Direct Qwen2.5-VL bypassing ComfyUI CLIP limitations  
-# ============================================================================
-
-try:
-    from .nodes.native.qwen_native_loader import QwenNativeLoader
-    from .nodes.native.qwen_native_encoder import QwenNativeEncoder
-    from .nodes.native.qwen_context_processor import QwenContextProcessor
-    from .nodes.native.qwen_validation_tools import QwenValidationTools
-
-    NODE_CLASS_MAPPINGS["QwenNativeLoader"] = QwenNativeLoader
-    NODE_DISPLAY_NAME_MAPPINGS["QwenNativeLoader"] = "Qwen Native Loader"
-
-    NODE_CLASS_MAPPINGS["QwenNativeEncoder"] = QwenNativeEncoder
-    NODE_DISPLAY_NAME_MAPPINGS["QwenNativeEncoder"] = "Qwen Native Encoder"
-
-    NODE_CLASS_MAPPINGS["QwenContextProcessor"] = QwenContextProcessor
-    NODE_DISPLAY_NAME_MAPPINGS["QwenContextProcessor"] = "Qwen Context Processor"
-
-    NODE_CLASS_MAPPINGS["QwenValidationTools"] = QwenValidationTools
-    NODE_DISPLAY_NAME_MAPPINGS["QwenValidationTools"] = "Qwen Validation Tools"
-
-    print("[QwenImageWanBridge] Loaded Native Qwen nodes (4 nodes)")
-    print("[QwenImageWanBridge] FIXES: Template dropping, Vision duplication, Processor path, Context images")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Native nodes: {e}")
+# Native nodes removed - incomplete implementation
 
 # ============================================================================
 # EXPORTS
@@ -208,28 +118,7 @@ __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
 
 print(f"[QwenImageWanBridge] Total nodes loaded: {len(NODE_CLASS_MAPPINGS)}")
 
-# ============================================================================
-# STANDALONE ENGINE - Qwen Image Engine based on DiffSynth-Engine architecture
-# ============================================================================
-
-try:
-    from .engine.nodes.engine_loader import QwenEngineLoader
-    from .engine.nodes.engine_encoder import QwenEngineEncoder  
-    from .engine.nodes.engine_sampler import QwenEngineSampler
-
-    NODE_CLASS_MAPPINGS["QwenEngineLoader"] = QwenEngineLoader
-    NODE_DISPLAY_NAME_MAPPINGS["QwenEngineLoader"] = "Qwen Engine Loader"
-
-    NODE_CLASS_MAPPINGS["QwenEngineEncoder"] = QwenEngineEncoder
-    NODE_DISPLAY_NAME_MAPPINGS["QwenEngineEncoder"] = "Qwen Engine Encoder"
-
-    NODE_CLASS_MAPPINGS["QwenEngineSampler"] = QwenEngineSampler
-    NODE_DISPLAY_NAME_MAPPINGS["QwenEngineSampler"] = "Qwen Engine Sampler"
-
-    print("[QwenImageWanBridge] Loaded Standalone Qwen Engine nodes (3 nodes)")
-    print("[QwenImageWanBridge] Based on DiffSynth-Engine architecture with proper reference latent handling")
-except Exception as e:
-    print(f"[QwenImageWanBridge] Failed to load Engine nodes: {e}")
+# Engine nodes removed - incomplete implementation
 
 # ============================================================================
 # AUTO DEBUG TRACING - Apply patches automatically

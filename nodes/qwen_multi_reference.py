@@ -1,6 +1,7 @@
 """
 Multi-Reference Image Handler for Qwen
-Combines multiple images into a single high-resolution composite canvas.
+[DEPRECATED] Use Image Batch node instead for multiple images.
+This node is kept for backward compatibility only.
 """
 
 import torch
@@ -10,6 +11,7 @@ import logging
 import math
 
 logger = logging.getLogger(__name__)
+logger.warning("[DEPRECATED] QwenMultiReferenceHandler is deprecated. Use Image Batch node to combine multiple images, then connect to QwenVLTextEncoder.")
 
 class QwenMultiReferenceHandler:
     """
@@ -54,24 +56,10 @@ class QwenMultiReferenceHandler:
     RETURN_NAMES = ("images",)
     FUNCTION = "create_composite_canvas"
     CATEGORY = "QwenImage/Reference"
-    TITLE = "Multi-Reference Canvas Composer"
-    DESCRIPTION = """Combines multiple images into a single high-resolution canvas for spatial reference.
-
-Resize modes:
-• match_first: resize all to image1 dimensions (may distort)
-• common_height: same height, preserve aspect ratios (uniform dimensions in grid mode)  
-• common_width: same width, preserve aspect ratios (uniform dimensions in grid mode)
-• largest_dims: resize all to largest width/height found
-• qwen_smart_resize: official Qwen 28px alignment with smart pixel constraints
-• diffsynth_auto_resize: DiffSynth 32px alignment with target pixel area
-
-Composition methods:
-• 'concat' creates a side-by-side image
-• 'grid' creates a 2x2 image layout (requires uniform dimensions)
-• 'offset' creates a weighted blend
-• 'native_multi' keeps images separate for native Qwen2.5-VL processing
-
-The output is either a single composite or multiple separate images."""
+    TITLE = "[DEPRECATED] Multi-Reference Composer"
+    DESCRIPTION = """[DEPRECATED] Use Image Batch node instead.
+This node is kept for backward compatibility.
+For new workflows, use Image Batch to combine multiple images."""
 
     def qwen_smart_resize(self, width: int, height: int, min_pixels: int = 4 * 28 * 28, max_pixels: int = 16384 * 28 * 28, factor: int = 28) -> Tuple[int, int]:
         """
@@ -235,20 +223,28 @@ The output is either a single composite or multiple separate images."""
                     # Grid mode requires uniform dimensions
                     new_w, new_h = target_w, target_h
                 else:
-                    # Keep aspect ratio, adjust width based on common height
-                    aspect_ratio = img.shape[2] / img.shape[1]  # w/h
-                    new_h = target_h
-                    new_w = int(target_h * aspect_ratio)
+                    # For native_multi, must have uniform dimensions
+                    if reference_method == "native_multi":
+                        new_w, new_h = target_w, target_h
+                    else:
+                        # Keep aspect ratio, adjust width based on common height
+                        aspect_ratio = img.shape[2] / img.shape[1]  # w/h
+                        new_h = target_h
+                        new_w = int(target_h * aspect_ratio)
                 
             elif resize_mode == "common_width":
                 if reference_method == "grid":
                     # Grid mode requires uniform dimensions
                     new_w, new_h = target_w, target_h
                 else:
-                    # Keep aspect ratio, adjust height based on common width  
-                    aspect_ratio = img.shape[1] / img.shape[2]  # h/w
-                    new_w = target_w
-                    new_h = int(target_w * aspect_ratio)
+                    # For native_multi, must have uniform dimensions
+                    if reference_method == "native_multi":
+                        new_w, new_h = target_w, target_h
+                    else:
+                        # Keep aspect ratio, adjust height based on common width
+                        aspect_ratio = img.shape[1] / img.shape[2]  # h/w
+                        new_w = target_w
+                        new_h = int(target_w * aspect_ratio)
                 
             elif resize_mode == "largest_dims":
                 # Stretch to largest dimensions (may distort)
@@ -323,30 +319,40 @@ The output is either a single composite or multiple separate images."""
         elif reference_method == "native_multi":
             # Return multiple separate images for native Qwen2.5-VL processing
             logger.info(f"[Multi-Reference] Returning {len(standardized_images)} separate images for native processing.")
-            # For native_multi, we need uniform dimensions to stack properly
-            # Use the resize_mode to ensure all images have the same dimensions
-            if resize_mode in ["common_height", "common_width"] and len(standardized_images) > 1:
-                # Check if dimensions are actually uniform
+
+            # CRITICAL: For native_multi, ALL images MUST have uniform dimensions
+            # Otherwise, VAE encoding will produce different sized latents
+            if len(standardized_images) > 1:
                 first_shape = standardized_images[0].shape
                 shapes_match = all(img.shape == first_shape for img in standardized_images)
+
                 if not shapes_match:
-                    logger.warning(f"[Multi-Reference] native_multi requires uniform dimensions. Switching to 'largest_dims' resize mode.")
-                    # Re-standardize all images to largest dimensions
-                    target_h = max(img.shape[1] for img in images)
-                    target_w = max(img.shape[2] for img in images)
-                    
-                    standardized_images = []
-                    for i, img in enumerate(images):
-                        # Resize to largest dimensions
-                        resized_img_chw = comfy.utils.common_upscale(
-                            img.movedim(-1, 1), # HWC to CHW for upscale function
-                            target_w, target_h, upscale_method, "disabled"
-                        )
-                        standardized_images.append(resized_img_chw.movedim(1, -1)) # CHW to HWC
-                    
-                    logger.info(f"[Multi-Reference] Re-standardized all images to {target_w}x{target_h}")
-            
-            # Stack all images along batch dimension (now they should have matching dimensions)
+                    logger.warning(f"[Multi-Reference] native_multi detected non-uniform dimensions!")
+                    for i, img in enumerate(standardized_images):
+                        logger.warning(f"  Image {i}: {img.shape}")
+
+                    # Force uniform dimensions using the first image's size
+                    # This ensures consistent latent dimensions after VAE encoding
+                    target_h, target_w = standardized_images[0].shape[1:3]
+                    logger.info(f"[Multi-Reference] Forcing all images to {target_w}x{target_h} for uniform latents")
+
+                    fixed_images = []
+                    for i, img in enumerate(standardized_images):
+                        if img.shape[1:3] != (target_h, target_w):
+                            # Resize to match first image
+                            resized_img_chw = comfy.utils.common_upscale(
+                                img.movedim(-1, 1), # HWC to CHW
+                                target_w, target_h, upscale_method, "disabled"
+                            )
+                            fixed_images.append(resized_img_chw.movedim(1, -1)) # CHW to HWC
+                            logger.info(f"  Resized image {i} from {img.shape} to match target")
+                        else:
+                            fixed_images.append(img)
+
+                    standardized_images = fixed_images
+
+            # Stack all images along batch dimension
             composite_image = torch.cat(standardized_images, dim=0)
+            logger.info(f"[Multi-Reference] Final output: {composite_image.shape}")
 
         return (composite_image,)
