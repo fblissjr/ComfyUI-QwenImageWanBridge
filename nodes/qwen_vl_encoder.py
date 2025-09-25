@@ -238,7 +238,6 @@ class QwenVLTextEncoder:
         # Build vision tokens for image editing
         if mode == "text_to_image":
             vision_tokens = ""
-            formatted_text = text
         else:
             # Build vision tokens based on number of images
             if num_images == 0:
@@ -250,16 +249,25 @@ class QwenVLTextEncoder:
                     f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
                     for i in range(num_images)
                 ])
-            formatted_text = f"{vision_tokens}{text}"
 
-        # Get drop index based on mode and whether system prompt exists
-        # DiffSynth drops 34 for text_to_image, 64 for image_edit
-        drop_idx = 0
-        if system_prompt:
-            drop_idx = 34 if mode == "text_to_image" else 64
+        # Format the text with system prompt if we have a processor and system prompt
+        # This includes the full template that will be tokenized, then we drop tokens after encoding
+        if self.processor and system_prompt:
+            # Use processor to format with system prompt wrapper
+            formatted_text = self.processor.format_template(text, system_prompt, vision_tokens)
+            # Get drop index from processor
+            drop_idx = self.processor.get_drop_index(mode)
+        else:
+            # Fallback: no system prompt wrapper, no dropping
+            formatted_text = f"{vision_tokens}{text}" if mode != "text_to_image" else text
+            drop_idx = 0
 
         if debug_mode:
             logger.info(f"[Encoder] Mode: {mode}, Images: {num_images}, Drop index: {drop_idx}")
+            if self.processor and system_prompt:
+                logger.info(f"[Encoder] Using processor with system prompt formatting and token dropping")
+            elif system_prompt:
+                logger.info(f"[Encoder] WARNING: System prompt provided but processor not available - no token dropping!")
             if num_images > 0:
                 for i, img in enumerate(vision_images):
                     h, w = img.shape[1], img.shape[2]
@@ -272,9 +280,9 @@ class QwenVLTextEncoder:
         # Encode and then drop embeddings (like DiffSynth does)
         conditioning = clip.encode_from_tokens_scheduled(tokens)
 
-        # Apply token dropping AFTER encoding if we have a system prompt
+        # Apply token dropping AFTER encoding if we formatted with system prompt
         # This matches DiffSynth's approach: encode first, then drop
-        if drop_idx > 0 and system_prompt:
+        if drop_idx > 0:
             # Access the actual conditioning data
             # ComfyUI conditioning format: [[embeddings, dict]]
             for i, cond in enumerate(conditioning):

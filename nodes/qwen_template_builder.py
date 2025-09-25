@@ -24,6 +24,8 @@ class QwenTemplateBuilderV2:
                     "default_t2i",
                     "default_edit",
                     "multi_image_edit",
+                    "face_replacement",
+                    "identity_transfer",
                     "structured_json_edit",
                     "xml_spatial_edit",
                     "natural_spatial_edit",
@@ -118,6 +120,18 @@ class QwenTemplateBuilderV2:
             "system": "Follow the coordinate-based editing instructions. When you see bounding box coordinates in brackets like [x1,y1,x2,y2], these specify exact pixel locations for modifications. Apply changes only within these regions while preserving all other areas.",
             "vision": True,
             "mode": "image_edit"
+        },
+        "face_replacement": {
+            "system": "Task: Perform precise head and facial feature replacement. Picture 1 contains the source identity (face, facial features, skin tone, hair). Picture 2 contains the target body and scene. Extract from Picture 1: Complete facial structure, all facial features, exact skin tone and texture, complete hairstyle and color, any facial hair or head accessories. Preserve from Picture 2: Everything below the neck line including body posture, clothing, hands, background, lighting conditions, and shadows. Critical: Completely replace Picture 2's head with Picture 1's head. Do not blend or mix facial features. Ensure natural neck integration and lighting consistency.",
+            "vision": True,
+            "mode": "image_edit",
+            "use_picture_format": True
+        },
+        "identity_transfer": {
+            "system": "Execute complete identity transfer preserving Picture 1's person's exact appearance. Analysis Phase: Picture 1 - Capture complete facial identity including bone structure, features, skin tone, age markers, hair details. Picture 2 - Identify pose, clothing, environment, lighting angle and intensity. Synthesis Phase: Place Picture 1's person into Picture 2's exact scenario. The final image must look as if Picture 1's person was originally photographed in Picture 2's setting. Maintain photorealistic quality with proper shadow and light integration.",
+            "vision": True,
+            "mode": "image_edit",
+            "use_picture_format": True
         }
     }
 
