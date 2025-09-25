@@ -1,20 +1,29 @@
 # Changelog
 
-## v2.1 System Prompt Separation Fix
+## v2.2 Token Dropping & N-Image Support
+
+### Added
+- **Proper token dropping implementation** matching DiffSynth/Diffusers behavior
+  - System prompt included during encoding for context
+  - First 34/64 embeddings dropped after encoding
+  - Prevents text contamination while maintaining quality
+- **N-image support** in Template Builder (0-100 images)
+  - Automatic warnings at 4+ and 10+ images
+  - 0 = auto-detect mode for future implementation
+- **Simplified architecture** following DRY principles
+  - Template Builder: Single source for system prompts
+  - Processor: Minimal formatter (80 lines)
+  - Encoder: Handles all technical encoding/dropping
 
 ### Fixed
-- **System prompt appearing in generated images** - Critical bug where template system prompts were being included in the generation prompt
-- **Template Builder and Encoder separation**:
-  - Template Builder now outputs raw `prompt` and `system_prompt` separately
-  - Encoder handles all template formatting internally
-  - No more duplicated logic between nodes
-- **Workflow connections**: Updated example workflows to properly connect Template Builder outputs to Encoder inputs
+- System prompts now provide proper context without appearing in images
+- Token dropping happens after encoding (was missing entirely)
 
-### Technical Details
-- Template Builder outputs: `prompt`, `system_prompt`, `mode_info`
-- Encoder accepts `system_prompt` as separate input parameter
-- System prompt is properly formatted with chat templates but separated from generation content
-- Debug mode shows clear separation of system vs generation prompts
+## v2.1 System Prompt Separation
+
+### Fixed
+- **System prompt appearing in generated images** - Template formatting issue
+- **Template Builder and Encoder separation** - No more duplicated logic
 
 ## v2.0 Qwen-Image-Edit-2509 Multi-Image Support
 

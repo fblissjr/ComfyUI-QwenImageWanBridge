@@ -5,27 +5,28 @@ Advanced nodes for Qwen-Image-Edit with multi-image support, more flexibility ar
 ## Features
 
 ### Core Capabilities
-- **Qwen-Image-Edit-2509 Support**: Multi-image editing with "Picture X:" references
-- **System Prompt Separation**: Clean template system without prompt contamination
-- **Multi-Image Processing**: Via ComfyUI's Image Batch node
-- **Debug Modes**: Detailed logging for troubleshooting
+- **Qwen-Image-Edit-2509**: Multi-image editing with "Picture X:" references
+- **Proper Token Dropping**: Matches DiffSynth/Diffusers (drops first 34/64 embeddings)
+- **N-Image Support**: Template Builder supports 0-100 images with warnings
+- **Clean Architecture**: DRY principles, single source of truth for templates
+- **Debug Modes**: Detailed logging shows dropping, ordering, formatting
 
 ### Key Nodes
 
 #### QwenVLTextEncoder
-Main text encoder with DiffSynth/Diffusers reference alignment.
-- 32-pixel resolution alignment for aligned vision processing
+Main text encoder with proper token dropping.
+- Token dropping after encoding (34 for text, 64 for image_edit)
 - Multi-image support via Image Batch input
-- Automatic "Picture X:" formatting for Qwen-Image-Edit-2509
-- Separate system_prompt input for template customization
-- Debug mode showing tokenization and formatting
+- Automatic "Picture X:" formatting for N images
+- System prompt from Template Builder (single source)
+- Debug mode shows embedding dropping in action
 
 #### QwenTemplateBuilder
-System prompt generator with clean separation from encoder.
-- Outputs raw `prompt` and `system_prompt` separately
+Single source of truth for system prompts.
+- Now supports 0-100 images (was limited to 4)
+- Automatic warnings at 4+ and 10+ images
 - `custom_system`: Override ANY template's system prompt
-- `show_all_prompts`: View all available templates
-- Uses official DiffSynth-Studio system prompts
+- Official DiffSynth-Studio templates included
 
 ### Helper Nodes
 - **QwenVLEmptyLatent**: Creates 16-channel empty latents
@@ -120,9 +121,10 @@ See [MULTI_IMAGE_ORDERING.md](MULTI_IMAGE_ORDERING.md) for detailed guide.
 - Entity control nodes (QwenEliGenEntityControl - untested with current models)
 - Token debugging tools (QwenTokenDebugger, QwenTokenAnalyzer)
 
-**Recent Fix (v2.1):**
-- System prompt separation prevents text contamination in generated images
-- Clean workflow connections between Template Builder and Encoder
+**Latest Updates (v2.2):**
+- Token dropping implementation matches DiffSynth/Diffusers exactly
+- Template Builder supports N images (0-100) with quality warnings
+- Clean DRY architecture: each component has single responsibility
 
 ## Requirements
 
