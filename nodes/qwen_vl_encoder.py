@@ -235,21 +235,28 @@ class QwenVLTextEncoder:
         # Simple processing: Template Builder provides system prompt, we handle technical bits
         num_images = len(vision_images) if vision_images else 0
 
-        # Get vision tokens and drop index from processor
-        vision_tokens = self.processor.get_vision_tokens(num_images)
-        drop_idx = self.processor.get_drop_index(mode)
-
-        # Format the full template (system prompt comes from Template Builder or defaults)
-        if system_prompt:
-            # Template Builder provided a system prompt
-            formatted_text = self.processor.format_template(text, system_prompt, vision_tokens)
+        # Build vision tokens for image editing
+        if mode == "text_to_image":
+            vision_tokens = ""
+            formatted_text = text
         else:
-            # No system prompt - fallback to avoid contamination
-            if mode == "text_to_image":
-                formatted_text = text
+            # Build vision tokens based on number of images
+            if num_images == 0:
+                vision_tokens = ""
+            elif num_images == 1:
+                vision_tokens = "<|vision_start|><|image_pad|><|vision_end|>"
             else:
-                formatted_text = f"{vision_tokens}{text}"
-            drop_idx = 0  # No dropping without proper template
+                vision_tokens = "".join([
+                    f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
+                    for i in range(num_images)
+                ])
+            formatted_text = f"{vision_tokens}{text}"
+
+        # Get drop index based on mode and whether system prompt exists
+        # DiffSynth drops 34 for text_to_image, 64 for image_edit
+        drop_idx = 0
+        if system_prompt:
+            drop_idx = 34 if mode == "text_to_image" else 64
 
         if debug_mode:
             logger.info(f"[Encoder] Mode: {mode}, Images: {num_images}, Drop index: {drop_idx}")
@@ -262,29 +269,25 @@ class QwenVLTextEncoder:
         # Tokenize with vision support
         tokens = clip.tokenize(formatted_text, images=vision_images if vision_images else [])
 
-        # Encode with optional embedding dropping
+        # Encode and then drop embeddings (like DiffSynth does)
+        conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+        # Apply token dropping AFTER encoding if we have a system prompt
+        # This matches DiffSynth's approach: encode first, then drop
         if drop_idx > 0 and system_prompt:
-            # Temporarily patch encoder to drop system prompt embeddings
-            original_encode = clip.cond_stage_model.encode_token_weights
-
-            def drop_embeddings(token_weight_pairs):
-                result = original_encode(token_weight_pairs)
-                # Drop first N embeddings to remove system prompt
-                if hasattr(result, 'shape') and len(result.shape) >= 2:
-                    result = result[:, drop_idx:, ...]
-                    if debug_mode:
-                        logger.info(f"[Encoder] Dropped first {drop_idx} embeddings")
-                return result
-
-            # Patch, encode, restore
-            clip.cond_stage_model.encode_token_weights = drop_embeddings
-            try:
-                conditioning = clip.encode_from_tokens_scheduled(tokens)
-            finally:
-                clip.cond_stage_model.encode_token_weights = original_encode
-        else:
-            # Standard encoding without dropping
-            conditioning = clip.encode_from_tokens_scheduled(tokens)
+            # Access the actual conditioning data
+            # ComfyUI conditioning format: [[embeddings, dict]]
+            for i, cond in enumerate(conditioning):
+                if len(cond) >= 1 and isinstance(cond[0], torch.Tensor):
+                    original_shape = cond[0].shape
+                    # Drop the first drop_idx embeddings from sequence dimension
+                    # Shape is typically [batch, sequence, hidden_dim]
+                    if len(cond[0].shape) >= 2 and cond[0].shape[1] > drop_idx:
+                        cond[0] = cond[0][:, drop_idx:, ...]
+                        if debug_mode:
+                            logger.info(f"[Encoder] Dropped first {drop_idx} embeddings: {original_shape} -> {cond[0].shape}")
+                    elif debug_mode:
+                        logger.info(f"[Encoder] Warning: Not enough tokens to drop. Shape: {original_shape}, drop_idx: {drop_idx}")
 
         # Add reference latents to conditioning if available
         if ref_latents and COMFY_AVAILABLE:
