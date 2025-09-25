@@ -47,9 +47,9 @@ class QwenTemplateBuilderV2:
                 }),
                 "num_images": ("INT", {
                     "default": 1,
-                    "min": 1,
-                    "max": 4,
-                    "tooltip": "Number of images to process (generates correct number of <|image_pad|> tokens)"
+                    "min": 0,
+                    "max": 100,
+                    "tooltip": "Number of images to process (0=auto-detect, 1-100=manual). Note: 4+ images may degrade quality."
                 }),
             }
         }
@@ -124,6 +124,12 @@ class QwenTemplateBuilderV2:
 
     def build(self, prompt: str, template_mode: str, custom_system: str, num_images: int) -> Tuple[str, str, str]:
         """Output the raw prompt and system prompt for the encoder to use"""
+
+        # Warn about quality degradation with many images
+        if num_images > 10:
+            print(f"[Template Builder] Warning: {num_images} images is significantly beyond model training. Expect unpredictable results.")
+        elif num_images > 4:
+            print(f"[Template Builder] Warning: Using {num_images} images. Quality may degrade with 4+ images (model was trained on 2-3).")
 
         # Handle show all prompts mode - displays all available system prompts
         if template_mode == "show_all_prompts":

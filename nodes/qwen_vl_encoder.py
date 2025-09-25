@@ -14,6 +14,14 @@ import folder_paths
 
 logger = logging.getLogger(__name__)
 
+# Import our custom processor for proper token dropping
+try:
+    from .qwen_processor_v2 import QwenProcessorV2
+    PROCESSOR_AVAILABLE = True
+except ImportError:
+    PROCESSOR_AVAILABLE = False
+    logger.warning("QwenProcessorV2 not available - will use simplified approach")
+
 # Try to import ComfyUI's utilities
 try:
     import comfy.sd
@@ -111,6 +119,17 @@ class QwenVLTextEncoder:
     Text encoder for Qwen2.5-VL - DiffSynth/Diffusers compatible
     Handles single or multiple images with proper 32-pixel alignment
     """
+
+    def __init__(self):
+        """Initialize with processor for proper token dropping"""
+        self.processor = None
+        if PROCESSOR_AVAILABLE:
+            try:
+                self.processor = QwenProcessorV2()
+                logger.info("[QwenVLTextEncoder] Initialized with QwenProcessorV2 for proper token dropping")
+            except Exception as e:
+                logger.warning(f"[QwenVLTextEncoder] Failed to initialize processor: {e}")
+                self.processor = None
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -213,54 +232,59 @@ class QwenVLTextEncoder:
                     if debug_mode:
                         logger.info(f"[Encoder]        VAE: {vae_w}x{vae_h}, latent: {ref_latent.shape}")
 
-        # Determine system prompt to use
-        if system_prompt:
-            # Use the custom system prompt from Template Builder
-            system_text = system_prompt
-            if debug_mode:
-                logger.info("[Encoder] Using custom system prompt from Template Builder")
-        else:
-            # Use default system prompts based on mode
-            if mode == "text_to_image":
-                system_text = ("Describe the image by detailing the color, shape, size, texture, "
-                              "quantity, text, spatial relationships of the objects and background:")
-            else:  # image_edit
-                system_text = ("Describe the key features of the input image (color, shape, size, texture, objects, background), "
-                              "then explain how the user's text instruction should alter or modify the image. "
-                              "Generate a new image that meets the user's requirements while maintaining consistency "
-                              "with the original input where appropriate.")
+        # Simple processing: Template Builder provides system prompt, we handle technical bits
+        num_images = len(vision_images) if vision_images else 0
 
-        # Build the formatted template WITHOUT system prompt to avoid it appearing in images
-        # DiffSynth drops the system tokens after encoding, but we'll just not include them
-        if mode == "text_to_image":
-            formatted_text = text  # Just the raw prompt for text-to-image
-        else:  # image_edit
-            # Multi-image with Picture X: format (DiffSynth/Diffusers standard)
-            if len(vision_images) > 1:
-                vision_prompt = "".join([
-                    f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
-                    for i in range(len(vision_images))
-                ])
-                formatted_text = f"{vision_prompt}{text}"
+        # Get vision tokens and drop index from processor
+        vision_tokens = self.processor.get_vision_tokens(num_images)
+        drop_idx = self.processor.get_drop_index(mode)
+
+        # Format the full template (system prompt comes from Template Builder or defaults)
+        if system_prompt:
+            # Template Builder provided a system prompt
+            formatted_text = self.processor.format_template(text, system_prompt, vision_tokens)
+        else:
+            # No system prompt - fallback to avoid contamination
+            if mode == "text_to_image":
+                formatted_text = text
             else:
-                # Single image
-                formatted_text = f"<|vision_start|><|image_pad|><|vision_end|>{text}"
+                formatted_text = f"{vision_tokens}{text}"
+            drop_idx = 0  # No dropping without proper template
 
         if debug_mode:
-            logger.info(f"[Encoder] Applied {mode} template for {len(vision_images) or 0} images")
-            if len(vision_images) > 0:
-                logger.info("[Encoder] Image ordering:")
+            logger.info(f"[Encoder] Mode: {mode}, Images: {num_images}, Drop index: {drop_idx}")
+            if num_images > 0:
                 for i, img in enumerate(vision_images):
                     h, w = img.shape[1], img.shape[2]
-                    logger.info(f"  Picture {i+1}: {w}x{h} image")
-            logger.info(f"[Encoder] System prompt (not included in generation): {system_text[:100]}...")
-            logger.info(f"[Encoder] Text being tokenized: {formatted_text[:200]}...")
+                    logger.info(f"[Encoder]   Picture {i+1}: {w}x{h}")
+            logger.info(f"[Encoder] Template (first 150 chars): {formatted_text[:150]}...")
 
         # Tokenize with vision support
         tokens = clip.tokenize(formatted_text, images=vision_images if vision_images else [])
 
-        # Encode tokens to conditioning
-        conditioning = clip.encode_from_tokens_scheduled(tokens)
+        # Encode with optional embedding dropping
+        if drop_idx > 0 and system_prompt:
+            # Temporarily patch encoder to drop system prompt embeddings
+            original_encode = clip.cond_stage_model.encode_token_weights
+
+            def drop_embeddings(token_weight_pairs):
+                result = original_encode(token_weight_pairs)
+                # Drop first N embeddings to remove system prompt
+                if hasattr(result, 'shape') and len(result.shape) >= 2:
+                    result = result[:, drop_idx:, ...]
+                    if debug_mode:
+                        logger.info(f"[Encoder] Dropped first {drop_idx} embeddings")
+                return result
+
+            # Patch, encode, restore
+            clip.cond_stage_model.encode_token_weights = drop_embeddings
+            try:
+                conditioning = clip.encode_from_tokens_scheduled(tokens)
+            finally:
+                clip.cond_stage_model.encode_token_weights = original_encode
+        else:
+            # Standard encoding without dropping
+            conditioning = clip.encode_from_tokens_scheduled(tokens)
 
         # Add reference latents to conditioning if available
         if ref_latents and COMFY_AVAILABLE:
