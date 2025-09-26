@@ -437,10 +437,10 @@ class QwenSchedulerNode:
 # Node registration
 NODE_CLASS_MAPPINGS = {
     "QwenImageSamplerNode": QwenImageSamplerNode,
-    "QwenSchedulerNode": QwenSchedulerNode,
+    # QwenSchedulerNode removed - sampler has built-in FlowMatch scheduling
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "QwenImageSamplerNode": "Qwen Image Sampler (FlowMatch)",
-    "QwenSchedulerNode": "Qwen FlowMatch Scheduler",
+    # QwenSchedulerNode removed - not needed for workflow
 }

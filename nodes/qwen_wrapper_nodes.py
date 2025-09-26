@@ -37,17 +37,21 @@ class QwenImageEncodeWrapper:
             }
         }
 
-    RETURN_TYPES = ("QWEN_EDIT_LATENT",)
-    RETURN_NAMES = ("edit_latent",)
+    RETURN_TYPES = ("QWEN_EDIT_LATENTS",)
+    RETURN_NAMES = ("edit_latents",)
     FUNCTION = "encode"
     CATEGORY = "QwenImage/Wrappers"
-    TITLE = "Qwen Image Encode (Edit Latent)"
-    DESCRIPTION = "Encode reference images to edit latents for Qwen Image Edit"
+    TITLE = "Qwen Image Encode (Edit Latents)"
+    DESCRIPTION = "Encode reference images to edit latents (supports batched images)"
 
     def encode(self, vae, image, pad_to_even=True):
-        """Encode image to edit latents."""
+        """Encode image(s) to edit latents.
 
-        # VAE encode the image
+        Handles both single images and batched images.
+        For multiple images, use Image Batch node first.
+        """
+
+        # VAE encode the image(s) - handles batches automatically
         latent = vae.encode(image[:,:,:,:3])
 
         # Check if we need to pad for even dimensions
@@ -60,63 +64,26 @@ class QwenImageEncodeWrapper:
                 latent = F.pad(latent, (0, W_pad - W, 0, H_pad - H), mode='replicate')
                 logger.info(f"Padded edit latent from [{B}, {C}, {H}, {W}] to [{B}, {C}, {H_pad}, {W_pad}]")
 
+        # For batched images, split them into a list for concatenation
+        if latent.shape[0] > 1:
+            edit_latents = [latent[i:i+1] for i in range(latent.shape[0])]
+            logger.info(f"Split batch of {len(edit_latents)} edit latents")
+        else:
+            edit_latents = [latent]
+
         # Wrap in dict for type safety
-        edit_latent = {
-            "latent": latent,
+        result = {
+            "latents": edit_latents,  # List of latents for concatenation
+            "count": len(edit_latents),
             "is_edit": True,
             "original_shape": latent.shape
         }
 
-        return (edit_latent,)
+        return (result,)
 
 
-class QwenImageCombineLatents:
-    """
-    Combine multiple edit latents into a list for the model.
-
-    This node allows combining up to 4 edit latents that will be
-    concatenated in the sequence dimension.
-    """
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {},
-            "optional": {
-                "edit_latent1": ("QWEN_EDIT_LATENT",),
-                "edit_latent2": ("QWEN_EDIT_LATENT",),
-                "edit_latent3": ("QWEN_EDIT_LATENT",),
-                "edit_latent4": ("QWEN_EDIT_LATENT",),
-            }
-        }
-
-    RETURN_TYPES = ("QWEN_EDIT_LATENTS",)
-    RETURN_NAMES = ("edit_latents",)
-    FUNCTION = "combine"
-    CATEGORY = "QwenImage/Wrappers"
-    TITLE = "Qwen Combine Edit Latents"
-    DESCRIPTION = "Combine multiple edit latents for multi-image editing"
-
-    def combine(self, edit_latent1=None, edit_latent2=None,
-                edit_latent3=None, edit_latent4=None):
-        """Combine edit latents into a list."""
-
-        latents = []
-        for latent in [edit_latent1, edit_latent2, edit_latent3, edit_latent4]:
-            if latent is not None:
-                latents.append(latent["latent"])
-
-        if not latents:
-            return (None,)
-
-        # Return as wrapped list
-        edit_latents = {
-            "latents": latents,
-            "count": len(latents)
-        }
-
-        logger.info(f"Combined {len(latents)} edit latents")
-        return (edit_latents,)
+# DEPRECATED: QwenImageCombineLatents removed
+# Use Image Batch node instead to batch images before VAE encoding
 
 
 class QwenImageModelWithEdit:
@@ -280,7 +247,6 @@ class QwenDebugLatents:
             "required": {},
             "optional": {
                 "main_latent": ("LATENT",),
-                "edit_latent": ("QWEN_EDIT_LATENT",),
                 "edit_latents": ("QWEN_EDIT_LATENTS",),
             }
         }
@@ -292,7 +258,7 @@ class QwenDebugLatents:
     DESCRIPTION = "Debug latent dimensions and properties"
     OUTPUT_NODE = True
 
-    def debug(self, main_latent=None, edit_latent=None, edit_latents=None):
+    def debug(self, main_latent=None, edit_latents=None):
         """Debug latent information."""
 
         print("\n" + "="*60)
@@ -314,13 +280,6 @@ class QwenDebugLatents:
             print(f"    Width {W}: {'✓ Even' if W % 2 == 0 else '✗ Odd (needs padding)'}")
             print(f"  Pixel dimensions: {H*8}x{W*8}")
 
-        if edit_latent is not None:
-            latent = edit_latent["latent"]
-            print(f"\nEdit Latent:")
-            print(f"  Shape: {latent.shape}")
-            print(f"  Original shape: {edit_latent.get('original_shape', 'Unknown')}")
-            print(f"  Is edit: {edit_latent.get('is_edit', False)}")
-
         if edit_latents is not None:
             print(f"\nEdit Latents Collection:")
             print(f"  Count: {edit_latents['count']}")
@@ -335,15 +294,15 @@ class QwenDebugLatents:
 # Node registration
 NODE_CLASS_MAPPINGS = {
     "QwenImageEncodeWrapper": QwenImageEncodeWrapper,
-    "QwenImageCombineLatents": QwenImageCombineLatents,
+    # QwenImageCombineLatents removed - use Image Batch node instead
     "QwenImageModelWithEdit": QwenImageModelWithEdit,
     "QwenImageSamplerWithEdit": QwenImageSamplerWithEdit,
     "QwenDebugLatents": QwenDebugLatents,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "QwenImageEncodeWrapper": "Qwen Image Encode (Edit Latent)",
-    "QwenImageCombineLatents": "Qwen Combine Edit Latents",
+    "QwenImageEncodeWrapper": "Qwen Image Encode (Edit Latents)",
+    # QwenImageCombineLatents removed - use Image Batch node instead
     "QwenImageModelWithEdit": "Qwen Model with Edit Latents",
     "QwenImageSamplerWithEdit": "Qwen Sampler with Edit",
     "QwenDebugLatents": "Qwen Debug Latents",

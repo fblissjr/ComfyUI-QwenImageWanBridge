@@ -48,7 +48,7 @@ This project implements Qwen-Image-Edit model support for ComfyUI, enabling text
 ### Partially Working
 - **Multi-image editing**: Works for 1-3 images, issues with 4+ due to memory/processing
 - **Advanced encoder**: Resolution weighting works, memory optimization experimental
-- **Wrapper nodes**: Load models but dimension mismatches with samplers
+- **Wrapper nodes**: Independent implementation using transformers/diffusers (no DiffSynth dependency)
 
 ### Experimental
 - **EliGen Entity Control**: Code complete but untested with current models
@@ -56,7 +56,7 @@ This project implements Qwen-Image-Edit model support for ComfyUI, enabling text
 - **Multi-reference handler**: Deprecated in favor of Image Batch node
 
 ### Known Issues
-- **Dimension mismatches** between wrapper loaders and ComfyUI samplers
+- **Wrapper nodes**: Not fully tested, may have integration issues with ComfyUI samplers
 - **Reference latents** pass through conditioning but may have shape issues
 - **Token dropping** works but exact indices may need tuning
 
@@ -281,12 +281,13 @@ if isinstance(video_fhw, list):
 ### Dependencies
 - ComfyUI internals: comfy.sd, comfy.utils, node_helpers
 - External: KJNodes for Image Batch functionality
-- Python: transformers (for tokenizer if needed)
+- Python: transformers, diffusers (for wrapper nodes)
 
 ### Wrapper vs Native
-- **Native**: Uses ComfyUI's internal CLIP system (working)
-- **Wrapper**: Attempts to load HuggingFace models directly (broken)
-- Recommendation: Use native nodes for now
+- **Native**: Uses ComfyUI's internal CLIP system (working, recommended)
+- **Wrapper**: Independent implementation using transformers/diffusers (experimental)
+- **Key Difference**: Wrapper implements DiffSynth-style forward pass with 2x2 packing
+- Recommendation: Use native nodes unless you need exact DiffSynth behavior
 
 ## Debug Features
 
@@ -331,31 +332,38 @@ if isinstance(video_fhw, list):
 12. **QwenTokenAnalyzer** - Standalone analyzer
 13. **QwenDebugController** - Master debug control
 
-### Wrapper Nodes (Broken)
-14. **QwenImageDiTLoaderWrapper** - DiT model loader
-15. **QwenVLTextEncoderLoaderWrapper** - Text encoder loader
-16. **QwenImageVAELoaderWrapper** - VAE loader
+### Wrapper Nodes (Experimental - Not Fully Tested)
+14. **QwenImageDiTLoaderWrapper** - DiT model loader (transformers)
+15. **QwenVLTextEncoderLoaderWrapper** - Text encoder loader (transformers)
+16. **QwenImageVAELoaderWrapper** - VAE loader (diffusers/ComfyUI)
 17. **QwenModelManagerWrapper** - Pipeline loader
-18. **QwenImageSamplerNode** - FlowMatch sampler
-19. **QwenSchedulerNode** - Scheduler configuration
+18. **QwenProcessorWrapper** - Qwen2VL processor node
+19. **QwenProcessedToEmbedding** - Convert processed to conditioning
+20. **QwenImageEncodeWrapper** - Encode images to edit latents
+21. **QwenImageModelWrapper** - DiffSynth-style forward pass
+22. **QwenImageSamplerNode** - FlowMatch sampler with built-in scheduling
+23. **QwenImageModelWithEdit** - Inject edit latents into model
+24. **QwenImageSamplerWithEdit** - Alternative sampler with edit support
+25. **QwenDebugLatents** - Debug latent dimensions
 
 ## Implementation Gaps
 
-### Missing from DiffSynth
-- Proper FlowMatch sampler integration
-- Complete pipeline loading
-- Inference optimization
-- Batch processing efficiency
+### Wrapper System Status
+- **Loaders**: Complete, use transformers/diffusers (no DiffSynth dependency)
+- **Processor nodes**: Registered and functional
+- **Model wrapper**: Implements DiffSynth forward pass with 2x2 packing
+- **Sampler**: FlowMatch scheduler with dynamic shift
+- **Testing**: Not fully validated with actual models
 
 ### Incomplete Features
 - Entity control (EliGen) untested
 - Spatial tokens not integrated with encoder
-- Multi-reference deprecated
-- Wrapper nodes non-functional
+- Wrapper nodes not tested end-to-end
+- Multi-image memory optimization
 
 ### Future Work Needed
-1. Fix dimension mismatch in reference latents
-2. Complete wrapper node integration
+1. Test wrapper nodes with actual Qwen models
+2. Verify FlowMatch sampler produces correct results
 3. Test and refine EliGen entity control
 4. Optimize multi-image processing
-5. Verify token dropping indices
+5. Document wrapper workflow examples

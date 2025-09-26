@@ -1,29 +1,41 @@
 # Changelog
 
-## v2.6 alpha - not yet working but in progress Wrapper Model Nodes
+## v2.6 alpha - Wrapper Nodes (Experimental)
 
 ### Added
-- **New Wrapper Model Loaders** following DiffSynth/WanVideoWrapper patterns:
-  - `QwenImageDiTLoaderWrapper` - Load Qwen-Image-Edit-2509 transformer
-  - `QwenVLTextEncoderLoaderWrapper` - Load Qwen2.5-VL with processor
-  - `QwenImageVAELoaderWrapper` - Load 16-channel VAE
+- **Wrapper Node System** - Independent implementation (11 nodes):
+  - `QwenImageDiTLoaderWrapper` - Load Qwen DiT using transformers
+  - `QwenVLTextEncoderLoaderWrapper` - Load Qwen2.5-VL using transformers
+  - `QwenImageVAELoaderWrapper` - Load 16-channel VAE using diffusers/ComfyUI
   - `QwenModelManagerWrapper` - Unified pipeline loader
-- **HuggingFace Support** - Download models directly or load from local files
-- **Flexible Precision** - Support for fp32, fp16, bf16, fp8, and quantization
-- **Device Management** - Proper CUDA/CPU/offload device handling
-- **Model Validation** - Automatic verification of 16-channel VAE compatibility
+  - `QwenProcessorWrapper` - Process text/images with Qwen2VL processor
+  - `QwenProcessedToEmbedding` - Convert processed tokens to conditioning
+  - `QwenImageEncodeWrapper` - Encode images to edit latents (batch support via Image Batch node)
+  - `QwenImageModelWrapper` - DiffSynth-style forward pass with 2x2 packing
+  - `QwenImageSamplerNode` - FlowMatch sampler with built-in scheduling
+  - `QwenImageModelWithEdit` - Inject edit latents into model
+  - `QwenImageSamplerWithEdit` - Alternative sampler with edit support
+  - `QwenDebugLatents` - Debug latent dimensions and flow
 
 ### Technical Implementation
-- Based on analysis of WanVideoWrapper loading patterns
-- Uses ComfyUI's folder_paths for model discovery
-- Wraps models in ComfyUI BaseModel for compatibility
-- Supports both DiffSynth from_pretrained and local safetensors loading
-- Proper integration with ComfyUI's model management system
+- **No DiffSynth dependency** - Uses only transformers, diffusers, torch
+- 2x2 patch packing operation following DiffSynth model_fn_qwen_image
+- Edit latent concatenation in sequence dimension (not conditioning)
+- FlowMatch scheduler with resolution-aware dynamic shift
+- Automatic padding for odd dimensions to enable patch processing
+- Direct edit latent injection bypassing ComfyUI's conditioning system
+- ComfyUI's standard VAE loader for 16-channel VAE (auto-detects config)
 
-### Documentation
-- Added WRAPPER_LOADING_PATTERNS.md documenting implementation details
-- Model folder structure and integration points documented
-- Error handling and common issues addressed
+### Fixed
+- Removed all DiffSynth imports from wrapper loaders
+- Fixed type mismatch: text encoder loader outputs `QWEN_TEXT_ENCODER` not `CLIP`
+- Removed redundant `QwenImageCombineLatents` node (use Image Batch instead)
+- Removed redundant `QwenSchedulerNode` (sampler has built-in scheduling)
+- VAE loader now uses ComfyUI's auto-config detection
+
+### Status
+- **Not fully tested** - Wrapper nodes are complete but haven't been validated with actual models
+- **Use Standard Nodes** - Recommended for production use (QwenVLCLIPLoader + QwenVLTextEncoder)
 
 ## v2.5 Power User Features & Auto-Labeling
 

@@ -148,11 +148,13 @@ try:
     )
     from .nodes.qwen_wrapper_sampler import (
         QwenImageSamplerNode,
-        QwenSchedulerNode,
+    )
+    from .nodes.qwen_wrapper_processor import (
+        QwenProcessorWrapper,
+        QwenProcessedToEmbedding,
     )
     from .nodes.qwen_wrapper_nodes import (
         QwenImageEncodeWrapper,
-        QwenImageCombineLatents,
         QwenImageModelWithEdit,
         QwenImageSamplerWithEdit,
         QwenDebugLatents,
@@ -173,15 +175,18 @@ try:
     NODE_CLASS_MAPPINGS["QwenImageSamplerNode"] = QwenImageSamplerNode
     NODE_DISPLAY_NAME_MAPPINGS["QwenImageSamplerNode"] = "Qwen Image Sampler (FlowMatch)"
 
-    NODE_CLASS_MAPPINGS["QwenSchedulerNode"] = QwenSchedulerNode
-    NODE_DISPLAY_NAME_MAPPINGS["QwenSchedulerNode"] = "Qwen FlowMatch Scheduler"
+    # Processor nodes for text/image processing
+    NODE_CLASS_MAPPINGS["QwenProcessorWrapper"] = QwenProcessorWrapper
+    NODE_DISPLAY_NAME_MAPPINGS["QwenProcessorWrapper"] = "Qwen Processor (Wrapper)"
 
-    # New wrapper nodes for edit latent handling
+    NODE_CLASS_MAPPINGS["QwenProcessedToEmbedding"] = QwenProcessedToEmbedding
+    NODE_DISPLAY_NAME_MAPPINGS["QwenProcessedToEmbedding"] = "Qwen Processed to Embedding (Wrapper)"
+
+    # Edit latent handling nodes
     NODE_CLASS_MAPPINGS["QwenImageEncodeWrapper"] = QwenImageEncodeWrapper
-    NODE_DISPLAY_NAME_MAPPINGS["QwenImageEncodeWrapper"] = "Qwen Image Encode (Edit Latent)"
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageEncodeWrapper"] = "Qwen Image Encode (Edit Latents)"
 
-    NODE_CLASS_MAPPINGS["QwenImageCombineLatents"] = QwenImageCombineLatents
-    NODE_DISPLAY_NAME_MAPPINGS["QwenImageCombineLatents"] = "Qwen Combine Edit Latents"
+    # QwenImageCombineLatents removed - use Image Batch node instead
 
     NODE_CLASS_MAPPINGS["QwenImageModelWithEdit"] = QwenImageModelWithEdit
     NODE_DISPLAY_NAME_MAPPINGS["QwenImageModelWithEdit"] = "Qwen Model with Edit Latents"
@@ -192,7 +197,7 @@ try:
     NODE_CLASS_MAPPINGS["QwenDebugLatents"] = QwenDebugLatents
     NODE_DISPLAY_NAME_MAPPINGS["QwenDebugLatents"] = "Qwen Debug Latents"
 
-    print("[QwenImageWanBridge] Loaded Wrapper Loader nodes (11 nodes)")
+    print("[QwenImageWanBridge] Loaded Wrapper nodes (11 nodes)")
     print("[QwenImageWanBridge] FEATURE: DiffSynth-style model loading with proper edit latent handling")
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load wrapper loader nodes: {e}")

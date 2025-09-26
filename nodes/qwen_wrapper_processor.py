@@ -171,8 +171,20 @@ class QwenProcessedToEmbedding:
         if text_encoder is None:
             raise ValueError("No text encoder provided.")
 
-        if processed is None or not isinstance(processed, dict):
-            raise ValueError("Invalid processed input.")
+        if processed is None:
+            raise ValueError("No processed input provided.")
+
+        # Handle different input types
+        if not isinstance(processed, dict):
+            # If it's a BatchEncoding or similar, convert to dict
+            if hasattr(processed, 'data'):
+                processed = processed.data
+            elif hasattr(processed, '__dict__'):
+                processed = vars(processed)
+            else:
+                logger.error(f"Processed input type: {type(processed)}")
+                logger.error(f"Processed input: {processed}")
+                raise ValueError(f"Invalid processed input type: {type(processed)}")
 
         # Get input IDs and attention mask
         input_ids = processed.get("input_ids")
@@ -181,10 +193,21 @@ class QwenProcessedToEmbedding:
         image_grid_thw = processed.get("image_grid_thw", None)
 
         if input_ids is None:
+            logger.error(f"Processed keys: {list(processed.keys())}")
             raise ValueError("No input_ids in processed output.")
 
         # Move to correct device
-        device = next(text_encoder.parameters()).device if hasattr(text_encoder, 'parameters') else 'cpu'
+        device = 'cpu'
+        if hasattr(text_encoder, 'parameters'):
+            try:
+                device = next(iter(text_encoder.parameters())).device
+            except (StopIteration, AttributeError):
+                # No parameters or empty, try to get device another way
+                if hasattr(text_encoder, 'device'):
+                    device = text_encoder.device
+                else:
+                    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
         input_ids = input_ids.to(device)
         if attention_mask is not None:
             attention_mask = attention_mask.to(device)

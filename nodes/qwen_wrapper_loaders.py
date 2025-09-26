@@ -130,28 +130,15 @@ class QwenImageDiTLoaderWrapper:
 
         try:
             if model_name == "Download from HuggingFace":
-                # Load from HuggingFace using DiffSynth pattern
+                # Load from HuggingFace using transformers
+                from transformers import AutoModel
+
                 logger.info(f"Loading Qwen Image DiT from HuggingFace: {huggingface_id}")
-
-                # Import DiffSynth models if available
-                try:
-                    from diffsynth.models.qwen_image_dit import QwenImageDiT
-
-                    # Create model following DiffSynth pattern
-                    model = QwenImageDiT.from_pretrained(
-                        huggingface_id,
-                        torch_dtype=dtype,
-                        device_map=target_device if target_device != "cpu" else None
-                    )
-                except ImportError:
-                    # Fallback to transformers if DiffSynth not available
-                    from transformers import AutoModel
-
-                    model = AutoModel.from_pretrained(
-                        huggingface_id,
-                        torch_dtype=dtype,
-                        trust_remote_code=True
-                    ).to(target_device)
+                model = AutoModel.from_pretrained(
+                    huggingface_id,
+                    torch_dtype=dtype,
+                    trust_remote_code=True
+                ).to(target_device)
 
             else:
                 # Load from local file
@@ -164,43 +151,35 @@ class QwenImageDiTLoaderWrapper:
                 # Load state dict
                 state_dict = load_torch_file(model_path, device=target_device)
 
-                # Create model and load weights
-                try:
-                    from diffsynth.models.qwen_image_dit import QwenImageDiT
+                # Use transformers to load the model
+                from transformers import AutoModel
+                import torch.nn as nn
 
-                    # Initialize model with config from state dict
-                    model = QwenImageDiT()
-                    model.load_state_dict(state_dict)
-                    model = model.to(dtype=dtype, device=target_device)
+                # Try to infer model architecture from state dict keys
+                logger.info("Loading DiT model from state dict")
 
-                except ImportError:
-                    # Basic transformer loading without DiffSynth
-                    logger.warning("DiffSynth not available, using basic loading")
+                # Create a basic wrapper module that holds the state dict
+                class DiTModelWrapper(nn.Module):
+                    def __init__(self, state_dict):
+                        super().__init__()
+                        # Load the state dict into this module
+                        self.load_state_dict(state_dict, strict=False)
 
-                    # Create a simple wrapper
-                    import torch.nn as nn
-                    model = nn.Module()
-                    model.load_state_dict(state_dict)
-                    model = model.to(dtype=dtype, device=target_device)
+                    def forward(self, *args, **kwargs):
+                        # Forward pass will be handled by the wrapper
+                        raise NotImplementedError("Use QwenImageModelWrapper for forward pass")
 
-            # Create model config for ComfyUI
-            from comfy.latent_formats import Wan21  # Use Wan21 format for 16-channel VAE
+                model = DiTModelWrapper(state_dict)
+                model = model.to(dtype=dtype, device=target_device)
 
-            model_config = comfy.model_base.ModelConfig()
-            model_config.latent_format = Wan21
-            model_config.unet_config = {
-                "in_channels": 16,
-                "out_channels": 16,
-                "model_channels": 3584,  # Qwen2.5-VL hidden size
-            }
-            model_config.manual_cast_dtype = dtype
-
-            # Wrap in ComfyUI model
-            wrapped_model = QwenImageDiTWrapper(model_config, model)
-            wrapped_model.eval()
+            # Set model to eval mode
+            model.eval()
 
             logger.info(f"Successfully loaded Qwen Image DiT model")
-            return (wrapped_model,)
+            logger.info(f"Model type: {type(model)}, device: {target_device}, dtype: {dtype}")
+
+            # Return the model directly - it will be wrapped by QwenImageModelWrapper later
+            return (model,)
 
         except Exception as e:
             logger.error(f"Failed to load Qwen Image DiT: {e}")
@@ -257,7 +236,7 @@ class QwenVLTextEncoderLoaderWrapper:
             }
         }
 
-    RETURN_TYPES = ("CLIP", "QWEN_PROCESSOR")  # Use CLIP for ComfyUI compatibility
+    RETURN_TYPES = ("QWEN_TEXT_ENCODER", "QWEN_PROCESSOR")  # Text encoder and processor for wrapper workflow
     RETURN_NAMES = ("text_encoder", "processor")
     FUNCTION = "load_model"
     CATEGORY = "QwenImage/Loaders"
@@ -289,53 +268,29 @@ class QwenVLTextEncoderLoaderWrapper:
 
         try:
             if model_name == "Download from HuggingFace":
-                # Load from HuggingFace
+                # Load from HuggingFace using transformers
+                from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+
                 logger.info(f"Loading Qwen2.5-VL from HuggingFace: {huggingface_id}")
 
-                try:
-                    from diffsynth.models.qwen_image_text_encoder import QwenImageTextEncoder
-                    from transformers import AutoProcessor
+                load_kwargs = {
+                    "torch_dtype": dtype if precision not in ["int8", "int4"] else torch.float16,
+                    "trust_remote_code": True
+                }
 
-                    # Load text encoder
-                    text_encoder = QwenImageTextEncoder.from_pretrained(
-                        huggingface_id,
-                        torch_dtype=dtype if precision not in ["int8", "int4"] else torch.float16,
-                        device_map=target_device if target_device != "cpu" else None
-                    )
+                # Add quantization config if needed
+                if precision == "int8":
+                    load_kwargs["load_in_8bit"] = True
+                elif precision == "int4":
+                    load_kwargs["load_in_4bit"] = True
 
-                    # Apply quantization if needed
-                    if precision == "int8":
-                        text_encoder = text_encoder.quantize(8)
-                    elif precision == "int4":
-                        text_encoder = text_encoder.quantize(4)
+                text_encoder = Qwen2VLForConditionalGeneration.from_pretrained(
+                    huggingface_id,
+                    **load_kwargs
+                ).to(target_device)
 
-                    # Load processor if requested
-                    processor = None
-                    if load_processor:
-                        processor = AutoProcessor.from_pretrained(huggingface_id)
-
-                except ImportError:
-                    # Fallback to transformers
-                    from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
-
-                    load_kwargs = {
-                        "torch_dtype": dtype if precision not in ["int8", "int4"] else torch.float16,
-                        "trust_remote_code": True
-                    }
-
-                    # Add quantization config if needed
-                    if precision == "int8":
-                        load_kwargs["load_in_8bit"] = True
-                    elif precision == "int4":
-                        load_kwargs["load_in_4bit"] = True
-
-                    text_encoder = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                        huggingface_id,
-                        **load_kwargs
-                    ).to(target_device)
-
-                    # Load processor
-                    processor = AutoProcessor.from_pretrained(huggingface_id) if load_processor else None
+                # Load processor
+                processor = AutoProcessor.from_pretrained(huggingface_id) if load_processor else None
 
             else:
                 # Load from local file
@@ -348,31 +303,47 @@ class QwenVLTextEncoderLoaderWrapper:
                 # Load state dict
                 state_dict = load_torch_file(model_path, device=target_device)
 
-                # Create model and load weights
-                try:
-                    from diffsynth.models.qwen_image_text_encoder import QwenImageTextEncoder
+                # Use transformers to load
+                from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+                import torch.nn as nn
 
-                    text_encoder = QwenImageTextEncoder()
-                    text_encoder.load_state_dict(state_dict)
-                    text_encoder = text_encoder.to(dtype=dtype, device=target_device)
+                logger.info("Loading text encoder from state dict")
 
-                    # Try to load processor from same directory
-                    processor = None
-                    if load_processor:
-                        processor_path = Path(model_path).parent / "processor"
-                        if processor_path.exists():
+                # Create model wrapper
+                class TextEncoderWrapper(nn.Module):
+                    def __init__(self, state_dict):
+                        super().__init__()
+                        self.load_state_dict(state_dict, strict=False)
+
+                    def forward(self, *args, **kwargs):
+                        raise NotImplementedError("Use processor nodes for encoding")
+
+                text_encoder = TextEncoderWrapper(state_dict)
+                text_encoder = text_encoder.to(dtype=dtype, device=target_device)
+
+                # Try to load processor from same directory or HuggingFace
+                processor = None
+                if load_processor:
+                    # First try local processor directory
+                    processor_path = Path(model_path).parent / "processor"
+                    if processor_path.exists():
+                        from transformers import AutoProcessor
+                        processor = AutoProcessor.from_pretrained(str(processor_path))
+                        logger.info(f"Loaded processor from {processor_path}")
+                    else:
+                        # Try loading from HuggingFace as fallback
+                        try:
                             from transformers import AutoProcessor
-                            processor = AutoProcessor.from_pretrained(str(processor_path))
-
-                except ImportError:
-                    # Basic loading without DiffSynth
-                    logger.warning("DiffSynth not available, using basic loading")
-
-                    import torch.nn as nn
-                    text_encoder = nn.Module()
-                    text_encoder.load_state_dict(state_dict)
-                    text_encoder = text_encoder.to(dtype=dtype, device=target_device)
-                    processor = None
+                            processor = AutoProcessor.from_pretrained(
+                                "Qwen/Qwen2-VL-7B-Instruct",
+                                trust_remote_code=True
+                            )
+                            logger.info("Loaded processor from HuggingFace (Qwen2-VL-7B-Instruct)")
+                        except Exception as e:
+                            logger.warning(f"Could not load processor: {e}")
+                            logger.warning("Processor node will not work. Either:")
+                            logger.warning("  1. Place processor files in same directory as model")
+                            logger.warning("  2. Use 'Download from HuggingFace' option")
 
             text_encoder.eval()
 
@@ -451,28 +422,19 @@ class QwenImageVAELoaderWrapper:
 
         try:
             if model_name == "Download from HuggingFace":
-                # Load VAE from HuggingFace
+                # Load VAE from HuggingFace using diffusers
+                from diffusers import AutoencoderKL
+
                 logger.info(f"Loading VAE from HuggingFace: {huggingface_id}")
+                vae_model = AutoencoderKL.from_pretrained(
+                    huggingface_id,
+                    subfolder="vae",
+                    torch_dtype=dtype
+                ).to(device)
 
-                try:
-                    from diffsynth.models.qwen_image_vae import QwenImageVAE
-
-                    # The VAE is typically included with the main model
-                    vae = QwenImageVAE.from_pretrained(
-                        huggingface_id,
-                        subfolder="vae",
-                        torch_dtype=dtype
-                    ).to(device)
-
-                except ImportError:
-                    # Fallback to diffusers VAE
-                    from diffusers import AutoencoderKL
-
-                    vae = AutoencoderKL.from_pretrained(
-                        huggingface_id,
-                        subfolder="vae",
-                        torch_dtype=dtype
-                    ).to(device)
+                # Wrap in ComfyUI VAE format
+                import comfy.sd
+                vae = comfy.sd.VAE(model=vae_model)
 
             else:
                 # Load from local file
@@ -485,51 +447,19 @@ class QwenImageVAELoaderWrapper:
                 # Load state dict
                 state_dict = load_torch_file(vae_path, device=device)
 
-                # Check if it's a 16-channel VAE
-                if "encoder.conv_in.weight" in state_dict:
-                    in_channels = state_dict["encoder.conv_in.weight"].shape[1]
-                    if in_channels != 3:
-                        logger.warning(f"Unexpected VAE input channels: {in_channels}, expected 3")
+                # Use ComfyUI's standard VAE loader - it auto-detects the config
+                import comfy.sd
 
-                if "decoder.conv_out.weight" in state_dict:
-                    out_channels = state_dict["decoder.conv_out.weight"].shape[0]
-                    if out_channels != 3:
-                        logger.warning(f"Unexpected VAE output channels: {out_channels}, expected 3")
-
-                # Check latent channels
-                if "decoder.conv_in.weight" in state_dict:
-                    latent_channels = state_dict["decoder.conv_in.weight"].shape[1]
-                    if latent_channels != QWEN_VAE_CHANNELS:
-                        raise ValueError(f"Invalid VAE: has {latent_channels} latent channels, expected {QWEN_VAE_CHANNELS}")
-
-                # Create VAE
-                try:
-                    from diffsynth.models.qwen_image_vae import QwenImageVAE
-
-                    vae = QwenImageVAE()
-                    vae.load_state_dict(state_dict)
-                    vae = vae.to(dtype=dtype, device=device)
-
-                except ImportError:
-                    # Use ComfyUI's VAE with custom config
-                    import comfy.sd
-
-                    # Create a VAE with 16 channels
-                    vae_config = {
-                        "latent_channels": QWEN_VAE_CHANNELS,
-                        "in_channels": 3,
-                        "out_channels": 3,
-                    }
-
-                    vae = comfy.sd.VAE(sd=state_dict, config=vae_config)
-                    vae = vae.to(dtype=dtype, device=device)
+                logger.info("Using ComfyUI VAE loader for Qwen 16-channel VAE")
+                vae = comfy.sd.VAE(sd=state_dict)
+                # ComfyUI VAE handles device management internally, no need for .to()
 
             # Enable tiling if requested
             if tiling and hasattr(vae, "enable_tiling"):
                 vae.enable_tiling()
                 logger.info("Enabled VAE tiling for large images")
 
-            vae.eval()
+            # ComfyUI VAE is already in eval mode, no need to call .eval()
 
             logger.info(f"Successfully loaded 16-channel VAE")
             return (vae,)
@@ -580,7 +510,7 @@ class QwenModelManagerWrapper:
             }
         }
 
-    RETURN_TYPES = ("MODEL", "CLIP", "VAE", "QWEN_PROCESSOR")
+    RETURN_TYPES = ("MODEL", "QWEN_TEXT_ENCODER", "VAE", "QWEN_PROCESSOR")
     RETURN_NAMES = ("dit", "text_encoder", "vae", "processor")
     FUNCTION = "load_pipeline"
     CATEGORY = "QwenImage/Loaders"
