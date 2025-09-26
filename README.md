@@ -5,30 +5,48 @@ Advanced nodes for Qwen-Image-Edit with multi-image support, more flexibility ar
 ## Features
 
 ### Core Capabilities
-- **Qwen-Image-Edit-2509**: Multi-image editing with image token formatting
-- **100% DiffSynth-Studio Aligned**: Verified matching implementation
-- **Proper Token Dropping**: Matches DiffSynth/Diffusers (drops first 34/64 embeddings)
-- **N-Image Support**: Template Builder supports 0-100 images with warnings
-- **Clean Architecture**: DRY principles, single source of truth for templates
-- **Enhanced Debug**: Full prompt display, character counts, no truncation
+- **Qwen-Image-Edit-2509**: Multi-image editing (1-3 optimal, up to 512 max)
+- **100% DiffSynth-Studio Aligned**: Verified implementation
+- **Advanced Power User Mode**: Per-image resolution control
+- **Configurable Auto-Labeling**: Optional "Picture X:" formatting
+- **Memory Optimization**: VRAM budgets and weighted resolution
+- **Full Debug Output**: Complete prompts, character counts, memory usage
+
+### Key Features
+
+#### Automatic Resolution Handling
+- Automatically handles mismatched dimensions between empty latent and reference images
+- Pads to nearest even dimensions for model compatibility
+- Works with any aspect ratio - not limited to 1024x1024
 
 ### Key Nodes
 
 #### QwenVLTextEncoder
-Main text encoder with proper token dropping.
-- Token dropping after encoding (34 for text, 64 for image_edit)
-- Multi-image support via Image Batch input
-- Automatic image token formatting for N images
-- System prompt from Template Builder (single source)
-- Debug mode shows embedding dropping in action
+Standard encoder with automatic labeling.
+- Token dropping: 34 (text), 64 (image_edit)
+- Multi-image support via Image Batch
+- auto_label parameter for "Picture X:" control
+- System prompt from Template Builder
+- Full debug output with character counts
+- verbose_log for console tracing of model passes
+
+#### QwenVLTextEncoderAdvanced
+Power user encoder with resolution control.
+- All standard features plus:
+- Per-image resolution weighting
+- Memory budget management (max_memory_mb)
+- Hero/reference modes for importance
+- Custom resolution targets (vision & VAE separate)
+- Choice of "Picture" vs "Image" labels
+- Simplified interface (no validation_mode)
+- verbose_log for console tracing of model passes
 
 #### QwenTemplateBuilder
-Single source of truth for system prompts.
-- Now supports 0-100 images (was limited to 4)
-- Automatic warnings at 4+ and 10+ images
-- `custom_system`: Override ANY template's system prompt
-- Official DiffSynth-Studio templates included
-- New edit templates for system prompts
+System prompt templates.
+- DiffSynth-Studio templates included
+- Face replacement templates (qwen_face_swap, qwen_identity_merge)
+- custom_system override for any template
+- show_all_prompts mode to view options
 
 ### Helper Nodes
 - **QwenVLEmptyLatent**: Creates 16-channel empty latents
@@ -124,16 +142,14 @@ See [MULTI_IMAGE_ORDERING.md](MULTI_IMAGE_ORDERING.md) for detailed guide.
 - Entity control nodes (QwenEliGenEntityControl - untested with current models)
 - Token debugging tools (QwenTokenDebugger, QwenTokenAnalyzer)
 
-**Latest Updates (v2.4):**
-- 100% DiffSynth-Studio alignment verified
-- Enhanced debug output with full prompts and character counts
-- New face replacement templates for full scene preservation
-- Templates aligned with Qwen-Image-Edit-2509 training structure
+**Latest Updates (v2.5):**
+- Advanced encoder for power users with resolution control
+- Configurable auto-labeling (can now be disabled)
+- Memory optimization for limited VRAM
+- Hero/reference image weighting
+- Comprehensive test guide with 10 configurations
 
-**v2.3 Updates:**
-- Debug Controller node for comprehensive debugging and profiling
-- Silent debug patches - no console spam unless explicitly enabled
-- Performance profiling, memory tracking, and error analysis tools
+See [ADVANCED_ENCODER_TEST_GUIDE.md](ADVANCED_ENCODER_TEST_GUIDE.md) for testing configurations.
 
 ## Requirements
 

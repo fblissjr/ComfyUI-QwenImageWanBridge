@@ -18,92 +18,344 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `example_workflows/` - Example JSON workflows with comprehensive notes
 - `internal/` - Internal documentation and analysis
 
-## Current Implementation
+## Project Overview
 
-### Core Nodes
+This project implements Qwen-Image-Edit model support for ComfyUI, enabling text-to-image generation and vision-based image editing using the Qwen2.5-VL 7B model. It provides a bridge between DiffSynth-Studio's implementation and ComfyUI's node-based workflow system.
 
-**QwenVLTextEncoder**
-- Main text encoder with DiffSynth/Diffusers reference alignment
-- 32-pixel resolution alignment for proper vision processing
-- Multi-image support via ComfyUI's Image Batch node
-- Automatic "Picture X:" formatting for Qwen-Image-Edit-2509
-- Separate system_prompt input for template customization
-- Debug mode for troubleshooting
+**Core Problem Solved**: Native ComfyUI lacks support for Qwen-Image-Edit's unique features including:
+- 16-channel VAE latents (vs standard 4-channel)
+- Vision token processing for image understanding
+- Proper dimension alignment (32-pixel for VAE, 28-pixel for vision)
+- Multi-image editing with "Picture X:" labeling
+- Token dropping for proper conditioning
 
-**QwenTemplateBuilder**
-- System prompt generation with DiffSynth-Studio templates
-- Outputs separate prompt and system_prompt for clean separation
-- custom_system field to override any template's system prompt
-- show_all_prompts mode to view available templates
+**Key Differentiators**:
+- Uses ComfyUI's internal CLIP loader with `CLIPType.QWEN_IMAGE` for compatibility
+- Implements DiffSynth-Studio templates and token dropping behavior
+- Provides both wrapper nodes (for HuggingFace models) and native integration
+- Includes unique EliGen entity control from DiffSynth-Studio
 
-**QwenMultiReferenceHandler**
-- Multi-image processor supporting up to 4 images
-- native_multi mode for Qwen-Image-Edit-2509 (uniform dimensions required)
-- Various composite modes: concat, grid, offset for other use cases
-- Automatic dimension matching to prevent VAE latent errors
+## Current Implementation Status
 
-**QwenEliGenEntityControl** (Experimental)
-- Entity-level spatial generation with masks
-- Up to 4 regions with individual prompts and weights
-- Based on DiffSynth EliGen implementation
+### Fully Working
+- **Text-to-image generation** via QwenVLTextEncoder in text_to_image mode
+- **Single image editing** with vision token support
+- **Template system** with 15+ pre-configured templates
+- **16-channel VAE support** via QwenVLEmptyLatent and helpers
+- **RoPE position embedding fix** for batch processing
+- **Debug system** with verbose logging control
 
-### Key Features
+### Partially Working
+- **Multi-image editing**: Works for 1-3 images, issues with 4+ due to memory/processing
+- **Advanced encoder**: Resolution weighting works, memory optimization experimental
+- **Wrapper nodes**: Load models but dimension mismatches with samplers
 
-**System Prompt Separation (Latest Fix)**
-- Template Builder and Encoder now have clear separation of responsibilities
-- Template Builder outputs raw prompt and system_prompt separately
-- Encoder handles all formatting internally
-- Fixed issue where system prompt text was appearing in generated images
-- No more duplicated template logic between nodes
+### Experimental
+- **EliGen Entity Control**: Code complete but untested with current models
+- **Spatial Token Generator**: 1000+ lines of code for coordinate-based editing
+- **Multi-reference handler**: Deprecated in favor of Image Batch node
 
-**Qwen-Image-Edit-2509 Support**
-- Multi-image support with "Picture 1:", "Picture 2:" formatting
-- Automatic detection and formatting when using Picture references
-- Use ComfyUI's Image Batch node for multiple images
-- Template system uses official DiffSynth-Studio prompts
+### Known Issues
+- **Dimension mismatches** between wrapper loaders and ComfyUI samplers
+- **Reference latents** pass through conditioning but may have shape issues
+- **Token dropping** works but exact indices may need tuning
 
-**Template System**
-- custom_system field works as override for ANY template mode
-- show_all_prompts mode displays all available system prompts
-- Uses exact templates from DiffSynth-Studio repository
-- Clean separation between prompt content and system instruction
+## Technical Architecture
 
-**Multi-Image Processing**
-- QwenMultiReferenceHandler with native_multi mode for 2509
-- Automatic dimension matching prevents VAE latent errors
-- Forces uniform dimensions when needed
+### Node System
 
-### Current Working State
-
-**What's Working:**
-- Text-to-image generation
-- Single and multi-image editing with Qwen-Image-Edit-2509
-- Template system with custom system prompts
-- Debug Controller with performance profiling and log analysis
-- Silent debug patches (no console spam unless enabled)
-- Multi-reference image processing with dimension fixes
-- Full debug output showing complete prompts being encoded
-- Face replacement templates aligned with Qwen-Image-Edit-2509 structure
-
-**What's Experimental:**
-- EliGen Entity Control (untested with current models)
-- Spatial Token Generator (low priority, experimental)
-
-### Basic Workflows
-
-**Text-to-Image:**
+**Data Flow**:
 ```
-QwenTemplateBuilder → QwenVLTextEncoder → KSampler
+LoadImage → QwenVLTextEncoder → KSampler → VAEDecode
+            ↑                      ↑
+    QwenTemplateBuilder    QwenVLEmptyLatent
 ```
 
-**Image Edit:**
-```
-LoadImage → QwenVLTextEncoder (edit_image) → KSampler
-QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
+**Conditioning System**:
+- Text embeddings generated by Qwen2.5-VL (3584 dimensions)
+- Vision tokens embedded when edit_image provided
+- Reference latents attached to conditioning dict
+- Token dropping applied after encoding (34 for T2I, 64 for I2E)
+
+**Reference Latents**:
+- Encoded from input images via VAE
+- Stored in conditioning as `reference_latents` key
+- Should guide generation but currently may be ignored
+
+### Resolution Handling
+
+**32-Pixel Alignment (VAE)**:
+- Required for VAE encoder/decoder compatibility
+- Implemented in `calculate_dimensions()` method
+- Target area 1024×1024 (1,048,576 pixels) for VAE
+
+**28-Pixel Alignment (Vision)**:
+- Native Qwen ViT patch size requirement
+- Used in spatial token generator
+- Not enforced in main encoder (uses 32-pixel)
+
+**Dimension Calculation**:
+```python
+def calculate_dimensions(target_area: int, aspect_ratio: float) -> tuple:
+    width = math.sqrt(target_area * aspect_ratio)
+    height = width / aspect_ratio
+    width = round(width / 32) * 32  # 32-pixel alignment
+    height = round(height / 32) * 32
+    return max(32, int(width)), max(32, int(height))
 ```
 
-**Multi-Image Edit:**
+**Current Issues**:
+- Vision encoder uses 384×384 target (147,456 pixels)
+- VAE encoder uses 1024×1024 target (1,048,576 pixels)
+- Mismatch can cause different sized reference latents
+
+### Multi-Image Processing
+
+**Image Batch Integration**:
+- Use ComfyUI's Image Batch node to combine multiple images
+- Images passed as batch tensor to encoder
+- Each image processed individually for vision/VAE
+
+**"Picture X:" Labeling**:
+- Automatically added for 2+ images when `auto_label=True`
+- Format: `Picture 1: <|vision_start|><|image_pad|><|vision_end|>`
+- Matches DiffSynth-Studio and official Qwen-Image-Edit-2509
+
+**Token Dropping**:
+- Text-to-image mode: Drop first 34 tokens
+- Image edit mode: Drop first 64 tokens
+- Applied AFTER encoding to conditioning embeddings
+
+**Limitations**:
+- Optimal for 1-3 images
+- 4+ images may cause memory issues
+- All images must have similar dimensions for uniform latents
+
+### Template System
+
+**QwenTemplateBuilderV2**:
+- 15 pre-configured templates
+- `custom_system` field overrides any template
+- `show_all_prompts` mode displays all templates
+- Returns: (prompt, system_prompt, mode_info)
+
+**Template Format**:
 ```
-LoadImage (×N) → Image Batch → QwenVLTextEncoder → KSampler
-QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
+<|im_start|>system
+{system_prompt}<|im_end|>
+<|im_start|>user
+{vision_tokens}{text}<|im_end|>
+<|im_start|>assistant
 ```
+
+**Available Templates**:
+- default_t2i, default_edit
+- face_replacement variants (3 types)
+- artistic, photorealistic, technical
+- structured_json_edit, xml_spatial_edit
+- style_transfer, minimal_edit
+
+## Key Technical Details
+
+### VAE and Latents
+
+**16-Channel VAE (Wan21 Format)**:
+- Standard ComfyUI uses 4-channel VAE
+- Qwen-Image-Edit requires 16-channel
+- Shape: [B, 16, H/8, W/8] for latents
+
+**Tensor Dimensions**:
+- Wrapper nodes expect 5D: [B, C, T, H, W]
+- Native ComfyUI uses 4D: [B, C, H, W]
+- Conversion attempted via squeeze/unsqueeze
+
+**Reference Latent Flow**:
+1. Input image → VAE encode → 16-channel latent
+2. Attached to conditioning dict
+3. Should influence generation (currently uncertain)
+
+**Current Dimension Issues**:
+- Empty latent creates shape based on pixel dimensions
+- Reference latents from VAE may have different shape
+- Mismatch causes errors in process_img function
+
+### Vision Processing
+
+**Qwen2.5-VL Integration**:
+- Model loaded from `models/text_encoders/` folder
+- Uses ComfyUI's CLIP infrastructure
+- 3584-dimensional embeddings
+
+**Vision Tokens**:
+- Format: `<|vision_start|><|image_pad|><|vision_end|>`
+- One set per image
+- Inserted before user text in prompt
+
+**RoPE Fix Applied**:
+```python
+# Monkey patch for batch processing with different image sizes
+if isinstance(video_fhw, list):
+    video_fhw = tuple(max([i[j] for i in video_fhw]) for j in range(3))
+```
+
+**Token Dropping**:
+- Implemented in QwenProcessorV2
+- Drops embeddings after encoding
+- Maintains compatibility with DiffSynth
+
+## Known Issues and Solutions
+
+### Issue 1: Dimension Mismatch
+**Problem**: Empty latent and reference latents have different shapes
+**Symptoms**: Error in ComfyUI's process_img: "The number of samples in the conditioning doesn't match"
+**Root Cause**: Different resolution calculations for empty vs reference
+**Attempted Fixes**:
+- Squeeze/unsqueeze operations (didn't work)
+- Padding to match dimensions (partially worked)
+- Dimension wrapper functions (incomplete)
+
+### Issue 2: Wrapper Node Integration
+**Problem**: Wrapper loaders don't integrate with ComfyUI samplers
+**Symptoms**: Type errors, dimension mismatches
+**Root Cause**: Expecting DiffSynth pipeline, not ComfyUI format
+**Status**: Wrapper nodes may need complete rewrite
+
+### Issue 3: Multi-Image Memory
+**Problem**: 4+ images cause memory issues
+**Symptoms**: OOM errors, slow processing
+**Root Cause**: Each image processed at high resolution
+**Workaround**: Limit to 1-3 images
+
+### Issue 4: Token Dropping Accuracy
+**Problem**: Uncertainty about exact drop indices
+**Symptoms**: Possible conditioning issues
+**Current Values**: 34 (T2I), 64 (I2E)
+**Note**: Values from DiffSynth but may need verification
+
+## Workflow Examples
+
+### Text-to-Image Generation
+```
+1. QwenVLCLIPLoader → Load model
+2. QwenTemplateBuilder → Create system prompt (mode: default_t2i)
+3. QwenVLTextEncoder → Encode text (mode: text_to_image)
+4. QwenVLEmptyLatent → Create 16-channel latent
+5. KSampler → Generate (denoise: 1.0)
+6. VAEDecode → Output image
+```
+
+### Single Image Editing
+```
+1. LoadImage → Input image
+2. QwenVLCLIPLoader → Load model
+3. QwenTemplateBuilder → Create system prompt (mode: default_edit)
+4. QwenVLTextEncoder → Encode with edit_image input
+5. VAEEncode → Create reference latent (or use EmptyLatent)
+6. KSampler → Generate (denoise: 0.3-0.7 for structure, 0.9-1.0 for semantic)
+7. VAEDecode → Output image
+```
+
+### Multi-Image Composition
+```
+1. LoadImage × N → Multiple input images
+2. Image Batch (from KJNodes) → Combine images
+3. QwenVLTextEncoder → Process batch with auto_label=True
+4. Rest same as single image editing
+```
+
+### Settings That Work
+- **Resolution**: 1024×1024 or 512×512
+- **Denoise**: 0.5-0.7 for edits, 1.0 for generation
+- **CFG**: 7.0-9.0
+- **Steps**: 20-30
+- **Sampler**: euler, euler_ancestral
+
+## Integration Points
+
+### ComfyUI Model System
+- Uses CLIP loader with `CLIPType.QWEN_IMAGE`
+- Models stored in `models/text_encoders/`
+- VAE uses standard ComfyUI VAE nodes
+- KSampler works with conditioning output
+
+### Dependencies
+- ComfyUI internals: comfy.sd, comfy.utils, node_helpers
+- External: KJNodes for Image Batch functionality
+- Python: transformers (for tokenizer if needed)
+
+### Wrapper vs Native
+- **Native**: Uses ComfyUI's internal CLIP system (working)
+- **Wrapper**: Attempts to load HuggingFace models directly (broken)
+- Recommendation: Use native nodes for now
+
+## Debug Features
+
+### Debug Mode (UI Output)
+- Set `debug_mode=True` in encoder
+- Shows detailed processing info
+- Displays vision tokens and formatting
+- Character counts for all components
+
+### Verbose Logging (Console)
+- Set `verbose_log=True` for console tracing
+- Controlled via debug_patch.py
+- Traces model forward passes
+- Performance profiling available
+
+### Debug Controller Node
+- Holistic debugging interface
+- Controls all debug settings
+- Performance analysis
+- Log aggregation
+
+## Current Working Nodes
+
+### Core Nodes (Working)
+1. **QwenVLCLIPLoader** - Loads Qwen2.5-VL model
+2. **QwenVLTextEncoder** - Main encoder with vision support
+3. **QwenVLTextEncoderAdvanced** - Power user features
+4. **QwenTemplateBuilder** - Template system
+5. **QwenLowresFixNode** - Two-stage refinement
+
+### Helper Nodes (Working)
+6. **QwenVLEmptyLatent** - 16-channel latent creation
+7. **QwenVLImageToLatent** - Image to latent conversion
+
+### Experimental Nodes (Untested)
+8. **QwenEliGenEntityControl** - Mask-based spatial control
+9. **QwenEliGenMaskPainter** - Mask creation tool
+10. **QwenSpatialTokenGenerator** - Coordinate-based editing
+
+### Debug Nodes (Working)
+11. **QwenTokenDebugger** - Token analysis
+12. **QwenTokenAnalyzer** - Standalone analyzer
+13. **QwenDebugController** - Master debug control
+
+### Wrapper Nodes (Broken)
+14. **QwenImageDiTLoaderWrapper** - DiT model loader
+15. **QwenVLTextEncoderLoaderWrapper** - Text encoder loader
+16. **QwenImageVAELoaderWrapper** - VAE loader
+17. **QwenModelManagerWrapper** - Pipeline loader
+18. **QwenImageSamplerNode** - FlowMatch sampler
+19. **QwenSchedulerNode** - Scheduler configuration
+
+## Implementation Gaps
+
+### Missing from DiffSynth
+- Proper FlowMatch sampler integration
+- Complete pipeline loading
+- Inference optimization
+- Batch processing efficiency
+
+### Incomplete Features
+- Entity control (EliGen) untested
+- Spatial tokens not integrated with encoder
+- Multi-reference deprecated
+- Wrapper nodes non-functional
+
+### Future Work Needed
+1. Fix dimension mismatch in reference latents
+2. Complete wrapper node integration
+3. Test and refine EliGen entity control
+4. Optimize multi-image processing
+5. Verify token dropping indices

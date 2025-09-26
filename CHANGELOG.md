@@ -1,5 +1,62 @@
 # Changelog
 
+## v2.6 alpha - not yet working but in progress Wrapper Model Nodes
+
+### Added
+- **New Wrapper Model Loaders** following DiffSynth/WanVideoWrapper patterns:
+  - `QwenImageDiTLoaderWrapper` - Load Qwen-Image-Edit-2509 transformer
+  - `QwenVLTextEncoderLoaderWrapper` - Load Qwen2.5-VL with processor
+  - `QwenImageVAELoaderWrapper` - Load 16-channel VAE
+  - `QwenModelManagerWrapper` - Unified pipeline loader
+- **HuggingFace Support** - Download models directly or load from local files
+- **Flexible Precision** - Support for fp32, fp16, bf16, fp8, and quantization
+- **Device Management** - Proper CUDA/CPU/offload device handling
+- **Model Validation** - Automatic verification of 16-channel VAE compatibility
+
+### Technical Implementation
+- Based on analysis of WanVideoWrapper loading patterns
+- Uses ComfyUI's folder_paths for model discovery
+- Wraps models in ComfyUI BaseModel for compatibility
+- Supports both DiffSynth from_pretrained and local safetensors loading
+- Proper integration with ComfyUI's model management system
+
+### Documentation
+- Added WRAPPER_LOADING_PATTERNS.md documenting implementation details
+- Model folder structure and integration points documented
+- Error handling and common issues addressed
+
+## v2.5 Power User Features & Auto-Labeling
+
+### Added
+- **QwenVLTextEncoderAdvanced** for power users
+  - Per-image resolution weighting (hero/reference modes)
+  - Memory budget management (VRAM limits)
+  - Custom resolution targets (vision & VAE separate)
+  - Progressive and memory-optimized modes
+- **Configurable auto-labeling**
+  - auto_label parameter (on/off)
+  - label_format choice (Picture/Image)
+- **Documentation**
+  - Advanced encoder test guide (10 configurations)
+  - Model limits (512 images, token constraints)
+  - Power user guide
+
+### Changed
+- Auto-labeling now optional (was always on)
+- Debug shows auto_label and label_format status
+- Advanced encoder simplified - removed confusing validation_mode parameter
+- Added verbose_log parameter to control console logging separately from UI debug
+- Enhanced debug patch with comprehensive tracing (timestamps, memory stats, NaN/Inf detection)
+
+### Fixed
+- Wan21 latent format requires 5D tensors - now properly handled
+- **Dimension mismatch auto-handling** - No more errors from mismatched resolutions!
+  - Automatically pads latents to even dimensions for patch processing
+  - Wraps ComfyUI's QwenImage model to handle any resolution
+  - Users can now use any resolution, not just 1024x1024
+- Clear debug messages showing dimension adjustments
+- Documentation updated with technical explanation
+
 ## v2.4 DiffSynth Alignment & Better Debug
 
 ### Added

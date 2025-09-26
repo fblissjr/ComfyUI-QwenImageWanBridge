@@ -6,6 +6,8 @@ Apply this by running: import debug_patch; debug_patch.apply_debug_patches()
 import logging
 import torch
 import os
+import time
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -27,33 +29,73 @@ def apply_debug_patches():
         
         def debug_extra_conds(self, **kwargs):
             if DEBUG_VERBOSE:
-                logger.info("=== COMFYUI MODEL_BASE EXTRA_CONDS TRACE ===")
-                logger.info(f"STEP 2 - EXTRA_CONDS PROCESSING:")
+                logger.info("\n" + "="*60)
+                logger.info("COMFYUI MODEL_BASE EXTRA_CONDS TRACE")
+                logger.info("="*60)
+                logger.info(f"[STEP 2] Processing extra conditions for model")
+                logger.info(f"Timestamp: {time.strftime('%H:%M:%S')}")
 
                 # Check for trace ID from our encoder
                 if "trace_id" in kwargs:
-                    logger.info(f"  - Found trace ID: {kwargs['trace_id']}")
+                    logger.info(f"  ✓ Trace ID: {kwargs['trace_id']}")
 
-                # Log what we receive
-                logger.info(f"  - Received kwargs keys: {list(kwargs.keys())}")
+                # Log all received parameters
+                logger.info(f"\n[Received Parameters]")
+                logger.info(f"  Keys: {list(kwargs.keys())}")
+
+                # Detailed conditioning info
+                if "c" in kwargs:
+                    cond = kwargs["c"]
+                    if isinstance(cond, list):
+                        logger.info(f"  Conditioning: list of {len(cond)} items")
+                        for i, c in enumerate(cond[:2]):
+                            if isinstance(c, torch.Tensor):
+                                logger.info(f"    - Cond {i}: shape={c.shape}, dtype={c.dtype}")
+
+                # Reference latents detailed logging
                 if "reference_latents" in kwargs:
                     ref_latents = kwargs["reference_latents"]
-                    logger.info(f"  - Reference latents type: {type(ref_latents)}")
+                    logger.info(f"\n[Reference Latents]")
+                    logger.info(f"  Type: {type(ref_latents).__name__}")
                     if isinstance(ref_latents, list):
-                        logger.info(f"  - Reference latents count: {len(ref_latents)}")
-                        for i, lat in enumerate(ref_latents[:3]):  # Only log first 3
+                        logger.info(f"  Count: {len(ref_latents)} latents")
+                        for i, lat in enumerate(ref_latents):
                             if hasattr(lat, 'shape'):
-                                logger.info(f"  - Ref latent {i}: {lat.shape}, {lat.dtype}, range=[{lat.min():.4f}, {lat.max():.4f}]")
+                                logger.info(f"  Latent {i+1}:")
+                                logger.info(f"    - Shape: {lat.shape}")
+                                logger.info(f"    - Dtype: {lat.dtype}")
+                                logger.info(f"    - Device: {lat.device}")
+                                logger.info(f"    - Range: [{lat.min().item():.4f}, {lat.max().item():.4f}]")
+                                logger.info(f"    - Mean: {lat.mean().item():.4f}, Std: {lat.std().item():.4f}")
+                else:
+                    logger.info(f"\n[Reference Latents]")
+                    logger.info(f"  ⚠ NO REFERENCE LATENTS PROVIDED")
+
+                # Log transformer options if present
+                if "transformer_options" in kwargs:
+                    opts = kwargs["transformer_options"]
+                    if opts:
+                        logger.info(f"\n[Transformer Options]")
+                        logger.info(f"  Keys: {list(opts.keys()) if isinstance(opts, dict) else 'Not a dict'}")
 
             # Call original method
+            start_time = time.perf_counter() if DEBUG_VERBOSE else 0
             result = original_extra_conds(self, **kwargs)
+            elapsed = (time.perf_counter() - start_time) * 1000 if DEBUG_VERBOSE else 0
 
             if DEBUG_VERBOSE:
                 # Log what we return
-                logger.info(f"  - Returned keys: {list(result.keys())}")
+                logger.info(f"\n[Output to Model]")
+                logger.info(f"  Keys: {list(result.keys())}")
                 if "ref_latents" in result:
-                    logger.info(f"  - ref_latents type: {type(result['ref_latents'])}")
-                logger.info("=== EXTRA_CONDS HANDOFF TO MODEL ===")
+                    ref_out = result["ref_latents"]
+                    logger.info(f"  ref_latents:")
+                    logger.info(f"    - Type: {type(ref_out).__name__}")
+                    if isinstance(ref_out, list):
+                        logger.info(f"    - Count: {len(ref_out)}")
+                logger.info(f"\n[Performance]")
+                logger.info(f"  Processing time: {elapsed:.2f}ms")
+                logger.info("="*60 + "\n")
             
             return result
         
@@ -69,29 +111,93 @@ def apply_debug_patches():
         
         def debug_forward(self, x, timesteps, context, attention_mask=None, guidance=None, ref_latents=None, transformer_options={}, control=None, **kwargs):
             if DEBUG_VERBOSE:
-                logger.info("=== QWEN IMAGE MODEL FORWARD TRACE ===")
-                logger.info(f"STEP 3 - MODEL FORWARD PASS:")
-                logger.info(f"  - Input latent shape: {x.shape}")
-                logger.info(f"  - Timesteps: {timesteps.shape if hasattr(timesteps, 'shape') else timesteps}")
-                logger.info(f"  - Context shape: {context.shape if hasattr(context, 'shape') else type(context)}")
+                logger.info("\n" + "="*60)
+                logger.info("QWEN IMAGE MODEL FORWARD PASS")
+                logger.info("="*60)
+                logger.info(f"[STEP 3] Executing model forward pass")
+                logger.info(f"Timestamp: {time.strftime('%H:%M:%S')}")
 
-                if ref_latents is not None:
-                    logger.info(f"  - ref_latents type: {type(ref_latents)}")
-                    if hasattr(ref_latents, '__len__'):
-                        logger.info(f"  - ref_latents count: {len(ref_latents)}")
-                        for i, lat in enumerate(ref_latents[:3]):  # Only log first 3
-                            if hasattr(lat, 'shape'):
-                                logger.info(f"  - Model ref_latent {i}: {lat.shape}, range=[{lat.min():.4f}, {lat.max():.4f}]")
+                # Input details
+                logger.info(f"\n[Input Tensors]")
+                logger.info(f"  Latent (x):")
+                logger.info(f"    - Shape: {x.shape}")
+                logger.info(f"    - Device: {x.device}")
+                logger.info(f"    - Range: [{x.min().item():.4f}, {x.max().item():.4f}]")
+
+                logger.info(f"  Timesteps:")
+                if hasattr(timesteps, 'shape'):
+                    logger.info(f"    - Shape: {timesteps.shape}")
+                    logger.info(f"    - Values: {timesteps.tolist() if timesteps.numel() < 10 else f'{timesteps[0].item():.2f}...'}")
                 else:
-                    logger.info(f"  - ref_latents: None - NO REFERENCE LATENTS RECEIVED!")
+                    logger.info(f"    - Value: {timesteps}")
+
+                logger.info(f"  Context:")
+                if hasattr(context, 'shape'):
+                    logger.info(f"    - Shape: {context.shape}")
+                    logger.info(f"    - Device: {context.device}")
+                else:
+                    logger.info(f"    - Type: {type(context).__name__}")
+
+                # Attention mask info
+                if attention_mask is not None:
+                    logger.info(f"  Attention Mask:")
+                    logger.info(f"    - Shape: {attention_mask.shape if hasattr(attention_mask, 'shape') else 'N/A'}")
+                    logger.info(f"    - Unique values: {torch.unique(attention_mask).tolist() if hasattr(attention_mask, 'unique') else 'N/A'}")
+
+                # Guidance info
+                if guidance is not None:
+                    logger.info(f"  Guidance: {guidance}")
+
+                # Reference latents detailed info
+                logger.info(f"\n[Reference Latents in Model]")
+                if ref_latents is not None:
+                    logger.info(f"  Type: {type(ref_latents).__name__}")
+                    if hasattr(ref_latents, '__len__'):
+                        logger.info(f"  Count: {len(ref_latents)} latents")
+                        for i, lat in enumerate(ref_latents):
+                            if hasattr(lat, 'shape'):
+                                logger.info(f"  Latent {i+1}:")
+                                logger.info(f"    - Shape: {lat.shape}")
+                                logger.info(f"    - Device: {lat.device}")
+                                logger.info(f"    - Range: [{lat.min().item():.4f}, {lat.max().item():.4f}]")
+                                logger.info(f"    - Mean: {lat.mean().item():.4f}, Std: {lat.std().item():.4f}")
+                                # Check for NaN or Inf
+                                if torch.isnan(lat).any():
+                                    logger.warning(f"    ⚠ Contains NaN values!")
+                                if torch.isinf(lat).any():
+                                    logger.warning(f"    ⚠ Contains Inf values!")
+                else:
+                    logger.warning(f"  ⚠ NO REFERENCE LATENTS RECEIVED BY MODEL!")
+                    logger.info(f"  This means image editing won't use reference images")
+
+                # Transformer options
+                if transformer_options:
+                    logger.info(f"\n[Transformer Options]")
+                    logger.info(f"  Keys: {list(transformer_options.keys())}")
+                    if 'block_modifiers' in transformer_options:
+                        logger.info(f"  Block modifiers present: {len(transformer_options['block_modifiers'])}")
 
             # Call original forward
+            start_time = time.perf_counter() if DEBUG_VERBOSE else 0
             result = original_forward(self, x, timesteps, context, attention_mask, guidance, ref_latents, transformer_options, control, **kwargs)
+            elapsed = (time.perf_counter() - start_time) * 1000 if DEBUG_VERBOSE else 0
 
             if DEBUG_VERBOSE:
-                logger.info(f"  - Output shape: {result.shape}")
-                logger.info(f"  - Output range: [{result.min():.4f}, {result.max():.4f}]")
-                logger.info("=== MODEL FORWARD COMPLETE ===")
+                logger.info(f"\n[Output]")
+                logger.info(f"  Shape: {result.shape}")
+                logger.info(f"  Device: {result.device}")
+                logger.info(f"  Range: [{result.min().item():.4f}, {result.max().item():.4f}]")
+                logger.info(f"  Mean: {result.mean().item():.4f}, Std: {result.std().item():.4f}")
+
+                # Check output health
+                if torch.isnan(result).any():
+                    logger.error(f"  ⚠ Output contains NaN values!")
+                if torch.isinf(result).any():
+                    logger.error(f"  ⚠ Output contains Inf values!")
+
+                logger.info(f"\n[Performance]")
+                logger.info(f"  Forward pass time: {elapsed:.2f}ms")
+                logger.info("="*60 + "\n")
             
             return result
         

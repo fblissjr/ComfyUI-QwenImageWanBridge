@@ -9,6 +9,7 @@ import torch
 import logging
 from typing import Optional, Dict, Any, Tuple, Union, List
 import folder_paths
+# Removed dimension wrappers - just pass latents through as-is
 
 # Simplified encoder - no longer needs complex processors
 
@@ -22,17 +23,7 @@ except ImportError:
     PROCESSOR_AVAILABLE = False
     logger.warning("QwenProcessorV2 not available - will use simplified approach")
 
-# Import smart labeling components (Phase 0-2)
-try:
-    from .qwen_config import QwenConfig
-    from .qwen_logger import QwenLogger
-    from .qwen_validator import ReferenceValidator
-    from .qwen_smart_detector import SmartLabelingDetector
-    SMART_LABELING_AVAILABLE = True
-    logger.info("[Smart Labeling] Components loaded - Phase 0-2 features available")
-except ImportError:
-    SMART_LABELING_AVAILABLE = False
-    logger.info("[Smart Labeling] Components not available - using legacy behavior")
+# Validation and smart labeling removed for simplicity
 
 # Try to import ComfyUI's utilities
 try:
@@ -174,10 +165,13 @@ class QwenVLTextEncoder:
                     "default": False,
                     "tooltip": "Show processing details in console"
                 }),
-                # Validation Parameter (simplified)
-                "validation_mode": (["off", "warn", "error"], {
-                    "default": "off",
-                    "tooltip": "Validate Picture references match available images"
+                "auto_label": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Automatically add 'Picture X:' labels for multiple images (DiffSynth standard)"
+                }),
+                "verbose_log": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Enable verbose console logging of model forward passes"
                 }),
             }
         }
@@ -205,7 +199,7 @@ class QwenVLTextEncoder:
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None,
               vae=None, system_prompt: str = "", debug_mode: bool = False,
-              validation_mode: str = "off") -> Tuple[Any]:
+              auto_label: bool = True, verbose_log: bool = False) -> Tuple[Any]:
 
         """Encode text and images for Qwen Image generation.
         Follows DiffSynth/Diffusers implementation with 32-pixel alignment."""
@@ -217,15 +211,17 @@ class QwenVLTextEncoder:
         ref_latents = []
         debug_info = []  # Collect debug information for UI output
 
-        # Control verbose debug output based on debug_mode
+        # Control verbose debug output based on verbose_log parameter
         try:
             from . import debug_patch
-            debug_patch.set_debug_verbose(debug_mode)
-            if debug_mode:
-                logger.info("[Encoder] Debug mode enabled - verbose tracing active")
+            debug_patch.set_debug_verbose(verbose_log)
+            if verbose_log:
+                logger.info("[Encoder] Verbose console logging enabled - model forward passes will be traced")
+            elif debug_mode:
+                logger.info("[Encoder] Debug mode enabled - UI output active, console logging disabled")
         except Exception as e:
             if debug_mode:
-                logger.debug(f"Could not control verbose debug: {e}")
+                logger.debug(f"Could not control verbose logging: {e}")
 
         # Process images if provided
         if mode == "image_edit" and edit_image is not None:
@@ -260,6 +256,7 @@ class QwenVLTextEncoder:
                     vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
                     vae_img_hwc = vae_img.movedim(1, -1)
                     ref_latent = vae.encode(vae_img_hwc[:, :, :, :3])
+                    # Just pass through as-is - VAE knows what format to return
                     ref_latents.append(ref_latent)
 
                     if debug_mode:
@@ -268,17 +265,7 @@ class QwenVLTextEncoder:
         # Simple processing: Template Builder provides system prompt, we handle technical bits
         num_images = len(vision_images) if vision_images else 0
 
-        # Phase 1: Validation (if enabled)
-        if SMART_LABELING_AVAILABLE and validation_mode != "off":
-            validator = ReferenceValidator()
-            is_valid, message, details = validator.validate(text, num_images, validation_mode)
-
-            if not is_valid and validation_mode == "error":
-                raise ValueError(f"Reference validation failed: {message}")
-            elif message and debug_mode:
-                # Only show actual problems, not "unused images" which is annoying
-                if "unused" not in message.lower():
-                    logger.info(f"[Validation] {message}")
+        # Validation removed for simplicity - users can check their own prompts
 
         # Simplified: Always add "Picture X:" for 2+ images (matches DiffSynth & Diffusers)
         # Build vision tokens based on image count
@@ -294,14 +281,25 @@ class QwenVLTextEncoder:
                 vision_tokens = "<|vision_start|><|image_pad|><|vision_end|>"
                 debug_info.append(f"Single image mode (no Picture label)")
             else:
-                # Multi-image: always add "Picture X:" labels (DiffSynth/Diffusers standard)
-                vision_tokens = "".join([
-                    f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
-                    for i in range(num_images)
-                ])
-                debug_info.append(f"Multi-image mode: Added Picture 1-{num_images} labels")
+                # Multi-image: optionally add labels
+                if auto_label:
+                    # DiffSynth standard: "Picture X:" labels
+                    label_format = "Picture"  # Could be made configurable in future
+                    vision_tokens = "".join([
+                        f"{label_format} {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
+                        for i in range(num_images)
+                    ])
+                    debug_info.append(f"Multi-image mode: Added {label_format} 1-{num_images} labels (auto_label=True)")
+                else:
+                    # No labels, just concatenate vision tokens
+                    vision_tokens = "".join([
+                        "<|vision_start|><|image_pad|><|vision_end|>"
+                        for i in range(num_images)
+                    ])
+                    debug_info.append(f"Multi-image mode: No labels, raw vision tokens (auto_label=False)")
+
                 if debug_mode:
-                    logger.info(f"[Encoder] Added Picture labels for {num_images} images")
+                    logger.info(f"[Encoder] Auto-label: {auto_label}, Images: {num_images}")
 
         # Initialize formatted_text and drop_idx for debug output
         formatted_text = ""
@@ -363,8 +361,19 @@ class QwenVLTextEncoder:
                 {"reference_latents": ref_latents},
                 append=True
             )
+
+            # Don't manipulate dimensions - pass through as-is
+
             if debug_mode:
                 logger.info(f"[Encoder] Added {len(ref_latents)} reference latents to conditioning")
+                debug_info.append(f"Reference latents: {len(ref_latents)} with auto-dimension handling")
+                # Add dimension check warning
+                if ref_latents:
+                    latent_shapes = [str(lat.shape) for lat in ref_latents]
+                    unique_shapes = set(latent_shapes)
+                    if len(unique_shapes) > 1:
+                        debug_info.append(f"\nWARNING: Reference latents have different shapes: {unique_shapes}")
+                        debug_info.append("This may cause generation issues. Ensure all images have similar dimensions.")
 
         # Build debug output string
         if debug_mode and debug_info:
@@ -384,7 +393,7 @@ class QwenVLTextEncoder:
                 debug_output += f"\n\n=== USER PROMPT (without vision tokens) ===\n{text}"
 
             debug_output += f"\n\n=== SETTINGS ===\nMode: {mode}\nImages: {num_images}\nDrop Index: {drop_idx}"
-            debug_output += f"\nSystem Prompt: {'Yes' if system_prompt else 'No'}\nValidation: {validation_mode}"
+            debug_output += f"\nSystem Prompt: {'Yes' if system_prompt else 'No'}"
 
             # Show character counts for reference
             debug_output += f"\n\n=== CHARACTER COUNTS ===\nTotal prompt length: {len(formatted_text)} chars"

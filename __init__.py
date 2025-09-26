@@ -14,24 +14,37 @@ WEB_DIRECTORY = "./web"
 # ============================================================================
 
 try:
-    from .nodes.qwen_vl_encoder import QwenVLCLIPLoader, QwenVLTextEncoder
+    from .nodes.qwen_vl_encoder import QwenVLCLIPLoader, QwenVLTextEncoder, QwenLowresFixNode
     NODE_CLASS_MAPPINGS["QwenVLCLIPLoader"] = QwenVLCLIPLoader
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLCLIPLoader"] = "Qwen2.5-VL CLIP Loader"
 
     NODE_CLASS_MAPPINGS["QwenVLTextEncoder"] = QwenVLTextEncoder
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoder"] = "Qwen2.5-VL Text Encoder"
 
+    NODE_CLASS_MAPPINGS["QwenLowresFixNode"] = QwenLowresFixNode
+    NODE_DISPLAY_NAME_MAPPINGS["QwenLowresFixNode"] = "Qwen Lowres Fix (Two-Stage)"
+
     print("[QwenImageWanBridge] Loaded Qwen2.5-VL nodes using ComfyUI's CLIP")
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load encoder nodes: {e}")
 
+# Advanced encoder for power users
+try:
+    from .nodes.qwen_vl_encoder_advanced import QwenVLTextEncoderAdvanced
+    NODE_CLASS_MAPPINGS["QwenVLTextEncoderAdvanced"] = QwenVLTextEncoderAdvanced
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoderAdvanced"] = "Qwen2.5-VL Text Encoder (Advanced)"
+
+    print("[QwenImageWanBridge] Loaded Advanced Encoder with weighted resolution control")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load advanced encoder: {e}")
+
 # Helper nodes
 try:
     from .nodes.qwen_vl_helpers import QwenVLEmptyLatent, QwenVLImageToLatent
-    
+
     NODE_CLASS_MAPPINGS["QwenVLEmptyLatent"] = QwenVLEmptyLatent
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLEmptyLatent"] = "Qwen VL Empty Latent"
-    
+
     NODE_CLASS_MAPPINGS["QwenVLImageToLatent"] = QwenVLImageToLatent
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLImageToLatent"] = "Qwen VL Image to Latent"
 
@@ -121,6 +134,68 @@ except Exception as e:
 # Patches removed - functionality integrated into main encoder
 
 # Native nodes removed - incomplete implementation
+
+# ============================================================================
+# WRAPPER LOADER NODES - DiffSynth-style model loading
+# ============================================================================
+
+try:
+    from .nodes.qwen_wrapper_loaders import (
+        QwenImageDiTLoaderWrapper,
+        QwenVLTextEncoderLoaderWrapper,
+        QwenImageVAELoaderWrapper,
+        QwenModelManagerWrapper
+    )
+    from .nodes.qwen_wrapper_sampler import (
+        QwenImageSamplerNode,
+        QwenSchedulerNode,
+    )
+    from .nodes.qwen_wrapper_nodes import (
+        QwenImageEncodeWrapper,
+        QwenImageCombineLatents,
+        QwenImageModelWithEdit,
+        QwenImageSamplerWithEdit,
+        QwenDebugLatents,
+    )
+
+    NODE_CLASS_MAPPINGS["QwenImageDiTLoaderWrapper"] = QwenImageDiTLoaderWrapper
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageDiTLoaderWrapper"] = "Qwen Image DiT Loader (Wrapper)"
+
+    NODE_CLASS_MAPPINGS["QwenVLTextEncoderLoaderWrapper"] = QwenVLTextEncoderLoaderWrapper
+    NODE_DISPLAY_NAME_MAPPINGS["QwenVLTextEncoderLoaderWrapper"] = "Qwen2.5-VL Text Encoder Loader (Wrapper)"
+
+    NODE_CLASS_MAPPINGS["QwenImageVAELoaderWrapper"] = QwenImageVAELoaderWrapper
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageVAELoaderWrapper"] = "Qwen 16-Channel VAE Loader (Wrapper)"
+
+    NODE_CLASS_MAPPINGS["QwenModelManagerWrapper"] = QwenModelManagerWrapper
+    NODE_DISPLAY_NAME_MAPPINGS["QwenModelManagerWrapper"] = "Qwen Image Edit Pipeline Loader (Wrapper)"
+
+    NODE_CLASS_MAPPINGS["QwenImageSamplerNode"] = QwenImageSamplerNode
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageSamplerNode"] = "Qwen Image Sampler (FlowMatch)"
+
+    NODE_CLASS_MAPPINGS["QwenSchedulerNode"] = QwenSchedulerNode
+    NODE_DISPLAY_NAME_MAPPINGS["QwenSchedulerNode"] = "Qwen FlowMatch Scheduler"
+
+    # New wrapper nodes for edit latent handling
+    NODE_CLASS_MAPPINGS["QwenImageEncodeWrapper"] = QwenImageEncodeWrapper
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageEncodeWrapper"] = "Qwen Image Encode (Edit Latent)"
+
+    NODE_CLASS_MAPPINGS["QwenImageCombineLatents"] = QwenImageCombineLatents
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageCombineLatents"] = "Qwen Combine Edit Latents"
+
+    NODE_CLASS_MAPPINGS["QwenImageModelWithEdit"] = QwenImageModelWithEdit
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageModelWithEdit"] = "Qwen Model with Edit Latents"
+
+    NODE_CLASS_MAPPINGS["QwenImageSamplerWithEdit"] = QwenImageSamplerWithEdit
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageSamplerWithEdit"] = "Qwen Sampler with Edit"
+
+    NODE_CLASS_MAPPINGS["QwenDebugLatents"] = QwenDebugLatents
+    NODE_DISPLAY_NAME_MAPPINGS["QwenDebugLatents"] = "Qwen Debug Latents"
+
+    print("[QwenImageWanBridge] Loaded Wrapper Loader nodes (11 nodes)")
+    print("[QwenImageWanBridge] FEATURE: DiffSynth-style model loading with proper edit latent handling")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load wrapper loader nodes: {e}")
 
 # ============================================================================
 # EXPORTS
