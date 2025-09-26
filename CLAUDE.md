@@ -79,8 +79,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Text-to-image generation
 - Single and multi-image editing with Qwen-Image-Edit-2509
 - Template system with custom system prompts
-- Debug mode for troubleshooting
+- Debug Controller with performance profiling and log analysis
+- Silent debug patches (no console spam unless enabled)
 - Multi-reference image processing with dimension fixes
+- Full debug output showing complete prompts being encoded
+- Face replacement templates aligned with Qwen-Image-Edit-2509 structure
 
 **What's Experimental:**
 - EliGen Entity Control (untested with current models)

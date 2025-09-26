@@ -1,6 +1,5 @@
 """
 Qwen Template Builder Node V2
-Simplified version with better Python-based logic
 """
 
 import json
@@ -28,6 +27,8 @@ class QwenTemplateBuilderV2:
                     "face_replacement_detailed",
                     "face_replacement_technical",
                     "identity_transfer",
+                    "qwen_face_swap",
+                    "qwen_identity_merge",
                     "structured_json_edit",
                     "xml_spatial_edit",
                     "natural_spatial_edit",
@@ -48,12 +49,6 @@ class QwenTemplateBuilderV2:
                     "multiline": True,
                     "default": "",
                     "tooltip": "Override system prompt - works with ANY template mode (leave empty to use default). This overrides the built-in system prompt for any selected template."
-                }),
-                "num_images": ("INT", {
-                    "default": 1,
-                    "min": 0,
-                    "max": 100,
-                    "tooltip": "Number of images to process (0=auto-detect, 1-100=manual). Note: 4+ images may degrade quality."
                 }),
             }
         }
@@ -124,13 +119,13 @@ class QwenTemplateBuilderV2:
             "mode": "image_edit"
         },
         "face_replacement": {
-            "system": "Task: Perform precise head and facial feature replacement. Picture 1 contains the source identity (face, facial features, skin tone, hair). Picture 2 contains the target body and scene. Extract from Picture 1: Complete facial structure, all facial features, exact skin tone and texture, complete hairstyle and color, any facial hair or head accessories. Preserve from Picture 2: Everything below the neck line including body posture, clothing, hands, background, lighting conditions, and shadows. Critical: Completely replace Picture 2's head with Picture 1's head. Do not blend or mix facial features. Ensure natural neck integration and lighting consistency.",
+            "system": "You are editing images based on user instructions. Analyze the provided images and follow this structured approach: The person from Picture 1 should replace the face and head of the person in Picture 2, while preserving all other elements of Picture 2 including body pose, clothing, hands, background, environment, and lighting. Generate a complete image that shows the full scene from Picture 2 with Picture 1's facial identity seamlessly integrated.",
             "vision": True,
             "mode": "image_edit",
             "use_picture_format": True
         },
         "face_replacement_detailed": {
-            "system": "Analyze Picture 1 in extreme detail: map exact hex color of skin, measure facial proportions (eye width to face width ratio, nose length to face height), identify specific ethnic features, catalog age markers (wrinkles, skin texture), classify hair pattern (straight/wavy/curly with specific curl pattern), document facial hair density and color. Picture 2 provides the body template. Execute pixel-perfect replacement of Picture 2's entire head region with Picture 1's analyzed features. Maintain Picture 2's exact lighting angle and shadow intensity. The goal is surgical precision in transferring Picture 1's complete facial identity.",
+            "system": "You are performing precise identity transfer between images. Follow this structured edit: Change the person from Picture 2 to have the exact facial features, skin tone, hair style, and head structure from Picture 1. Maintain Picture 2's complete scene composition including body posture, clothing, hand positions, background elements, and lighting conditions. Generate a full image that preserves Picture 2's context while replacing only the head and facial identity with Picture 1's features.",
             "vision": True,
             "mode": "image_edit",
             "use_picture_format": True
@@ -146,18 +141,24 @@ class QwenTemplateBuilderV2:
             "vision": True,
             "mode": "image_edit",
             "use_picture_format": True
+        },
+        "qwen_face_swap": {
+            "system": "Generate an image based on the following instructions: Change the person from Picture 2 to have the face from Picture 1. Keep all other elements from Picture 2 unchanged including body, clothing, pose, and background.",
+            "vision": True,
+            "mode": "image_edit",
+            "use_picture_format": True
+        },
+        "qwen_identity_merge": {
+            "system": "Generate an image that combines elements from multiple pictures: The face and head from Picture 1 should be placed on the body from Picture 2, maintaining Picture 2's pose, clothing, and environment. Ensure natural integration with consistent lighting and shadows.",
+            "vision": True,
+            "mode": "image_edit",
+            "use_picture_format": True
         }
     }
 
 
-    def build(self, prompt: str, template_mode: str, custom_system: str, num_images: int) -> Tuple[str, str, str]:
+    def build(self, prompt: str, template_mode: str, custom_system: str) -> Tuple[str, str, str]:
         """Output the raw prompt and system prompt for the encoder to use"""
-
-        # Warn about quality degradation with many images
-        if num_images > 10:
-            print(f"[Template Builder] Warning: {num_images} images is significantly beyond model training. Expect unpredictable results.")
-        elif num_images > 4:
-            print(f"[Template Builder] Warning: Using {num_images} images. Quality may degrade with 4+ images (model was trained on 2-3).")
 
         # Handle show all prompts mode - displays all available system prompts
         if template_mode == "show_all_prompts":
@@ -188,9 +189,7 @@ class QwenTemplateBuilderV2:
             system_prompt = custom_system if custom_system else template["system"]
             mode_info = f"{template_mode}|{template['mode']}"
 
-            # Add Picture format hint if needed
-            if template.get("use_picture_format", False) and num_images > 1:
-                mode_info += f"|picture_format_{num_images}"
+            # Note: Picture format is now automatic in encoder for 2+ images
 
             return (prompt, system_prompt, mode_info)
 

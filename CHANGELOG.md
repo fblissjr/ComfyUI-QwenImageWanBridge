@@ -1,5 +1,41 @@
 # Changelog
 
+## v2.4 DiffSynth Alignment & Better Debug
+
+### Added
+- **100% DiffSynth-Studio alignment** verified for all components
+- **Better debug output** showing full prompts without truncation
+- **New face replacement templates** aligned with Qwen-Image-Edit-2509:
+  - `qwen_face_swap` - Simple face swap following model's training
+  - `qwen_identity_merge` - Identity transfer with full scene preservation
+- **Character counts** in debug output for tracking token usage
+
+### Fixed
+- Face replacement templates now generate full images, not just face crops
+- Debug output shows complete formatted text being encoded
+- Templates use "generate an image" structure matching model training
+
+### Changed
+- Updated face replacement templates to preserve full scene context
+- Debug output sections reorganized for better clarity
+
+## v2.3 Debug Controller & Silent Patches
+
+### Added
+- **QwenDebugController node** - Comprehensive debugging system
+  - Multi-level debugging: off/basic/verbose/trace
+  - Performance profiling and memory tracking
+  - Component filtering and regex pattern matching
+  - Export debug sessions to JSON/text
+  - System info display (GPU, CPU, memory)
+- **Silent debug patches** - No console spam by default
+  - Set `QWEN_DEBUG_VERBOSE=true` or use Debug Controller to enable
+  - Integrates with encoder's debug_mode parameter
+
+### Fixed
+- Debug patches now run silently unless explicitly enabled
+- No more console spam during normal operation
+
 ## v2.2 Token Dropping & N-Image Support
 
 ### Added

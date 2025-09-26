@@ -166,7 +166,7 @@ class QwenVLTextEncoder:
                     "tooltip": "Required for image editing - encodes reference latents"
                 }),
                 "system_prompt": ("STRING", {
-                    "tooltip": "System prompt override from Template Builder (optional)",
+                    "tooltip": "System prompt from Template Builder - connect for proper token dropping",
                     "multiline": True,
                     "default": ""
                 }),
@@ -174,24 +174,16 @@ class QwenVLTextEncoder:
                     "default": False,
                     "tooltip": "Show processing details in console"
                 }),
-                # Smart Labeling Parameters (Phase 0-2)
-                "smart_labeling": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Enable smart Picture X labeling (only adds when needed)"
-                }),
-                "validation_mode": (["off", "warn", "error", "verbose"], {
+                # Validation Parameter (simplified)
+                "validation_mode": (["off", "warn", "error"], {
                     "default": "off",
-                    "tooltip": "Validate Picture references: off=disabled, warn=log warnings, error=stop on mismatch"
-                }),
-                "force_labels": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Force Picture X labels even if not detected as needed"
+                    "tooltip": "Validate Picture references match available images"
                 }),
             }
         }
 
-    RETURN_TYPES = ("CONDITIONING",)
-    RETURN_NAMES = ("conditioning",)
+    RETURN_TYPES = ("CONDITIONING", "STRING")
+    RETURN_NAMES = ("conditioning", "debug_output")
     FUNCTION = "encode"
     CATEGORY = "QwenImage/Encoding"
     TITLE = "Qwen2.5-VL Text Encoder"
@@ -213,8 +205,7 @@ class QwenVLTextEncoder:
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None,
               vae=None, system_prompt: str = "", debug_mode: bool = False,
-              smart_labeling: bool = False, validation_mode: str = "off",
-              force_labels: bool = False) -> Tuple[Any]:
+              validation_mode: str = "off") -> Tuple[Any]:
 
         """Encode text and images for Qwen Image generation.
         Follows DiffSynth/Diffusers implementation with 32-pixel alignment."""
@@ -224,6 +215,7 @@ class QwenVLTextEncoder:
 
         vision_images = []
         ref_latents = []
+        debug_info = []  # Collect debug information for UI output
 
         # Control verbose debug output based on debug_mode
         try:
@@ -239,9 +231,11 @@ class QwenVLTextEncoder:
         if mode == "image_edit" and edit_image is not None:
             if debug_mode:
                 logger.info(f"[Encoder] Input shape: {edit_image.shape}")
+                debug_info.append(f"Input shape: {edit_image.shape}")
 
             # Convert batch tensor to list of images
             images = [edit_image[i:i+1, :, :, :3] for i in range(edit_image.shape[0])]
+            debug_info.append(f"Processing {len(images)} images")
 
             # Process each image with DiffSynth/Diffusers standard sizing
             for i, img in enumerate(images):
@@ -257,6 +251,8 @@ class QwenVLTextEncoder:
 
                 if debug_mode:
                     logger.info(f"[Encoder] Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}")
+
+                debug_info.append(f"Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}")
 
                 # Resize for VAE encoder (1024x1024 target area) if VAE provided
                 if vae is not None:
@@ -280,63 +276,50 @@ class QwenVLTextEncoder:
             if not is_valid and validation_mode == "error":
                 raise ValueError(f"Reference validation failed: {message}")
             elif message and debug_mode:
-                logger.info(f"[Validation] {message}")
+                # Only show actual problems, not "unused images" which is annoying
+                if "unused" not in message.lower():
+                    logger.info(f"[Validation] {message}")
 
-        # Phase 2: Smart Detection (if enabled)
-        should_add_labels = False
-        label_reason = "legacy"
-
-        if SMART_LABELING_AVAILABLE and mode != "text_to_image":
-            detector = SmartLabelingDetector()
-            should_add_labels, label_reason = detector.should_add_labels(
-                text, num_images, smart_labeling, force_labels
-            )
-
-            if debug_mode:
-                logger.info(f"[Smart Labeling] Decision: {'Add labels' if should_add_labels else 'No labels'} - Reason: {label_reason}")
-        else:
-            # Legacy behavior or text-to-image mode
-            if mode == "text_to_image":
-                should_add_labels = False
-                label_reason = "text_to_image mode"
-            else:
-                # Legacy: always add labels for multi-image
-                should_add_labels = num_images > 1
-                label_reason = "legacy mode (multi-image)" if should_add_labels else "legacy mode (single)"
-
-        # Build vision tokens based on smart detection
+        # Simplified: Always add "Picture X:" for 2+ images (matches DiffSynth & Diffusers)
+        # Build vision tokens based on image count
         if mode == "text_to_image":
             vision_tokens = ""
+            debug_info.append(f"Mode: text_to_image, no vision tokens")
         else:
             if num_images == 0:
                 vision_tokens = ""
+                debug_info.append(f"No images provided")
             elif num_images == 1:
-                # Single image never gets Picture label
+                # Single image: no label needed
                 vision_tokens = "<|vision_start|><|image_pad|><|vision_end|>"
-            elif should_add_labels:
-                # Multi-image with labels (smart detection said yes)
+                debug_info.append(f"Single image mode (no Picture label)")
+            else:
+                # Multi-image: always add "Picture X:" labels (DiffSynth/Diffusers standard)
                 vision_tokens = "".join([
                     f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
                     for i in range(num_images)
                 ])
-            else:
-                # Multi-image without labels (smart detection said no)
-                vision_tokens = "".join([
-                    "<|vision_start|><|image_pad|><|vision_end|>"
-                    for i in range(num_images)
-                ])
+                debug_info.append(f"Multi-image mode: Added Picture 1-{num_images} labels")
+                if debug_mode:
+                    logger.info(f"[Encoder] Added Picture labels for {num_images} images")
+
+        # Initialize formatted_text and drop_idx for debug output
+        formatted_text = ""
+        drop_idx = 0
 
         # Format the text with system prompt if we have a processor and system prompt
-        # This includes the full template that will be tokenized, then we drop tokens after encoding
+        # DiffSynth ALWAYS uses drop_idx based on mode, regardless of system prompt
         if self.processor and system_prompt:
             # Use processor to format with system prompt wrapper
             formatted_text = self.processor.format_template(text, system_prompt, vision_tokens)
-            # Get drop index from processor
+            # DiffSynth always drops tokens for each mode when using their templates
             drop_idx = self.processor.get_drop_index(mode)
         else:
-            # Fallback: no system prompt wrapper, no dropping
+            # No system prompt - still apply DiffSynth drop indices if using standard format
             formatted_text = f"{vision_tokens}{text}" if mode != "text_to_image" else text
-            drop_idx = 0
+            # DiffSynth behavior: they always have templates, so always drop
+            # But we allow no template, so only drop if we're in a vision mode
+            drop_idx = 0  # Only drop when we have the full template
 
         if debug_mode:
             logger.info(f"[Encoder] Mode: {mode}, Images: {num_images}, Drop index: {drop_idx}")
@@ -383,7 +366,36 @@ class QwenVLTextEncoder:
             if debug_mode:
                 logger.info(f"[Encoder] Added {len(ref_latents)} reference latents to conditioning")
 
-        return (conditioning,)
+        # Build debug output string
+        if debug_mode and debug_info:
+            debug_output = "=== QWEN ENCODER DEBUG ===\n\n"
+            debug_output += "\n".join(debug_info)
+
+            # Show vision tokens (truncate if very long)
+            vision_display = vision_tokens[:200] + "..." if len(vision_tokens) > 200 else vision_tokens
+
+            debug_output += f"\n\n=== VISION TOKENS ===\n{vision_display}"
+
+            # Show FULL formatted text without truncation for debugging
+            debug_output += f"\n\n=== FULL PROMPT BEING ENCODED ===\n{formatted_text}"
+
+            # Also show just the user prompt part for clarity
+            if vision_tokens and text:
+                debug_output += f"\n\n=== USER PROMPT (without vision tokens) ===\n{text}"
+
+            debug_output += f"\n\n=== SETTINGS ===\nMode: {mode}\nImages: {num_images}\nDrop Index: {drop_idx}"
+            debug_output += f"\nSystem Prompt: {'Yes' if system_prompt else 'No'}\nValidation: {validation_mode}"
+
+            # Show character counts for reference
+            debug_output += f"\n\n=== CHARACTER COUNTS ===\nTotal prompt length: {len(formatted_text)} chars"
+            debug_output += f"\nVision tokens: {len(vision_tokens)} chars"
+            debug_output += f"\nUser prompt: {len(text)} chars"
+            if system_prompt:
+                debug_output += f"\nSystem prompt: {len(system_prompt)} chars"
+        else:
+            debug_output = "Enable debug_mode to see detailed output"
+
+        return (conditioning, debug_output)
 
 
 class QwenLowresFixNode:

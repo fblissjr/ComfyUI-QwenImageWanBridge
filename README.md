@@ -5,11 +5,12 @@ Advanced nodes for Qwen-Image-Edit with multi-image support, more flexibility ar
 ## Features
 
 ### Core Capabilities
-- **Qwen-Image-Edit-2509**: Multi-image editing with "Picture X:" references
+- **Qwen-Image-Edit-2509**: Multi-image editing with image token formatting
+- **100% DiffSynth-Studio Aligned**: Verified matching implementation
 - **Proper Token Dropping**: Matches DiffSynth/Diffusers (drops first 34/64 embeddings)
 - **N-Image Support**: Template Builder supports 0-100 images with warnings
 - **Clean Architecture**: DRY principles, single source of truth for templates
-- **Debug Modes**: Detailed logging shows dropping, ordering, formatting
+- **Enhanced Debug**: Full prompt display, character counts, no truncation
 
 ### Key Nodes
 
@@ -17,7 +18,7 @@ Advanced nodes for Qwen-Image-Edit with multi-image support, more flexibility ar
 Main text encoder with proper token dropping.
 - Token dropping after encoding (34 for text, 64 for image_edit)
 - Multi-image support via Image Batch input
-- Automatic "Picture X:" formatting for N images
+- Automatic image token formatting for N images
 - System prompt from Template Builder (single source)
 - Debug mode shows embedding dropping in action
 
@@ -27,11 +28,13 @@ Single source of truth for system prompts.
 - Automatic warnings at 4+ and 10+ images
 - `custom_system`: Override ANY template's system prompt
 - Official DiffSynth-Studio templates included
+- New edit templates for system prompts
 
 ### Helper Nodes
 - **QwenVLEmptyLatent**: Creates 16-channel empty latents
 - **QwenVLImageToLatent**: Converts images to 16-channel latents
 - **QwenTemplateConnector**: Connects template builder to encoder (optional)
+- **QwenDebugController**: Comprehensive debugging and profiling system
 
 ### Experimental Nodes (Available but Low Priority)
 - **QwenSpatialTokenGenerator**: Visual editor for spatial tokens
@@ -121,10 +124,16 @@ See [MULTI_IMAGE_ORDERING.md](MULTI_IMAGE_ORDERING.md) for detailed guide.
 - Entity control nodes (QwenEliGenEntityControl - untested with current models)
 - Token debugging tools (QwenTokenDebugger, QwenTokenAnalyzer)
 
-**Latest Updates (v2.2):**
-- Token dropping implementation matches DiffSynth/Diffusers exactly
-- Template Builder supports N images (0-100) with quality warnings
-- Clean DRY architecture: each component has single responsibility
+**Latest Updates (v2.4):**
+- 100% DiffSynth-Studio alignment verified
+- Enhanced debug output with full prompts and character counts
+- New face replacement templates for full scene preservation
+- Templates aligned with Qwen-Image-Edit-2509 training structure
+
+**v2.3 Updates:**
+- Debug Controller node for comprehensive debugging and profiling
+- Silent debug patches - no console spam unless explicitly enabled
+- Performance profiling, memory tracking, and error analysis tools
 
 ## Requirements
 
