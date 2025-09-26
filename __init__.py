@@ -101,6 +101,18 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Token Analysis nodes: {e}")
 
+# Debug Controller node
+try:
+    from .nodes.qwen_debug_controller import QwenDebugController
+
+    NODE_CLASS_MAPPINGS["QwenDebugController"] = QwenDebugController
+    NODE_DISPLAY_NAME_MAPPINGS["QwenDebugController"] = "Qwen Debug Controller"
+
+    print("[QwenImageWanBridge] Loaded Debug Controller node")
+    print("[QwenImageWanBridge] FEATURE: Holistic debugging with performance profiling and log analysis")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Debug Controller: {e}")
+
 # Inpainting nodes removed - not core to image edit
 
 # Note: Experimental multi-frame nodes have been archived
@@ -127,7 +139,7 @@ print(f"[QwenImageWanBridge] Total nodes loaded: {len(NODE_CLASS_MAPPINGS)}")
 try:
     from .nodes import debug_patch
     debug_patch.apply_debug_patches()
-    print("[QwenImageWanBridge] ✅ Debug patches applied - end-to-end tracing active")
-    print("[QwenImageWanBridge] Trace shows: Model Load → Conditioning → Sampler → Forward Pass")
+    print("[QwenImageWanBridge] ✅ Debug patches applied (silent mode by default)")
+    print("[QwenImageWanBridge] Use QwenDebugController node or set QWEN_DEBUG_VERBOSE=true for tracing")
 except Exception as e:
     print(f"[QwenImageWanBridge] ❌ Debug patches failed: {e}")

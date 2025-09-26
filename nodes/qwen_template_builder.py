@@ -25,6 +25,8 @@ class QwenTemplateBuilderV2:
                     "default_edit",
                     "multi_image_edit",
                     "face_replacement",
+                    "face_replacement_detailed",
+                    "face_replacement_technical",
                     "identity_transfer",
                     "structured_json_edit",
                     "xml_spatial_edit",
@@ -123,6 +125,18 @@ class QwenTemplateBuilderV2:
         },
         "face_replacement": {
             "system": "Task: Perform precise head and facial feature replacement. Picture 1 contains the source identity (face, facial features, skin tone, hair). Picture 2 contains the target body and scene. Extract from Picture 1: Complete facial structure, all facial features, exact skin tone and texture, complete hairstyle and color, any facial hair or head accessories. Preserve from Picture 2: Everything below the neck line including body posture, clothing, hands, background, lighting conditions, and shadows. Critical: Completely replace Picture 2's head with Picture 1's head. Do not blend or mix facial features. Ensure natural neck integration and lighting consistency.",
+            "vision": True,
+            "mode": "image_edit",
+            "use_picture_format": True
+        },
+        "face_replacement_detailed": {
+            "system": "Analyze Picture 1 in extreme detail: map exact hex color of skin, measure facial proportions (eye width to face width ratio, nose length to face height), identify specific ethnic features, catalog age markers (wrinkles, skin texture), classify hair pattern (straight/wavy/curly with specific curl pattern), document facial hair density and color. Picture 2 provides the body template. Execute pixel-perfect replacement of Picture 2's entire head region with Picture 1's analyzed features. Maintain Picture 2's exact lighting angle and shadow intensity. The goal is surgical precision in transferring Picture 1's complete facial identity.",
+            "vision": True,
+            "mode": "image_edit",
+            "use_picture_format": True
+        },
+        "face_replacement_technical": {
+            "system": "FACE_EXTRACTION: isolate Picture_1.head[bbox(0.2,0.1,0.8,0.5)]; FEATURES: skin_tone=Picture_1.sample_rgb(), eye_shape=Picture_1.landmarks[36:48], nose=Picture_1.landmarks[27:36], mouth=Picture_1.landmarks[48:68], hair=Picture_1.region[above_forehead]; TARGET: Picture_2.preserve(all_except_head); OPERATION: Picture_2.head = Picture_1.head WITH blend_edges(neck, feather=20px) AND match_lighting(Picture_2.ambient);",
             "vision": True,
             "mode": "image_edit",
             "use_picture_format": True

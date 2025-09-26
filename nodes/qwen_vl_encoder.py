@@ -22,6 +22,18 @@ except ImportError:
     PROCESSOR_AVAILABLE = False
     logger.warning("QwenProcessorV2 not available - will use simplified approach")
 
+# Import smart labeling components (Phase 0-2)
+try:
+    from .qwen_config import QwenConfig
+    from .qwen_logger import QwenLogger
+    from .qwen_validator import ReferenceValidator
+    from .qwen_smart_detector import SmartLabelingDetector
+    SMART_LABELING_AVAILABLE = True
+    logger.info("[Smart Labeling] Components loaded - Phase 0-2 features available")
+except ImportError:
+    SMART_LABELING_AVAILABLE = False
+    logger.info("[Smart Labeling] Components not available - using legacy behavior")
+
 # Try to import ComfyUI's utilities
 try:
     import comfy.sd
@@ -162,6 +174,19 @@ class QwenVLTextEncoder:
                     "default": False,
                     "tooltip": "Show processing details in console"
                 }),
+                # Smart Labeling Parameters (Phase 0-2)
+                "smart_labeling": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Enable smart Picture X labeling (only adds when needed)"
+                }),
+                "validation_mode": (["off", "warn", "error", "verbose"], {
+                    "default": "off",
+                    "tooltip": "Validate Picture references: off=disabled, warn=log warnings, error=stop on mismatch"
+                }),
+                "force_labels": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Force Picture X labels even if not detected as needed"
+                }),
             }
         }
 
@@ -187,7 +212,9 @@ class QwenVLTextEncoder:
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None,
-              vae=None, system_prompt: str = "", debug_mode: bool = False) -> Tuple[Any]:
+              vae=None, system_prompt: str = "", debug_mode: bool = False,
+              smart_labeling: bool = False, validation_mode: str = "off",
+              force_labels: bool = False) -> Tuple[Any]:
 
         """Encode text and images for Qwen Image generation.
         Follows DiffSynth/Diffusers implementation with 32-pixel alignment."""
@@ -197,6 +224,16 @@ class QwenVLTextEncoder:
 
         vision_images = []
         ref_latents = []
+
+        # Control verbose debug output based on debug_mode
+        try:
+            from . import debug_patch
+            debug_patch.set_debug_verbose(debug_mode)
+            if debug_mode:
+                logger.info("[Encoder] Debug mode enabled - verbose tracing active")
+        except Exception as e:
+            if debug_mode:
+                logger.debug(f"Could not control verbose debug: {e}")
 
         # Process images if provided
         if mode == "image_edit" and edit_image is not None:
@@ -235,18 +272,57 @@ class QwenVLTextEncoder:
         # Simple processing: Template Builder provides system prompt, we handle technical bits
         num_images = len(vision_images) if vision_images else 0
 
-        # Build vision tokens for image editing
+        # Phase 1: Validation (if enabled)
+        if SMART_LABELING_AVAILABLE and validation_mode != "off":
+            validator = ReferenceValidator()
+            is_valid, message, details = validator.validate(text, num_images, validation_mode)
+
+            if not is_valid and validation_mode == "error":
+                raise ValueError(f"Reference validation failed: {message}")
+            elif message and debug_mode:
+                logger.info(f"[Validation] {message}")
+
+        # Phase 2: Smart Detection (if enabled)
+        should_add_labels = False
+        label_reason = "legacy"
+
+        if SMART_LABELING_AVAILABLE and mode != "text_to_image":
+            detector = SmartLabelingDetector()
+            should_add_labels, label_reason = detector.should_add_labels(
+                text, num_images, smart_labeling, force_labels
+            )
+
+            if debug_mode:
+                logger.info(f"[Smart Labeling] Decision: {'Add labels' if should_add_labels else 'No labels'} - Reason: {label_reason}")
+        else:
+            # Legacy behavior or text-to-image mode
+            if mode == "text_to_image":
+                should_add_labels = False
+                label_reason = "text_to_image mode"
+            else:
+                # Legacy: always add labels for multi-image
+                should_add_labels = num_images > 1
+                label_reason = "legacy mode (multi-image)" if should_add_labels else "legacy mode (single)"
+
+        # Build vision tokens based on smart detection
         if mode == "text_to_image":
             vision_tokens = ""
         else:
-            # Build vision tokens based on number of images
             if num_images == 0:
                 vision_tokens = ""
             elif num_images == 1:
+                # Single image never gets Picture label
                 vision_tokens = "<|vision_start|><|image_pad|><|vision_end|>"
-            else:
+            elif should_add_labels:
+                # Multi-image with labels (smart detection said yes)
                 vision_tokens = "".join([
                     f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
+                    for i in range(num_images)
+                ])
+            else:
+                # Multi-image without labels (smart detection said no)
+                vision_tokens = "".join([
+                    "<|vision_start|><|image_pad|><|vision_end|>"
                     for i in range(num_images)
                 ])
 
