@@ -392,6 +392,16 @@ class QwenVLTextEncoderLoaderWrapper:
                 processor = None
                 if load_processor:
                     try:
+                        # Use the specific Qwen2_5_VLProcessor instead of AutoProcessor
+                        from transformers import Qwen2_5_VLProcessor
+                        processor = Qwen2_5_VLProcessor.from_pretrained(
+                            huggingface_id,
+                            trust_remote_code=True
+                        )
+                        logger.info(f"Loaded processor: {type(processor).__name__}")
+                    except ImportError:
+                        # Fallback to AutoProcessor if Qwen2_5_VLProcessor not available
+                        logger.info("Qwen2_5_VLProcessor not available, using AutoProcessor")
                         from transformers import AutoProcessor
                         processor = AutoProcessor.from_pretrained(
                             huggingface_id,
@@ -434,14 +444,32 @@ class QwenVLTextEncoderLoaderWrapper:
                     ]
 
                     for proc_path in processor_locations:
-                        if proc_path.exists() and (proc_path / "preprocessor_config.json").exists():
+                        # Check for both preprocessor_config.json and processor_config.json
+                        config_file = None
+                        if proc_path.exists():
+                            if (proc_path / "preprocessor_config.json").exists():
+                                config_file = "preprocessor_config.json"
+                            elif (proc_path / "processor_config.json").exists():
+                                config_file = "processor_config.json"
+
+                        if config_file:
                             try:
+                                # Try Qwen2_5_VLProcessor first
+                                from transformers import Qwen2_5_VLProcessor
+                                processor = Qwen2_5_VLProcessor.from_pretrained(
+                                    str(proc_path),
+                                    trust_remote_code=True
+                                )
+                                logger.info(f"Loaded Qwen2_5_VLProcessor from {proc_path}")
+                                break
+                            except ImportError:
+                                # Fallback to AutoProcessor
                                 from transformers import AutoProcessor
                                 processor = AutoProcessor.from_pretrained(
                                     str(proc_path),
                                     trust_remote_code=True
                                 )
-                                logger.info(f"Loaded processor from {proc_path}")
+                                logger.info(f"Loaded AutoProcessor from {proc_path}")
                                 break
                             except Exception as e:
                                 logger.debug(f"Could not load processor from {proc_path}: {e}")
@@ -450,12 +478,21 @@ class QwenVLTextEncoderLoaderWrapper:
                     # Fallback to HuggingFace if no local processor found
                     if processor is None:
                         try:
-                            from transformers import AutoProcessor
-                            processor = AutoProcessor.from_pretrained(
-                                "Qwen/Qwen2-VL-7B-Instruct",
+                            # Try specific processor first
+                            from transformers import Qwen2_5_VLProcessor
+                            processor = Qwen2_5_VLProcessor.from_pretrained(
+                                "Qwen/Qwen2.5-VL-7B-Instruct",
                                 trust_remote_code=True
                             )
-                            logger.info("Loaded processor from HuggingFace (Qwen2-VL-7B-Instruct)")
+                            logger.info("Loaded Qwen2_5_VLProcessor from HuggingFace")
+                        except ImportError:
+                            # Fallback to AutoProcessor
+                            from transformers import AutoProcessor
+                            processor = AutoProcessor.from_pretrained(
+                                "Qwen/Qwen2.5-VL-7B-Instruct",
+                                trust_remote_code=True
+                            )
+                            logger.info("Loaded AutoProcessor from HuggingFace")
                         except Exception as e:
                             logger.warning(f"Could not load processor: {e}")
                             logger.warning("Processor will not be available")
