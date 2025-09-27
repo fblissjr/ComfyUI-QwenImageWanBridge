@@ -5,9 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Code and Writing Style Guidelines
 
 - **No emojis** in code, display names, or documentation
+- Do **NOT** commit code to git or stage code for git without me explicitly asking and approving it
 - Keep all naming and display text professional
 - Avoid "Pure", "Enhanced", "Advanced", "Ultimate" type prefixes - use descriptive names instead
-- Always avoid redundancy and unnecessary complexity. If you need to make a v2, there needs to be a compelling reason for it instead of simply modifying the code or creating a new git branch.
+- Always avoid redundancy and unnecessary complexity. If you need to make a v2, there needs to be a compelling reason for it instead of simply modifying the code.
 - Clean, simple node names that describe what they do
 - Keep descriptions minimal and factual
 
@@ -367,3 +368,4 @@ if isinstance(video_fhw, list):
 3. Test and refine EliGen entity control
 4. Optimize multi-image processing
 5. Document wrapper workflow examples
+- The vision and text encoder model is `Qwen2.5-VL-7B-Instruct`, with a HF repo of `Qwen/Qwen2.5-VL-7B-Instruct`. The safetensors file on the ComfyUI server is stored in the standard ComfyUI/models/text_encoders folder.

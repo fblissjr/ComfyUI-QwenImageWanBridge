@@ -20,6 +20,18 @@ from .qwen_wrapper_base import QwenWrapperBase, QWEN_VAE_CHANNELS
 
 logger = logging.getLogger(__name__)
 
+# Set up verbose logging for wrapper nodes
+logging.basicConfig(level=logging.DEBUG)
+logger.setLevel(logging.DEBUG)
+
+# Add console handler if not present
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(name)s] %(levelname)s: %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
 # Get device settings from ComfyUI
 device = mm.get_torch_device()
 offload_device = mm.unet_offload_device()
@@ -109,7 +121,14 @@ class QwenImageDiTLoaderWrapper:
 
     def load_model(self, model_name: str, precision: str = "bf16",
                    load_device: str = "cuda", huggingface_id: str = None) -> Tuple[Any]:
-        """Load the Qwen Image Edit DiT model."""
+        """Load the Qwen Image Edit DiT model using DiffSynth implementation."""
+
+        logger.info("="*60)
+        logger.info("QWEN IMAGE DIT LOADER (DiffSynth) - Starting")
+        logger.info(f"Model: {model_name}")
+        logger.info(f"Precision: {precision}")
+        logger.info(f"Load device: {load_device}")
+        logger.info("="*60)
 
         # Determine dtype
         dtype_map = {
@@ -119,6 +138,7 @@ class QwenImageDiTLoaderWrapper:
             "fp8": torch.float8_e4m3fn if hasattr(torch, "float8_e4m3fn") else torch.bfloat16
         }
         dtype = dtype_map.get(precision, torch.bfloat16)
+        logger.debug(f"Using dtype: {dtype}")
 
         # Determine device
         if load_device == "offload":
@@ -127,18 +147,62 @@ class QwenImageDiTLoaderWrapper:
             target_device = "cpu"
         else:
             target_device = device
+        logger.debug(f"Target device: {target_device}")
 
         try:
-            if model_name == "Download from HuggingFace":
-                # Load from HuggingFace using transformers
-                from transformers import AutoModel
+            # Always use DiffSynth's QwenImageDiT implementation
+            import sys
+            import os
+            # Add parent directory to path to import from models folder
+            parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if parent_dir not in sys.path:
+                sys.path.insert(0, parent_dir)
 
-                logger.info(f"Loading Qwen Image DiT from HuggingFace: {huggingface_id}")
-                model = AutoModel.from_pretrained(
-                    huggingface_id,
-                    torch_dtype=dtype,
-                    trust_remote_code=True
-                ).to(target_device)
+            from models.qwen_image_dit import QwenImageDiT
+
+            logger.info("Creating QwenImageDiT (DiffSynth implementation)")
+            model = QwenImageDiT()
+
+            if model_name == "Download from HuggingFace":
+                # Download state dict from HuggingFace
+                logger.info(f"Downloading state dict from HuggingFace: {huggingface_id}")
+
+                from huggingface_hub import snapshot_download
+                import tempfile
+
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    # Download the model files
+                    snapshot_download(
+                        repo_id=huggingface_id,
+                        local_dir=tmp_dir,
+                        local_dir_use_symlinks=False,
+                        allow_patterns=["transformer/*.safetensors", "transformer/*.bin"],
+                    )
+
+                    # Find the model file in transformer subfolder
+                    model_files = []
+                    transformer_dir = os.path.join(tmp_dir, "transformer")
+                    if os.path.exists(transformer_dir):
+                        for filename in os.listdir(transformer_dir):
+                            if filename.endswith((".safetensors", ".bin")):
+                                model_files.append(os.path.join(transformer_dir, filename))
+
+                    if not model_files:
+                        # Fallback to root directory
+                        for filename in os.listdir(tmp_dir):
+                            if filename.endswith((".safetensors", ".bin")):
+                                model_files.append(os.path.join(tmp_dir, filename))
+
+                    if not model_files:
+                        raise ValueError(f"No model files found in {huggingface_id}")
+
+                    logger.info(f"Found model files: {model_files}")
+
+                    # Load state dict from files (may be multiple)
+                    state_dict = {}
+                    for model_file in model_files:
+                        file_state_dict = load_torch_file(model_file, device=target_device)
+                        state_dict.update(file_state_dict)
 
             else:
                 # Load from local file
@@ -151,32 +215,31 @@ class QwenImageDiTLoaderWrapper:
                 # Load state dict
                 state_dict = load_torch_file(model_path, device=target_device)
 
-                # Use transformers to load the model
-                from transformers import AutoModel
-                import torch.nn as nn
+            # Apply state dict converter if model has one
+            if hasattr(model, 'state_dict_converter'):
+                converter = model.state_dict_converter()
+                if converter:
+                    logger.info("Applying state dict converter")
+                    state_dict = converter.from_diffusers(state_dict)
 
-                # Try to infer model architecture from state dict keys
-                logger.info("Loading DiT model from state dict")
+            # Load the state dict into the model
+            logger.info("Loading state dict into QwenImageDiT")
+            incompatible = model.load_state_dict(state_dict, strict=False)
+            if incompatible.missing_keys:
+                logger.warning(f"Missing keys: {len(incompatible.missing_keys)}")
+                if len(incompatible.missing_keys) < 10:
+                    logger.debug(f"Missing keys: {incompatible.missing_keys}")
+            if incompatible.unexpected_keys:
+                logger.warning(f"Unexpected keys: {len(incompatible.unexpected_keys)}")
+                if len(incompatible.unexpected_keys) < 10:
+                    logger.debug(f"Unexpected keys: {incompatible.unexpected_keys}")
 
-                # Create a basic wrapper module that holds the state dict
-                class DiTModelWrapper(nn.Module):
-                    def __init__(self, state_dict):
-                        super().__init__()
-                        # Load the state dict into this module
-                        self.load_state_dict(state_dict, strict=False)
-
-                    def forward(self, *args, **kwargs):
-                        # Forward pass will be handled by the wrapper
-                        raise NotImplementedError("Use QwenImageModelWrapper for forward pass")
-
-                model = DiTModelWrapper(state_dict)
-                model = model.to(dtype=dtype, device=target_device)
-
-            # Set model to eval mode
+            # Move model to target device and dtype
+            model = model.to(dtype=dtype, device=target_device)
             model.eval()
 
             logger.info(f"Successfully loaded Qwen Image DiT model")
-            logger.info(f"Model type: {type(model)}, device: {target_device}, dtype: {dtype}")
+            logger.info(f"Model type: {type(model).__name__}, device: {target_device}, dtype: {dtype}")
 
             # Return the model directly - it will be wrapped by QwenImageModelWrapper later
             return (model,)
@@ -246,7 +309,14 @@ class QwenVLTextEncoderLoaderWrapper:
     def load_model(self, model_name: str, precision: str = "bf16",
                    load_device: str = "offload", huggingface_id: str = None,
                    load_processor: bool = True) -> Tuple[Any, Any]:
-        """Load the Qwen2.5-VL text encoder and processor."""
+        """Load the Qwen2.5-VL text encoder and processor using DiffSynth implementation."""
+
+        logger.info("="*60)
+        logger.info("QWEN2.5-VL TEXT ENCODER LOADER (DiffSynth) - Starting")
+        logger.info(f"Model: {model_name}")
+        logger.info(f"Precision: {precision}")
+        logger.info(f"Load device: {load_device}")
+        logger.info("="*60)
 
         # Determine dtype
         dtype_map = {
@@ -257,6 +327,7 @@ class QwenVLTextEncoderLoaderWrapper:
             "int4": torch.int8,  # Will use 4-bit quantization
         }
         dtype = dtype_map.get(precision, torch.bfloat16)
+        logger.debug(f"Using dtype: {dtype}")
 
         # Determine device
         if load_device == "offload":
@@ -265,73 +336,119 @@ class QwenVLTextEncoderLoaderWrapper:
             target_device = "cpu"
         else:
             target_device = device
+        logger.debug(f"Target device: {target_device}")
 
         try:
+            # Always use DiffSynth's QwenImageTextEncoder implementation
+            import sys
+            import os
+            # Add parent directory to path to import from models folder
+            parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if parent_dir not in sys.path:
+                sys.path.insert(0, parent_dir)
+
+            from models.qwen_image_text_encoder import QwenImageTextEncoder
+
+            logger.info("Creating QwenImageTextEncoder (DiffSynth implementation)")
+            text_encoder = QwenImageTextEncoder()
+
             if model_name == "Download from HuggingFace":
-                # Load from HuggingFace using transformers
-                from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+                # Download state dict from HuggingFace
+                logger.info(f"Downloading state dict from HuggingFace: {huggingface_id}")
 
-                logger.info(f"Loading Qwen2.5-VL from HuggingFace: {huggingface_id}")
+                from huggingface_hub import snapshot_download
+                import tempfile
 
-                load_kwargs = {
-                    "torch_dtype": dtype if precision not in ["int8", "int4"] else torch.float16,
-                    "trust_remote_code": True
-                }
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    # Download the model files
+                    snapshot_download(
+                        repo_id=huggingface_id,
+                        local_dir=tmp_dir,
+                        local_dir_use_symlinks=False,
+                        allow_patterns=["*.safetensors", "*.bin"],
+                    )
 
-                # Add quantization config if needed
-                if precision == "int8":
-                    load_kwargs["load_in_8bit"] = True
-                elif precision == "int4":
-                    load_kwargs["load_in_4bit"] = True
+                    # Find the model file
+                    model_files = []
+                    for filename in os.listdir(tmp_dir):
+                        if filename.endswith((".safetensors", ".bin")):
+                            model_files.append(os.path.join(tmp_dir, filename))
 
-                text_encoder = Qwen2VLForConditionalGeneration.from_pretrained(
-                    huggingface_id,
-                    **load_kwargs
-                ).to(target_device)
+                    if not model_files:
+                        raise ValueError(f"No model files found in {huggingface_id}")
 
-                # Load processor
-                processor = AutoProcessor.from_pretrained(huggingface_id) if load_processor else None
+                    logger.info(f"Found model files: {model_files}")
+
+                    # Load state dict from the first file
+                    state_dict = load_torch_file(model_files[0], device=target_device)
+
+                # Apply state dict converter if needed
+                converter = text_encoder.state_dict_converter()
+                if converter:
+                    logger.info("Applying state dict converter")
+                    state_dict = converter.from_diffusers(state_dict)
+
+                # Load processor separately if requested
+                processor = None
+                if load_processor:
+                    try:
+                        from transformers import AutoProcessor
+                        processor = AutoProcessor.from_pretrained(
+                            huggingface_id,
+                            trust_remote_code=True
+                        )
+                        logger.info(f"Loaded processor: {type(processor).__name__}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load processor: {e}")
+                        processor = None
 
             else:
-                # Load from local file
+                # Load from local file using DiffSynth approach
                 model_path = folder_paths.get_full_path("text_encoders", model_name)
                 if not model_path:
                     raise ValueError(f"Model not found: {model_name}")
 
                 logger.info(f"Loading Qwen2.5-VL from: {model_path}")
 
-                # Load state dict
+                # Load state dict from file
                 state_dict = load_torch_file(model_path, device=target_device)
 
-                # Use transformers to load
-                from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
-                import torch.nn as nn
+                # Apply state dict converter if needed
+                converter = text_encoder.state_dict_converter()
+                if converter:
+                    logger.info("Applying state dict converter")
+                    state_dict = converter.from_diffusers(state_dict)
 
-                logger.info("Loading text encoder from state dict")
-
-                # Create model wrapper
-                class TextEncoderWrapper(nn.Module):
-                    def __init__(self, state_dict):
-                        super().__init__()
-                        self.load_state_dict(state_dict, strict=False)
-
-                    def forward(self, *args, **kwargs):
-                        raise NotImplementedError("Use processor nodes for encoding")
-
-                text_encoder = TextEncoderWrapper(state_dict)
-                text_encoder = text_encoder.to(dtype=dtype, device=target_device)
-
-                # Try to load processor from same directory or HuggingFace
+                # Load processor if requested
                 processor = None
                 if load_processor:
-                    # First try local processor directory
-                    processor_path = Path(model_path).parent / "processor"
-                    if processor_path.exists():
-                        from transformers import AutoProcessor
-                        processor = AutoProcessor.from_pretrained(str(processor_path))
-                        logger.info(f"Loaded processor from {processor_path}")
-                    else:
-                        # Try loading from HuggingFace as fallback
+                    # Try to find processor config in various locations
+                    model_path_obj = Path(model_path)
+                    model_dir = model_path_obj.parent if model_path_obj.is_file() else model_path_obj
+
+                    # Try different locations for processor config
+                    processor_locations = [
+                        model_dir,  # Same directory as model
+                        model_dir / "processor",  # processor subdirectory
+                        Path(__file__).parent.parent / "configs" / "qwen25vl",  # Local configs
+                    ]
+
+                    for proc_path in processor_locations:
+                        if proc_path.exists() and (proc_path / "preprocessor_config.json").exists():
+                            try:
+                                from transformers import AutoProcessor
+                                processor = AutoProcessor.from_pretrained(
+                                    str(proc_path),
+                                    trust_remote_code=True
+                                )
+                                logger.info(f"Loaded processor from {proc_path}")
+                                break
+                            except Exception as e:
+                                logger.debug(f"Could not load processor from {proc_path}: {e}")
+                                continue
+
+                    # Fallback to HuggingFace if no local processor found
+                    if processor is None:
                         try:
                             from transformers import AutoProcessor
                             processor = AutoProcessor.from_pretrained(
@@ -341,13 +458,26 @@ class QwenVLTextEncoderLoaderWrapper:
                             logger.info("Loaded processor from HuggingFace (Qwen2-VL-7B-Instruct)")
                         except Exception as e:
                             logger.warning(f"Could not load processor: {e}")
-                            logger.warning("Processor node will not work. Either:")
-                            logger.warning("  1. Place processor files in same directory as model")
-                            logger.warning("  2. Use 'Download from HuggingFace' option")
+                            logger.warning("Processor will not be available")
 
+            # Load the state dict into the model
+            logger.info("Loading state dict into QwenImageTextEncoder")
+            incompatible = text_encoder.load_state_dict(state_dict, strict=False)
+            if incompatible.missing_keys:
+                logger.warning(f"Missing keys: {len(incompatible.missing_keys)}")
+                if len(incompatible.missing_keys) < 10:
+                    logger.debug(f"Missing keys: {incompatible.missing_keys}")
+            if incompatible.unexpected_keys:
+                logger.warning(f"Unexpected keys: {len(incompatible.unexpected_keys)}")
+                if len(incompatible.unexpected_keys) < 10:
+                    logger.debug(f"Unexpected keys: {incompatible.unexpected_keys}")
+
+            # Move model to target device and dtype
+            text_encoder = text_encoder.to(dtype=dtype, device=target_device)
             text_encoder.eval()
 
-            logger.info("Successfully loaded Qwen2.5-VL text encoder")
+            logger.info(f"Successfully loaded Qwen2.5-VL text encoder")
+            logger.info(f"Model on device: {target_device}, dtype: {dtype}")
             return (text_encoder, processor)
 
         except Exception as e:
@@ -412,6 +542,13 @@ class QwenImageVAELoaderWrapper:
                  tiling: bool = False, huggingface_id: str = None) -> Tuple[Any]:
         """Load the 16-channel VAE."""
 
+        logger.info("="*60)
+        logger.info("QWEN 16-CHANNEL VAE LOADER - Starting")
+        logger.info(f"Model: {model_name}")
+        logger.info(f"Precision: {precision}")
+        logger.info(f"Tiling: {tiling}")
+        logger.info("="*60)
+
         # Determine dtype
         dtype_map = {
             "fp32": torch.float32,
@@ -419,6 +556,7 @@ class QwenImageVAELoaderWrapper:
             "bf16": torch.bfloat16,
         }
         dtype = dtype_map.get(precision, torch.bfloat16)
+        logger.debug(f"Using dtype: {dtype}")
 
         try:
             if model_name == "Download from HuggingFace":
@@ -446,6 +584,45 @@ class QwenImageVAELoaderWrapper:
 
                 # Load state dict
                 state_dict = load_torch_file(vae_path, device=device)
+
+                # Detect VAE channels following Kijai's pattern
+                if "encoder.conv_in.weight" in state_dict:
+                    in_channels = state_dict["encoder.conv_in.weight"].shape[1]
+                    logger.info(f"Detected VAE input channels: {in_channels}")
+                elif "model.encoder.conv_in.weight" in state_dict:
+                    in_channels = state_dict["model.encoder.conv_in.weight"].shape[1]
+                    logger.info(f"Detected VAE input channels (nested): {in_channels}")
+                else:
+                    logger.warning("Could not detect VAE input channels, assuming 16")
+                    in_channels = 16
+
+                # Check output channels
+                if "decoder.conv_out.weight" in state_dict:
+                    out_channels = state_dict["decoder.conv_out.weight"].shape[0]
+                    logger.info(f"Detected VAE output channels: {out_channels}")
+                elif "model.decoder.conv_out.weight" in state_dict:
+                    out_channels = state_dict["model.decoder.conv_out.weight"].shape[0]
+                    logger.info(f"Detected VAE output channels (nested): {out_channels}")
+                else:
+                    logger.warning("Could not detect VAE output channels, assuming 16")
+                    out_channels = 16
+
+                # Validate this is a 16-channel VAE
+                if in_channels != 3 or out_channels != 3:
+                    logger.warning(f"Non-standard VAE detected: in={in_channels}, out={out_channels}")
+                    logger.warning("This appears to be a special VAE (possibly 16-channel latent space)")
+
+                # Check latent channels (most important for Qwen)
+                if "decoder.conv_in.weight" in state_dict:
+                    latent_channels = state_dict["decoder.conv_in.weight"].shape[1]
+                    logger.info(f"Detected VAE latent channels: {latent_channels}")
+                    if latent_channels == 16:
+                        logger.info("✓ Confirmed: This is a 16-channel latent VAE (Qwen/Wan format)")
+                elif "model.decoder.conv_in.weight" in state_dict:
+                    latent_channels = state_dict["model.decoder.conv_in.weight"].shape[1]
+                    logger.info(f"Detected VAE latent channels (nested): {latent_channels}")
+                    if latent_channels == 16:
+                        logger.info("✓ Confirmed: This is a 16-channel latent VAE (Qwen/Wan format)")
 
                 # Use ComfyUI's standard VAE loader - it auto-detects the config
                 import comfy.sd

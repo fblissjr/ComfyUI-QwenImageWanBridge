@@ -11,6 +11,15 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+# Set up verbose logging
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(name)s] %(levelname)s: %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
 
 class QwenProcessorWrapper:
     """Process text and images using the Qwen2.5-VL processor."""
@@ -65,7 +74,19 @@ class QwenProcessorWrapper:
         - Template formatting
         """
 
+        logger.info("="*60)
+        logger.info("QWEN PROCESSOR - Starting")
+        logger.info(f"Mode: {mode}")
+        logger.info(f"Text length: {len(text)} chars")
+        logger.info(f"Images provided: {images is not None}")
+        if images is not None:
+            logger.info(f"Image shape: {images.shape if hasattr(images, 'shape') else 'unknown'}")
+        logger.info(f"Add picture labels: {add_picture_labels}")
+        logger.info(f"System prompt: {bool(system_prompt)}")
+        logger.info("="*60)
+
         if processor is None:
+            logger.error("No processor provided!")
             raise ValueError("No processor provided. Connect a QwenVLTextEncoderLoaderWrapper.")
 
         formatted_text = text
@@ -231,6 +252,24 @@ class QwenProcessedToEmbedding:
             # DiffSynth-style encoding
             if hasattr(text_encoder, 'encode_from_ids'):
                 embeddings = text_encoder.encode_from_ids(**encode_kwargs)
+            elif hasattr(text_encoder, 'model'):
+                # Qwen2VLForConditionalGeneration - need to use the model's encoder
+                with torch.no_grad():
+                    try:
+                        outputs = text_encoder.model(
+                            **encode_kwargs,
+                            output_hidden_states=True,
+                            return_dict=True
+                        )
+                        embeddings = outputs.last_hidden_state if hasattr(outputs, 'last_hidden_state') else outputs[0]
+                    except Exception as model_err:
+                        logger.error(f"Model forward pass failed: {model_err}")
+                        logger.error(f"Available model attributes: {dir(text_encoder)}")
+                        # Try getting the encoder embeddings directly
+                        if hasattr(text_encoder, 'get_input_embeddings'):
+                            embeddings = text_encoder.get_input_embeddings()(input_ids)
+                        else:
+                            raise
             else:
                 # Standard transformer encoding
                 outputs = text_encoder(

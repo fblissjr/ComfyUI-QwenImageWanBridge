@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from typing import Dict, List, Optional, Tuple, Union, Any
 import logging
 import comfy.model_management as mm
+import comfy.samplers
 
 logger = logging.getLogger(__name__)
 

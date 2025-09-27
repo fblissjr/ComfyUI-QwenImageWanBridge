@@ -15,6 +15,15 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+# Set up verbose logging
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(name)s] %(levelname)s: %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
 
 class QwenFlowMatchScheduler:
     """
@@ -263,7 +272,11 @@ class QwenImageSamplerWrapper:
             combined["prompt_emb"] = torch.cat([neg_cond["prompt_emb"], pos_cond["prompt_emb"]])
 
         if "prompt_emb_mask" in pos_cond and "prompt_emb_mask" in neg_cond:
-            combined["prompt_emb_mask"] = torch.cat([neg_cond["prompt_emb_mask"], pos_cond["prompt_emb_mask"]])
+            if pos_cond["prompt_emb_mask"] is not None and neg_cond["prompt_emb_mask"] is not None:
+                combined["prompt_emb_mask"] = torch.cat([neg_cond["prompt_emb_mask"], pos_cond["prompt_emb_mask"]])
+            elif pos_cond["prompt_emb_mask"] is not None:
+                # If only positive has mask, duplicate for negative
+                combined["prompt_emb_mask"] = torch.cat([pos_cond["prompt_emb_mask"], pos_cond["prompt_emb_mask"]])
 
         # Copy other fields from positive only
         for key in ["edit_latents", "context_latents", "pooled_output"]:

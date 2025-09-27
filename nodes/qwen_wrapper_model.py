@@ -18,6 +18,11 @@ from typing import Optional, List, Dict, Any, Tuple, Union
 import comfy.model_management as mm
 import comfy.model_base
 from .qwen_wrapper_base import QwenWrapperBase, PATCH_SIZE
+from .qwen_wrapper_utils import (
+    pack_2x2, unpack_2x2, convert_4d_to_5d, convert_5d_to_4d,
+    pad_to_multiple, unpad_tensor, concatenate_edit_latents,
+    print_tensor_stats
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,16 +121,20 @@ class QwenImageModelWrapper(nn.Module, QwenWrapperBase):
         if timestep.max() > 1:
             timestep = timestep / 1000
 
-        # CRITICAL: Apply packing operation from line 802
+        # CRITICAL: Apply packing operation using utility
         # This transforms [B, C, H, W] -> [B, (H/2 * W/2), (C * 2 * 2)]
-        # Use actual latent dimensions for patch count calculation
-        H_patches = latents.shape[2] // 2
-        W_patches = latents.shape[3] // 2
+        # Debug logging for input
+        if logger.isEnabledFor(logging.DEBUG):
+            print_tensor_stats(latents, "Input Latents")
 
+        # Use utility for 2x2 packing then rearrange to sequence format
+        image_packed = pack_2x2(latents, P=2, Q=2)  # [B, C*4, H/2, W/2]
+        B, C_packed, H_packed, W_packed = image_packed.shape
+
+        # Rearrange to sequence format for transformer
         image = rearrange(
-            latents,
-            "B C (H P) (W Q) -> B (H W) (C P Q)",
-            H=H_patches, W=W_patches, P=2, Q=2
+            image_packed,
+            'b c h w -> b (h w) c'
         )
         image_seq_len = image.shape[1]
 
