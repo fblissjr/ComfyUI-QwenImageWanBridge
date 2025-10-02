@@ -1,8 +1,8 @@
 {
   "id": "cc679334-efe9-405b-b2bc-d10a4d200643",
   "revision": 0,
-  "last_node_id": 57,
-  "last_link_id": 134,
+  "last_node_id": 58,
+  "last_link_id": 137,
   "nodes": [
     {
       "id": 30,
@@ -91,92 +91,6 @@
       ]
     },
     {
-      "id": 27,
-      "type": "CFGNorm",
-      "pos": [
-        696.783935546875,
-        73.4620590209961
-      ],
-      "size": [
-        270,
-        58
-      ],
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 88
-        }
-      ],
-      "outputs": [
-        {
-          "name": "patched_model",
-          "type": "MODEL",
-          "links": [
-            49
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "CFGNorm",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        1
-      ]
-    },
-    {
-      "id": 26,
-      "type": "ModelSamplingAuraFlow",
-      "pos": [
-        1146.379150390625,
-        -67.55791473388672
-      ],
-      "size": [
-        270,
-        58
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "MODEL",
-          "type": "MODEL",
-          "links": []
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "ModelSamplingAuraFlow",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        3.1
-      ]
-    },
-    {
       "id": 28,
       "type": "ConditioningZeroOut",
       "pos": [
@@ -188,7 +102,7 @@
         26
       ],
       "flags": {},
-      "order": 13,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
@@ -232,7 +146,7 @@
         58
       ],
       "flags": {},
-      "order": 3,
+      "order": 2,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -258,40 +172,6 @@
       ]
     },
     {
-      "id": 46,
-      "type": "PreviewImage",
-      "pos": [
-        1258.8084716796875,
-        714.3526611328125
-      ],
-      "size": [
-        894.406982421875,
-        735.17724609375
-      ],
-      "flags": {},
-      "order": 17,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 89
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "PreviewImage",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": []
-    },
-    {
       "id": 55,
       "type": "Display Any (rgthree)",
       "pos": [
@@ -303,7 +183,7 @@
         349.0492248535156
       ],
       "flags": {},
-      "order": 14,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
@@ -325,75 +205,7 @@
         }
       },
       "widgets_values": [
-        "=== QWEN ENCODER DEBUG ===\n\nInput shape: torch.Size([2, 1024, 1152, 3])\nProcessing 2 images\nImage 1: 1152x1024 -> vision: 416x352\nImage 2: 1152x1024 -> vision: 416x352\nMulti-image mode: No labels, raw vision tokens (auto_label=False)\nReference latents: 2 with auto-dimension handling\n\n=== VISION TOKENS ===\n<|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|>\n\n=== FULL PROMPT BEING ENCODED ===\n<|im_start|>system\nDescribe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|><|vision_start|><|image_pad|><|vision_end|>The turtle with the Mitch McConnell head from Picture 1 is sitting on a rock next to the man with the hat from Picture 2<|im_end|>\n<|im_start|>assistant\n\n\n=== USER PROMPT (without vision tokens) ===\nThe turtle with the Mitch McConnell head from Picture 1 is sitting on a rock next to the man with the hat from Picture 2\n\n=== SETTINGS ===\nMode: image_edit\nImages: 2\nDrop Index: 64\nSystem Prompt: Yes\n\n=== CHARACTER COUNTS ===\nTotal prompt length: 590 chars\nVision tokens: 86 chars\nUser prompt: 120 chars\nSystem prompt: 304 chars"
-      ]
-    },
-    {
-      "id": 56,
-      "type": "TextEncodeQwenImageEditPlus",
-      "pos": [
-        1560.60986328125,
-        317.4176330566406
-      ],
-      "size": [
-        400,
-        200
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": null
-        },
-        {
-          "name": "vae",
-          "shape": 7,
-          "type": "VAE",
-          "link": null
-        },
-        {
-          "name": "image1",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "name": "image2",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "name": "image3",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "CONDITIONING",
-          "type": "CONDITIONING",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.61",
-        "Node name for S&R": "TextEncodeQwenImageEditPlus",
-        "ue_properties": {
-          "widget_ue_connectable": {
-            "prompt": true
-          },
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        ""
+        "=== QWEN ENCODER DEBUG ===\n\nInput shape: torch.Size([2, 1152, 768, 3])\nProcessing 2 images\nImage 1: 768x1152 -> vision: 320x480\nImage 2: 768x1152 -> vision: 320x480\nMulti-image mode: Added Picture 1-2 labels (auto_label=True)\nReference latents: 2 with auto-dimension handling\n\n=== VISION TOKENS ===\nPicture 1: <|vision_start|><|image_pad|><|vision_end|>Picture 2: <|vision_start|><|image_pad|><|vision_end|>\n\n=== FULL PROMPT BEING ENCODED ===\n<|im_start|>system\nDescribe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.<|im_end|>\n<|im_start|>user\nPicture 1: <|vision_start|><|image_pad|><|vision_end|>Picture 2: <|vision_start|><|image_pad|><|vision_end|>The old man is wearing the red soccer jersey<|im_end|>\n<|im_start|>assistant\n\n\n=== USER PROMPT (without vision tokens) ===\nThe old man is wearing the red soccer jersey\n\n=== SETTINGS ===\nMode: image_edit\nImages: 2\nDrop Index: 64\nSystem Prompt: Yes\n\n=== CHARACTER COUNTS ===\nTotal prompt length: 536 chars\nVision tokens: 108 chars\nUser prompt: 44 chars\nSystem prompt: 304 chars"
       ]
     },
     {
@@ -408,7 +220,7 @@
         46
       ],
       "flags": {},
-      "order": 16,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
@@ -428,7 +240,7 @@
           "type": "IMAGE",
           "slot_index": 0,
           "links": [
-            89
+            137
           ]
         }
       ],
@@ -456,7 +268,7 @@
         198
       ],
       "flags": {},
-      "order": 11,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -505,16 +317,16 @@
       ],
       "size": [
         403.6120910644531,
-        531.7413940429688
+        851.4181518554688
       ],
       "flags": {},
-      "order": 15,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
           "name": "model",
           "type": "MODEL",
-          "link": 49
+          "link": 136
         },
         {
           "name": "positive",
@@ -552,7 +364,7 @@
         }
       },
       "widgets_values": [
-        1071183626782183,
+        420598714351352,
         "randomize",
         25,
         5.5,
@@ -573,7 +385,7 @@
         336
       ],
       "flags": {},
-      "order": 10,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -639,92 +451,8 @@
         "0, 0, 0",
         "top",
         2,
-        "cpu"
-      ]
-    },
-    {
-      "id": 10,
-      "type": "QwenVLEmptyLatent",
-      "pos": [
-        1238.60498046875,
-        530.2300415039062
-      ],
-      "size": [
-        315,
-        106
-      ],
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "LATENT",
-          "type": "LATENT",
-          "slot_index": 0,
-          "links": [
-            80
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "QwenVLEmptyLatent",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        768,
-        1152,
-        1
-      ]
-    },
-    {
-      "id": 53,
-      "type": "LoadImage",
-      "pos": [
-        -83.86973571777344,
-        470.86279296875
-      ],
-      "size": [
-        315,
-        314.0000305175781
-      ],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "slot_index": 0,
-          "links": [
-            134
-          ]
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "slot_index": 1,
-          "links": []
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "LoadImage",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "9-soccer_jersey.png",
-        "image"
+        "cpu",
+        "<tr><td>Output: </td><td><b>1</b> x <b>768</b> x <b>1152 | 10.12MB</b></td></tr>"
       ]
     },
     {
@@ -739,7 +467,7 @@
         314
       ],
       "flags": {},
-      "order": 7,
+      "order": 3,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -785,7 +513,7 @@
         429.9887390136719
       ],
       "flags": {},
-      "order": 8,
+      "order": 4,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -840,7 +568,7 @@
         326
       ],
       "flags": {},
-      "order": 12,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -920,6 +648,211 @@
       ],
       "color": "#2a363b",
       "bgcolor": "#3f5159"
+    },
+    {
+      "id": 10,
+      "type": "QwenVLEmptyLatent",
+      "pos": [
+        1174.239501953125,
+        524.6433715820312
+      ],
+      "size": [
+        315,
+        106
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            80
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "QwenVLEmptyLatent",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        768,
+        1152,
+        1
+      ]
+    },
+    {
+      "id": 27,
+      "type": "CFGNorm",
+      "pos": [
+        779.7371215820312,
+        11.097090721130371
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 88
+        }
+      ],
+      "outputs": [
+        {
+          "name": "patched_model",
+          "type": "MODEL",
+          "links": [
+            135
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.60",
+        "Node name for S&R": "CFGNorm",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        1
+      ]
+    },
+    {
+      "id": 26,
+      "type": "ModelSamplingAuraFlow",
+      "pos": [
+        1146.379150390625,
+        -67.55791473388672
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 135
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            136
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.60",
+        "Node name for S&R": "ModelSamplingAuraFlow",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        3.1
+      ]
+    },
+    {
+      "id": 53,
+      "type": "LoadImage",
+      "pos": [
+        -83.86973571777344,
+        470.86279296875
+      ],
+      "size": [
+        315,
+        314.0000305175781
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            134
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.60",
+        "Node name for S&R": "LoadImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "9-soccer_jersey.png",
+        "image"
+      ]
+    },
+    {
+      "id": 58,
+      "type": "PreviewImage",
+      "pos": [
+        1258.8084716796875,
+        714.3526611328125
+      ],
+      "size": [
+        140,
+        26
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 137
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.62",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        },
+        "Node name for S&R": "PreviewImage"
+      }
     }
   ],
   "links": [
@@ -938,14 +871,6 @@
       33,
       2,
       "CONDITIONING"
-    ],
-    [
-      49,
-      27,
-      0,
-      33,
-      0,
-      "MODEL"
     ],
     [
       51,
@@ -1004,14 +929,6 @@
       "MODEL"
     ],
     [
-      89,
-      12,
-      0,
-      46,
-      0,
-      "IMAGE"
-    ],
-    [
       116,
       40,
       0,
@@ -1065,6 +982,30 @@
       0,
       7,
       1,
+      "IMAGE"
+    ],
+    [
+      135,
+      27,
+      0,
+      26,
+      0,
+      "MODEL"
+    ],
+    [
+      136,
+      26,
+      0,
+      33,
+      0,
+      "MODEL"
+    ],
+    [
+      137,
+      12,
+      0,
+      58,
+      0,
       "IMAGE"
     ]
   ],
@@ -1127,8 +1068,8 @@
     "ds": {
       "scale": 1.0152559799477083,
       "offset": [
-        593.0233867555914,
-        530.4650160644492
+        347.60344595127003,
+        80.24758663985966
       ]
     },
     "frontendVersion": "1.27.7",
