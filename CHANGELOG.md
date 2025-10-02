@@ -1,6 +1,9 @@
 # Changelog
 
-## v2.6 alpha - Wrapper Nodes (Experimental)
+## v2.5.1 - Reorganized example workflows
+- Example workflows have been renamed and reorganized, with a new one as well for Nunchaku 2509
+
+## v2.5 update - Wrapper Nodes (NOT WORKING YET - Experimental)
 
 ### Added
 - **Wrapper Node System** - Independent implementation (11 nodes):

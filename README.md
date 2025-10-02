@@ -2,6 +2,12 @@
 
 Advanced nodes for Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things to come.
 
+## Key Changes
+Latest:
+- Reorganized workflows in [example_workflows](example_workflows) with single image edit, multi image edit, text to image, and a multi edit for Nunchaku models. Highly recommend using Nunchaku over the lightning loras - quality is significantly better (or better, using the full weights).
+
+See [CHANGELOG.md](CHANGELOG.md) for full details and changelog history.
+
 ## Features
 
 ### Core Capabilities
@@ -44,7 +50,6 @@ Power user encoder with resolution control.
 #### QwenTemplateBuilder
 System prompt templates.
 - DiffSynth-Studio templates included
-- Face replacement templates (qwen_face_swap, qwen_identity_merge)
 - custom_system override for any template
 - show_all_prompts mode to view options
 
@@ -55,7 +60,7 @@ System prompt templates.
 - **QwenDebugController**: Comprehensive debugging and profiling system
 
 ### Experimental Nodes (Available but Low Priority)
-- **QwenSpatialTokenGenerator**: Visual editor for spatial tokens
+- **QwenSpatialTokenGenerator**: Visual editor for spatial tokens that don't seem to do much of anything right now
 - **QwenEliGenEntityControl**: Entity-level mask control
 - **QwenEliGenMaskPainter**: Simple mask creation
 - **QwenTokenDebugger**: Debug token processing
@@ -150,15 +155,6 @@ See [MULTI_IMAGE_ORDERING.md](MULTI_IMAGE_ORDERING.md) for detailed guide.
 - Comprehensive test guide with 10 configurations
 
 See [ADVANCED_ENCODER_TEST_GUIDE.md](ADVANCED_ENCODER_TEST_GUIDE.md) for testing configurations.
-
-## Requirements
-
-- ComfyUI
-- KJNodes custom node pack (for Image Batch node)
-- Model files:
-  - `Qwen-Image-Edit-2509.safetensors` (or fp8 variant)
-  - `qwen_2.5_vl_7b.safetensors` text encoder
-  - `qwen_image_vae.safetensors` (16-channel VAE)
 
 ## License
 
