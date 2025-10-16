@@ -1,5 +1,88 @@
 # Changelog
 
+## v2.6.1 - Resolution Scaling Fix
+
+### Fixed
+- **Zoom-out issue in image editing** - Large images were being aggressively downscaled
+  - Previous behavior: 1477×2056 scaled to 864×1216 (0.59x, causing zoom-out)
+  - New default: `preserve_resolution` keeps original dimensions with 32px alignment
+  - Example: 1477×2056 → 1472×2048 (minimal crop, no zoom-out)
+
+### Added
+- **scaling_mode parameter** in QwenVLTextEncoder with three modes:
+  - `preserve_resolution` (default) - Keeps input size, only applies 32px alignment
+  - `max_dimension_1024` - Scales largest side to 1024px (good for 4K images)
+  - `area_1024` - Legacy behavior, scales to ~1024×1024 area
+- Improved tooltips with detailed tradeoffs for each mode
+
+### Changed
+- Vision encoder always uses 384×384 area scaling (unchanged)
+- VAE encoder respects new scaling_mode setting
+- Debug output shows which scaling mode is active
+
+### Scaling Mode Comparison
+
+**preserve_resolution (default, recommended for most use cases)**
+- ✓ No zoom-out effect, subjects stay full-size
+- ✓ Best quality output, minimal cropping (only 32px alignment)
+- ✓ Works perfectly for typical image sizes (512px-2048px)
+- ✗ May use significant VRAM with very large images (4K+)
+- Use when: You want maximum quality and your images are under 2500px
+
+**max_dimension_1024 (recommended for 4K and very large images)**
+- ✓ Reduces VRAM usage significantly on large images
+- ✓ Balanced quality vs performance tradeoff
+- ✓ Prevents OOM errors on 4K images
+- ✗ Some zoom-out effect on images larger than 1024px
+- Use when: Working with 4K images or hitting VRAM limits
+
+**area_1024 (legacy, not recommended)**
+- ✓ Consistent ~1 megapixel output size
+- ✗ Aggressive zoom-out on large images (major quality loss)
+- ✗ Upscales small images unnecessarily (wastes quality)
+- ✗ Poor behavior across different input sizes
+- Use when: You need exact 1024×1024 area behavior for specific workflows
+
+### Examples by Resolution
+
+**Small portrait (512×768 = 0.4MP)**
+- preserve: 512×768 (1.00x) - unchanged, perfect
+- max_dimension: 672×1024 (1.31x) - upscaled
+- area: 832×1248 (1.62x) - upscaled too much
+
+**Large portrait (1477×2056 = 3MP, the reported issue)**
+- preserve: 1472×2048 (1.00x) - no zoom-out, FIXED
+- max_dimension: 736×1024 (0.50x) - some zoom-out
+- area: 864×1216 (0.58x) - old broken behavior
+
+**4K landscape (3840×2160 = 8MP)**
+- preserve: 3840×2176 (1.00x) - may OOM on lower VRAM
+- max_dimension: 1024×576 (0.27x) - RECOMMENDED for 4K
+- area: 1376×768 (0.36x) - inconsistent scaling
+
+## v2.6 - Mask-Based Inpainting
+
+### Added
+- **QwenMaskProcessor** - Mask preprocessing node
+  - Base64 mask input from spatial editor
+  - Blur, expand, feather controls
+  - Preview overlays showing inpaint areas
+- **QwenInpaintSampler** - Inpainting sampler node
+  - Implements exact diffusers blending: `(1-mask)*original + mask*generated`
+  - Strength control for partial/full regeneration
+  - 4-channel to 16-channel auto-conversion
+- **Inpainting mode** in QwenVLTextEncoder
+  - New `inpaint_mask` optional parameter
+  - Mask passed to conditioning for spatial control
+- **Example workflows**
+  - `qwen_edit_2509_mask_inpainting.json` - Standard workflow
+  - `nunchaku_qwen_mask_inpainting.json` - Nunchaku variant
+
+### Technical Details
+- Follows DiffSynth-Studio mask-based approach (not coordinate tokens)
+- Spatial tokens marked as experimental based on DiffSynth analysis
+- JavaScript interface already supports both systems
+
 ## v2.5.1 - Reorganized example workflows
 - Example workflows have been renamed and reorganized, with a new one as well for Nunchaku 2509
 

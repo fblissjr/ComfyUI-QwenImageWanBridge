@@ -141,12 +141,12 @@ class QwenVLTextEncoder:
                 "clip": ("CLIP",),
                 "text": ("STRING", {
                     "multiline": True,
-                    "default": "A beautiful landscape",
+                    "default": "",
                     "tooltip": "Your prompt"
                 }),
-                "mode": (["text_to_image", "image_edit"], {
+                "mode": (["text_to_image", "image_edit", "inpainting"], {
                     "default": "image_edit",
-                    "tooltip": "text_to_image: Generate from scratch | image_edit: Modify existing image"
+                    "tooltip": "text_to_image: Generate from scratch | image_edit: Modify existing image | inpainting: Mask-based editing"
                 }),
             },
             "optional": {
@@ -156,10 +156,17 @@ class QwenVLTextEncoder:
                 "vae": ("VAE", {
                     "tooltip": "Required for image editing - encodes reference latents"
                 }),
+                "inpaint_mask": ("MASK", {
+                    "tooltip": "Inpainting mask for selective editing (use with inpainting mode)"
+                }),
                 "system_prompt": ("STRING", {
                     "tooltip": "System prompt from Template Builder - connect for proper token dropping",
                     "multiline": True,
                     "default": ""
+                }),
+                "scaling_mode": (["preserve_resolution", "max_dimension_1024", "area_1024"], {
+                    "default": "preserve_resolution",
+                    "tooltip": "Resolution scaling mode:\n\npreserve_resolution (recommended):\n  ✓ No zoom-out, subjects stay full-size\n  ✓ Best quality, minimal cropping (32px alignment)\n  ✗ May use more VRAM with very large images\n  Example: 1477×2056 → 1472×2048 (1.00x)\n\nmax_dimension_1024 (for 4K/large images):\n  ✓ Reduces VRAM usage on large images\n  ✓ Balanced quality vs performance\n  ✗ Some zoom-out on large images\n  Example: 3840×2160 → 1024×576 (0.27x)\n\narea_1024 (legacy):\n  ✓ Consistent ~1MP output size\n  ✗ Aggressive zoom-out on large images\n  ✗ Upscales small images unnecessarily\n  Example: 1477×2056 → 864×1216 (0.58x)"
                 }),
                 "debug_mode": ("BOOLEAN", {
                     "default": False,
@@ -184,22 +191,47 @@ class QwenVLTextEncoder:
     DESCRIPTION = "DiffSynth/Diffusers-compatible encoder with 32-pixel alignment"
 
     @staticmethod
-    def calculate_dimensions(target_area: int, aspect_ratio: float) -> tuple:
-        """Calculate dimensions matching target area while preserving aspect ratio.
-        Uses 32-pixel alignment for VAE compatibility (DiffSynth/Diffusers standard)."""
+    def calculate_dimensions(target_area: int, aspect_ratio: float, original_w: int = None, original_h: int = None, mode: str = "area", max_size: int = 1024) -> tuple:
+        """Calculate dimensions for image scaling.
+
+        Args:
+            target_area: Target area in pixels (for area mode)
+            aspect_ratio: Width/height ratio
+            original_w: Original width (for preserve/max_dimension modes)
+            original_h: Original height (for preserve/max_dimension modes)
+            mode: "area" | "preserve" | "max_dimension"
+            max_size: Maximum dimension size (for max_dimension mode)
+
+        Uses 32-pixel alignment for VAE compatibility (DiffSynth/Diffusers standard).
+        """
         import math
-        width = math.sqrt(target_area * aspect_ratio)
-        height = width / aspect_ratio
-        width = round(width / 32) * 32
-        height = round(height / 32) * 32
+
+        if mode == "preserve" and original_w is not None and original_h is not None:
+            # Preserve original dimensions, only apply 32-pixel alignment
+            width = round(original_w / 32) * 32
+            height = round(original_h / 32) * 32
+        elif mode == "max_dimension" and original_w is not None and original_h is not None:
+            # Scale so largest dimension equals max_size
+            scale = max_size / max(original_w, original_h)
+            width = round(original_w * scale / 32) * 32
+            height = round(original_h * scale / 32) * 32
+        else:
+            # Area-based scaling (original behavior)
+            width = math.sqrt(target_area * aspect_ratio)
+            height = width / aspect_ratio
+            width = round(width / 32) * 32
+            height = round(height / 32) * 32
+
         return max(32, int(width)), max(32, int(height))
 
 
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None,
-              vae=None, system_prompt: str = "", debug_mode: bool = False,
-              auto_label: bool = True, verbose_log: bool = False) -> Tuple[Any]:
+              vae=None, inpaint_mask: Optional[torch.Tensor] = None,
+              system_prompt: str = "", scaling_mode: str = "preserve_resolution",
+              debug_mode: bool = False, auto_label: bool = True,
+              verbose_log: bool = False) -> Tuple[Any]:
 
         """Encode text and images for Qwen Image generation.
         Follows DiffSynth/Diffusers implementation with 32-pixel alignment."""
@@ -223,8 +255,18 @@ class QwenVLTextEncoder:
             if debug_mode:
                 logger.debug(f"Could not control verbose logging: {e}")
 
+        # Validate inpainting mode requirements
+        if mode == "inpainting":
+            if edit_image is None:
+                raise ValueError("Inpainting mode requires edit_image to be provided")
+            if inpaint_mask is None:
+                raise ValueError("Inpainting mode requires inpaint_mask to be provided")
+            if debug_mode:
+                logger.info("[Encoder] Inpainting mode: mask and image validation passed")
+                debug_info.append("Mode: inpainting (mask-based editing)")
+
         # Process images if provided
-        if mode == "image_edit" and edit_image is not None:
+        if mode in ["image_edit", "inpainting"] and edit_image is not None:
             if debug_mode:
                 logger.info(f"[Encoder] Input shape: {edit_image.shape}")
                 debug_info.append(f"Input shape: {edit_image.shape}")
@@ -239,8 +281,8 @@ class QwenVLTextEncoder:
                 h, w = img.shape[1], img.shape[2]
                 aspect_ratio = w / h
 
-                # Resize for vision encoder (384x384 target area)
-                vision_w, vision_h = self.calculate_dimensions(384*384, aspect_ratio)
+                # Resize for vision encoder (384x384 target area - always use area mode)
+                vision_w, vision_h = self.calculate_dimensions(384*384, aspect_ratio, mode="area")
                 img_chw = img.movedim(-1, 1)  # HWC to CHW for upscale
                 vision_img = comfy.utils.common_upscale(img_chw, vision_w, vision_h, "bicubic", "disabled")
                 vision_images.append(vision_img.movedim(1, -1))  # CHW to HWC
@@ -250,9 +292,27 @@ class QwenVLTextEncoder:
 
                 debug_info.append(f"Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}")
 
-                # Resize for VAE encoder (1024x1024 target area) if VAE provided
+                # Resize for VAE encoder - respects scaling_mode
                 if vae is not None:
-                    vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio)
+                    if scaling_mode == "preserve_resolution":
+                        # Preserve original dimensions with 32-pixel alignment
+                        vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio, original_w=w, original_h=h, mode="preserve")
+                        if debug_mode:
+                            logger.info(f"[Encoder]        VAE (preserve): {w}x{h} -> {vae_w}x{vae_h} (32px aligned)")
+                        debug_info.append(f"    VAE scaling: preserve_resolution ({vae_w}x{vae_h}, 32px aligned)")
+                    elif scaling_mode == "max_dimension_1024":
+                        # Scale largest dimension to 1024px
+                        vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio, original_w=w, original_h=h, mode="max_dimension", max_size=1024)
+                        if debug_mode:
+                            logger.info(f"[Encoder]        VAE (max_dim): {w}x{h} -> {vae_w}x{vae_h} (max 1024px)")
+                        debug_info.append(f"    VAE scaling: max_dimension_1024 ({vae_w}x{vae_h})")
+                    else:  # area_1024
+                        # Area-based scaling (original behavior)
+                        vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio, mode="area")
+                        if debug_mode:
+                            logger.info(f"[Encoder]        VAE (area): {w}x{h} -> {vae_w}x{vae_h} (1024x1024 area)")
+                        debug_info.append(f"    VAE scaling: area_1024 ({vae_w}x{vae_h})")
+
                     vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
                     vae_img_hwc = vae_img.movedim(1, -1)
                     ref_latent = vae.encode(vae_img_hwc[:, :, :, :3])
@@ -260,7 +320,7 @@ class QwenVLTextEncoder:
                     ref_latents.append(ref_latent)
 
                     if debug_mode:
-                        logger.info(f"[Encoder]        VAE: {vae_w}x{vae_h}, latent: {ref_latent.shape}")
+                        logger.info(f"[Encoder]        Latent shape: {ref_latent.shape}")
 
         # Simple processing: Template Builder provides system prompt, we handle technical bits
         num_images = len(vision_images) if vision_images else 0
@@ -374,6 +434,39 @@ class QwenVLTextEncoder:
                     if len(unique_shapes) > 1:
                         debug_info.append(f"\nWARNING: Reference latents have different shapes: {unique_shapes}")
                         debug_info.append("This may cause generation issues. Ensure all images have similar dimensions.")
+
+        # Add inpaint mask to conditioning if provided
+        if inpaint_mask is not None and COMFY_AVAILABLE:
+            # Resize mask to match VAE input dimensions if we have reference latents
+            if ref_latents and len(ref_latents) > 0:
+                # Get VAE dimensions from first image processing
+                # ref_latents[0] shape is [B, C, H/8, W/8] so we need to match the pre-encoded dimensions
+                # We need to get vae_w, vae_h from the image processing loop
+                # For now, resize mask to match first reference latent dimensions * 8 (latent->pixel space)
+                first_latent = ref_latents[0]
+                latent_h, latent_w = first_latent.shape[-2], first_latent.shape[-1]
+                target_h, target_w = latent_h * 8, latent_w * 8
+
+                # Resize mask to match VAE input dimensions
+                mask_batch = inpaint_mask.unsqueeze(1)  # Add channel dimension
+                resized_mask = comfy.utils.common_upscale(mask_batch, target_w, target_h, "bicubic", "disabled")
+                resized_mask = resized_mask.squeeze(1)  # Remove channel dimension
+
+                if debug_mode:
+                    logger.info(f"[Encoder] Resized mask from {inpaint_mask.shape} to {resized_mask.shape} to match VAE dimensions {target_w}x{target_h}")
+                    debug_info.append(f"Mask resized: {inpaint_mask.shape} → {resized_mask.shape}")
+
+                inpaint_mask = resized_mask
+
+            conditioning = node_helpers.conditioning_set_values(
+                conditioning,
+                {"inpaint_mask": inpaint_mask},
+                append=True
+            )
+
+            if debug_mode:
+                logger.info(f"[Encoder] Added inpaint mask to conditioning: {inpaint_mask.shape}")
+                debug_info.append(f"Inpaint mask: {inpaint_mask.shape}")
 
         # Build debug output string
         if debug_mode and debug_info:

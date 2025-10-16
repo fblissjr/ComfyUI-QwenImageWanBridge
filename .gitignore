@@ -18,10 +18,4 @@ config/
 # Logs
 *.log
 
-training/
 .claude/
-internal/
-docs/
-Documentation/
-nodes/archive
-archive/
