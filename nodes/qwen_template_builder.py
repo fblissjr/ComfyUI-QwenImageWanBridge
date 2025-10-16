@@ -16,12 +16,13 @@ class QwenTemplateBuilderV2:
             "required": {
                 "prompt": ("STRING", {
                     "multiline": True,
-                    "default": "A beautiful landscape",
+                    "default": "",
                     "tooltip": "Your main prompt text"
                 }),
                 "template_mode": ([
                     "default_t2i",
                     "default_edit",
+                    "inpainting",
                     "multi_image_edit",
                     "face_replacement",
                     "face_replacement_detailed",
@@ -71,6 +72,11 @@ class QwenTemplateBuilderV2:
             "system": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",
             "vision": True,
             "mode": "image_edit"
+        },
+        "inpainting": {
+            "system": "Replace or modify only the masked region according to the user's instruction. Preserve all other parts of the image exactly as they are. Blend the changes naturally with the surrounding context.",
+            "vision": True,
+            "mode": "inpainting"
         },
         "multi_image_edit": {
             "system": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",

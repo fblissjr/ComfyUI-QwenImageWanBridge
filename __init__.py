@@ -54,6 +54,22 @@ except Exception as e:
 
 # Resolution nodes removed - functionality integrated into encoder
 
+# Mask-based inpainting nodes
+try:
+    from .nodes.qwen_mask_processor import QwenMaskProcessor
+    from .nodes.qwen_inpaint_sampler import QwenInpaintSampler
+
+    NODE_CLASS_MAPPINGS["QwenMaskProcessor"] = QwenMaskProcessor
+    NODE_DISPLAY_NAME_MAPPINGS["QwenMaskProcessor"] = "Qwen Mask Processor"
+
+    NODE_CLASS_MAPPINGS["QwenInpaintSampler"] = QwenInpaintSampler
+    NODE_DISPLAY_NAME_MAPPINGS["QwenInpaintSampler"] = "Qwen Inpainting Sampler"
+
+    print("[QwenImageWanBridge] Loaded mask-based inpainting nodes (2 nodes)")
+    print("[QwenImageWanBridge] FEATURE: Mask-based spatial editing with diffusers patterns")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load mask-based inpainting nodes: {e}")
+
 # Simplified template builder V2
 try:
     from .nodes.qwen_template_builder import (
@@ -126,7 +142,7 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Debug Controller: {e}")
 
-# Inpainting nodes removed - not core to image edit
+# Inpainting nodes restored - mask-based approach aligns with DiffSynth patterns
 
 # Note: Experimental multi-frame nodes have been archived
 # Use Multi-Reference Handler with "index" mode for multi-frame support
