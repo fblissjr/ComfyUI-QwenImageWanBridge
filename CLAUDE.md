@@ -74,13 +74,28 @@ LoadImage → QwenVLTextEncoder → KSampler → VAEDecode
 - VAE encoder: 1024×1024 target area
 - `calculate_dimensions()` in `nodes/qwen_vl_encoder.py:187`
 
-### Inpainting System
+### Inpainting System (Simple Blending Approach)
+
+**Our Implementation:**
 - QwenMaskProcessor: Mask preprocessing (blur, expand, feather) - outputs IMAGE, MASK, preview
-- QwenInpaintSampler: Implements `final = (1-mask)*original + mask*generated` (548 lines - consider using KSampler + LatentCompositeMasked instead)
+- QwenInpaintSampler: Post-processing blend `final = (1-mask)*original + mask*generated`
 - Encoder inpainting mode: Accepts mask input, auto-resizes to match VAE dimensions
 - Template Builder: Includes "inpainting" template mode
 - Prompts: Use text encoder or template builder (NOT mask processor)
-- See `example_workflows/qwen_edit_2509_mask_inpainting.json`
+
+**Approach:** Simple latent blending after generation (post-processing)
+- Works with existing qwen-image-edit model
+- No DiT modifications required
+- ComfyUI-friendly implementation
+- Single mask + single prompt per operation
+
+**DiffSynth Alternative (Not Implemented):**
+- EliGen uses attention masking INSIDE the DiT (requires model access)
+- Multi-entity with isolated attention per region
+- QwenEliGenEntityControl node exists but untested
+- Would need ComfyUI DiT integration (may not be possible)
+
+See `example_workflows/qwen_edit_2509_mask_inpainting.json`
 
 ## Node Categories
 
@@ -194,12 +209,41 @@ Multi:  Picture 1: <|vision_start|><|image_pad|><|vision_end|>Picture 2: ...
 - Dependencies: KJNodes (Image Batch for multi-image)
 - Wrapper nodes: transformers, diffusers (optional, experimental)
 
+## Implementation Decisions
+
+### Inpainting Approach: Simple Blending vs EliGen
+
+**Decision:** Implemented simple post-processing blend (Choice A)
+
+**Rationale:**
+- Works with existing qwen-image-edit model (no new downloads)
+- No DiT modifications required (ComfyUI may not support this)
+- Standard ComfyUI workflow integration
+- Simpler to maintain and debug
+
+**Trade-offs:**
+- ✅ Works now with current infrastructure
+- ✅ No model access required
+- ✅ Compatible with all samplers
+- ❌ Not full DiffSynth approach (they use attention masking)
+- ❌ Single mask/prompt only (no multi-entity)
+- ❌ Post-processing, not in-model control
+
+**DiffSynth EliGen (Not Implemented):**
+- Requires DiT `process_entity_masks()` method (lines 434-484 in qwen_image_dit.py)
+- Modifies attention to isolate entity prompts to masked regions
+- Multi-entity support with prevented cross-attention
+- Would need ComfyUI DiT wrapper modifications
+
+**Alternative:** QwenEliGenEntityControl node exists but is untested and requires DiT integration.
+
 ## Known Issues
 
 1. **Multi-image memory**: 4+ images may OOM (optimal: 1-3)
 2. **Wrapper nodes**: Incomplete ComfyUI sampler integration
 3. **Spatial tokens**: Not used by DiffSynth (use EliGen/masks instead)
-4. **QwenInpaintSampler**: 548-line implementation for simple blend - consider using KSampler + LatentCompositeMasked instead
+4. **Inpainting approach**: Post-processing blend, not in-model attention masking like DiffSynth
+5. **QwenInpaintSampler**: 548-line implementation for simple blend - consider using KSampler + LatentCompositeMasked instead
 
 ## Debug Features
 
