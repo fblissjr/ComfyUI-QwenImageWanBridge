@@ -3,11 +3,14 @@
 ## BREAKING CHANGE (v2.7.0+)
 
 **Existing workflows will break.** You must:
-1. Delete old Template Builder, Encoder, and Encoder Advanced nodes from your workflow
-2. Add new versions of these nodes
-3. Connect: Template Builder `template_output` → Encoder `template_output` (single connection only)
+1. Delete and re-add, or Right Click -> Recreate Template Builder, Encoder, and Encoder Advanced nodes from your workflow
+2. Connect: Template Builder `template_output` → Encoder `template_output` (single connection only)
 
-Old multi-connection system (mode + system_prompt) no longer works.
+Old multi-connection system (mode + system_prompt) no longer works as it was getting convoluted and confusing. One connection from template builder now handles everything (prompt, mode, system_prompt).
+
+**Updated Workflows Available** [here](example_workflows/nunchaku_qwen_image_edit_2509.json)
+1. [Multi image edit workflow](example_workflows/nunchaku_qwen_image_edit_2509.json)
+2. [Single image edit workflow](example_workflows/qwen_edit_2509_single_image_edit.json)
 
 ---
 
@@ -24,7 +27,7 @@ Old multi-connection system (mode + system_prompt) no longer works.
 ### Changed
 
 **File-Based Template System**
-- Templates now stored as `.md` files in `nodes/templates/` directory
+- Templates now stored as `.md` files in `nodes/templates/` directory (this now means you can make your own templates super easily)
 - Single source of truth for all templates (no hardcoded dicts)
 - YAML frontmatter for metadata (mode, vision, experimental flags)
 - Easy to add/edit templates without code changes
