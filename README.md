@@ -49,6 +49,8 @@ Standard encoder with automatic labeling.
 #### QwenVLTextEncoderAdvanced
 Power user encoder with resolution control.
 - All standard features plus:
+- **scaling_mode** - Same three modes as standard encoder (preserve/max_dimension/area)
+- **resolution_mode** - Applies weights to scaling_mode base (balanced/hero_first/hero_last/progressive)
 - Per-image resolution weighting
 - Memory budget management (max_memory_mb)
 - Hero/reference modes for importance

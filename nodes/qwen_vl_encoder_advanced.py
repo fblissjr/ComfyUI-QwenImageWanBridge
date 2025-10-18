@@ -43,9 +43,13 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
 
         # Add advanced options to optional section
         base_types["optional"].update({
+            "scaling_mode": (["preserve_resolution", "max_dimension_1024", "area_1024"], {
+                "default": "preserve_resolution",
+                "tooltip": "Resolution scaling mode:\n\npreserve_resolution (recommended):\n  ✓ No zoom-out, subjects stay full-size\n  ✓ Best quality, minimal cropping (32px alignment)\n  ✗ May use more VRAM with very large images\n  Example: 1477×2056 → 1472×2048 (1.00x)\n\nmax_dimension_1024 (for 4K/large images):\n  ✓ Reduces VRAM usage on large images\n  ✓ Balanced quality vs performance\n  ✗ Some zoom-out on large images\n  Example: 3840×2160 → 1024×576 (0.27x)\n\narea_1024 (legacy):\n  ✓ Consistent ~1MP output size\n  ✗ Aggressive zoom-out on large images\n  ✗ Upscales small images unnecessarily\n  Example: 1477×2056 → 864×1216 (0.58x)"
+            }),
             "resolution_mode": (["balanced", "hero_first", "hero_last", "progressive", "custom", "memory_optimized"], {
                 "default": "balanced",
-                "tooltip": "Resolution strategy for multi-image processing"
+                "tooltip": "Resolution strategy for multi-image processing (applies weight to scaling_mode base resolution)"
             }),
             "vision_target_area": ("INT", {
                 "default": 147456,  # 384*384
@@ -193,7 +197,9 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None,
-              vae=None, system_prompt: str = "", debug_mode: bool = False,
+              vae=None, inpaint_mask: Optional[torch.Tensor] = None,
+              system_prompt: str = "", scaling_mode: str = "preserve_resolution",
+              debug_mode: bool = False,
               resolution_mode: str = "balanced",
               vision_target_area: int = 147456,  # 384*384
               vae_target_area: int = 1048576,    # 1024*1024
@@ -259,7 +265,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                 h, w = img.shape[1], img.shape[2]
                 aspect_ratio = w / h
 
-                # Calculate weighted dimensions for vision encoder
+                # Calculate weighted dimensions for vision encoder (always use area mode for vision)
                 vision_w, vision_h = self.calculate_weighted_dimensions(
                     vision_target_area, aspect_ratio, vision_weights[i]
                 )
@@ -273,11 +279,37 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
 
                 debug_info.append(f"Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h} (weight: {vision_weights[i]:.2f})")
 
-                # Calculate weighted dimensions for VAE encoder if provided
+                # Calculate weighted dimensions for VAE encoder if provided - respects scaling_mode
                 if vae is not None:
-                    vae_w, vae_h = self.calculate_weighted_dimensions(
-                        vae_target_area, aspect_ratio, vae_weights[i]
-                    )
+                    # Apply scaling_mode to base dimensions, then apply weight
+                    if scaling_mode == "preserve_resolution":
+                        # Start with original dimensions, apply weight
+                        base_w = round(w / 32) * 32
+                        base_h = round(h / 32) * 32
+                        # Apply weight by scaling the base dimensions
+                        vae_w = round((base_w * vae_weights[i]) / 32) * 32
+                        vae_h = round((base_h * vae_weights[i]) / 32) * 32
+                        if debug_mode:
+                            logger.info(f"[Advanced Encoder]        VAE (preserve+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
+                        debug_info.append(f"    VAE scaling: preserve_resolution with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
+                    elif scaling_mode == "max_dimension_1024":
+                        # Scale to max dimension 1024, then apply weight
+                        scale = 1024 / max(w, h)
+                        base_w = round(w * scale / 32) * 32
+                        base_h = round(h * scale / 32) * 32
+                        vae_w = round((base_w * vae_weights[i]) / 32) * 32
+                        vae_h = round((base_h * vae_weights[i]) / 32) * 32
+                        if debug_mode:
+                            logger.info(f"[Advanced Encoder]        VAE (max_dim+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
+                        debug_info.append(f"    VAE scaling: max_dimension_1024 with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
+                    else:  # area_1024
+                        # Use weighted dimensions calculation (original behavior)
+                        vae_w, vae_h = self.calculate_weighted_dimensions(
+                            vae_target_area, aspect_ratio, vae_weights[i]
+                        )
+                        if debug_mode:
+                            logger.info(f"[Advanced Encoder]        VAE (area+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
+                        debug_info.append(f"    VAE scaling: area_1024 with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
 
                     vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
                     vae_img_hwc = vae_img.movedim(1, -1)
@@ -296,7 +328,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                     ref_latents.append(ref_latent)
 
                     if debug_mode:
-                        logger.info(f"[Advanced Encoder]        VAE: {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f}), latent: {ref_latent.shape}")
+                        logger.info(f"[Advanced Encoder]        Latent shape: {ref_latent.shape}")
 
         # Call parent encode with processed images
         # We'll pass the debug_info we've collected
@@ -414,6 +446,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                     debug_output += f"Mode: {mode} -> drop_idx={drop_idx}\n"
 
             debug_output += f"\n=== ADVANCED SETTINGS ===\n"
+            debug_output += f"Scaling Mode: {scaling_mode}\n"
             debug_output += f"Resolution Mode: {resolution_mode}\n"
             debug_output += f"Vision Target: {vision_target_area} ({int(math.sqrt(vision_target_area))}²)\n"
             debug_output += f"VAE Target: {vae_target_area} ({int(math.sqrt(vae_target_area))}²)\n"

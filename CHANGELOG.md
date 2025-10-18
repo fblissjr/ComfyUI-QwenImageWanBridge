@@ -9,11 +9,12 @@
   - Example: 1477×2056 → 1472×2048 (minimal crop, no zoom-out)
 
 ### Added
-- **scaling_mode parameter** in QwenVLTextEncoder with three modes:
+- **scaling_mode parameter** in QwenVLTextEncoder and QwenVLTextEncoderAdvanced with three modes:
   - `preserve_resolution` (default) - Keeps input size, only applies 32px alignment
   - `max_dimension_1024` - Scales largest side to 1024px (good for 4K images)
   - `area_1024` - Legacy behavior, scales to ~1024×1024 area
 - Improved tooltips with detailed tradeoffs for each mode
+- Advanced encoder applies scaling_mode as base, then applies resolution_mode weights on top
 
 ### Changed
 - Vision encoder always uses 384×384 area scaling (unchanged)

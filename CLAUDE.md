@@ -70,9 +70,13 @@ LoadImage → QwenVLTextEncoder → KSampler → VAEDecode
 
 ### Resolution Handling
 - **32-pixel alignment** for VAE (required)
-- Vision encoder: 384×384 target area
-- VAE encoder: 1024×1024 target area
-- `calculate_dimensions()` in `nodes/qwen_vl_encoder.py:187`
+- Vision encoder: 384×384 target area (always area-based scaling)
+- VAE encoder: Configurable via `scaling_mode` parameter
+  - `preserve_resolution` (default): Keeps original size with 32px alignment
+  - `max_dimension_1024`: Scales largest side to 1024px
+  - `area_1024`: Scales to ~1024×1024 area (legacy)
+- `calculate_dimensions()` in `nodes/qwen_vl_encoder.py:193`
+- Advanced encoder: `scaling_mode` sets base, `resolution_mode` applies weights
 
 ### Inpainting System (Simple Blending Approach)
 
@@ -239,11 +243,12 @@ Multi:  Picture 1: <|vision_start|><|image_pad|><|vision_end|>Picture 2: ...
 
 ## Known Issues
 
-1. **Multi-image memory**: 4+ images may OOM (optimal: 1-3)
+1. **Multi-image memory**: 4+ images may OOM (optimal: 1-3, use `max_dimension_1024` for VRAM relief)
 2. **Wrapper nodes**: Incomplete ComfyUI sampler integration
 3. **Spatial tokens**: Not used by DiffSynth (use EliGen/masks instead)
 4. **Inpainting approach**: Post-processing blend, not in-model attention masking like DiffSynth
 5. **QwenInpaintSampler**: 548-line implementation for simple blend - consider using KSampler + LatentCompositeMasked instead
+6. **Zoom-out on large images**: Fixed in v2.6.1 with `preserve_resolution` default (was `area_1024`)
 
 ## Debug Features
 
