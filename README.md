@@ -2,27 +2,47 @@
 
 Custom nodes for Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things to come.
 
-See [CHANGELOG.md](CHANGELOG.md) for full details and changelog history.
+**Documentation:**
+- [CHANGELOG.md](CHANGELOG.md) - Full changelog history
+- [nodes/docs/](nodes/docs/) - Detailed node documentation
+- [nodes/docs/resolution_tradeoffs.md](nodes/docs/resolution_tradeoffs.md) - Resolution and scaling guide
+- [nodes/docs/QwenImageBatch.md](nodes/docs/QwenImageBatch.md) - Batch node documentation
 
 ## Features
 
 ### Core Capabilities
-- **Qwen-Image-Edit-2509**: Multi-image editing (1-3 optimal, up to 512 max)
-- **Mask-Based Inpainting**: Selective editing with diffusers blending
-- **100% DiffSynth-Studio Aligned**: Verified implementation
-- **Advanced Power User Mode**: Per-image resolution control
-- **Configurable Auto-Labeling**: Optional "Picture X:" formatting
-- **Memory Optimization**: VRAM budgets and weighted resolution
-- **Full Debug Output**: Complete prompts, character counts, memory usage
+- **Qwen-Image-Edit-2509**: Multi-image editing (1-3 optimal, up to 10 max because I had to pick something)
+- **QwenImageBatch**: Smart batching with auto-detection, aspect ratio preservation, scaling, batching strategy
+- **Resolution Control & Power User Mode**: Per-image resolution control
+- **Template Builder Auto-Sync**: Automatic mode matching between template and encoder
+- **System Prompt Control**: Customizable system prompts via the template builder
+- **Automatic Double-Scaling Prevention**: Batch node and better encoder intelligence
+- **Full Debug Output**: Complete prompts, character counts, aspect ratio tracking
 
-### Key Features
+### Still Experimental or Not Working Well (or at all)
+- Mask-Based Inpainting: Selective editing with diffusers blending, including Eligen entity control
+- All wrapper nodes, probably more stuff I'm omitting
 
-#### Automatic Resolution Handling
-- Automatically handles mismatched dimensions between empty latent and reference images
-- Pads to nearest even dimensions for model compatibility
-- Works with any aspect ratio - not limited to 1024x1024
+### v2.6.2 Highlights
 
-### Key Nodes
+**QwenImageBatch** - No more KJNodes dependency ([docs](nodes/docs/QwenImageBatch.md))
+- Auto-detects up to 10 images (no inputcount parameter)
+- Skips empty inputs (no black images)
+- `max_dimensions` strategy (minimal distortion) or `first_image` (hero-driven)
+- Prevents double-scaling with metadata propagation
+- See [resolution_tradeoffs.md](nodes/docs/resolution_tradeoffs.md) for detailed scaling guide
+
+**multi_image_edit Mode** - DiffSynth `encode_prompt_edit_multi` pattern
+- Vision tokens placed inside prompt (not before)
+- Automatic "Picture X:" labeling
+- Proper drop_idx (64) for multi-reference
+
+**Template Builder → Encoder Sync**
+- Connect template `mode` output → encoder `template_mode` input
+- Automatic mode matching (no manual dropdown needed)
+- Prevents token placement/drop index mismatches
+
+### Nodes
 
 #### QwenVLTextEncoder
 Standard encoder with automatic labeling.
@@ -104,26 +124,10 @@ QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
 
 Use prompts like: "Combine the person from Picture 1 with the background from Picture 2"
 
-### Mask-Based Inpainting
-```
-LoadImage → QwenMaskProcessor → QwenVLTextEncoder (inpainting mode)
-                    ↓ (mask)              ↓
-                    ↓             QwenInpaintSampler → VAEDecode
-                    ↓                      ↑
-                    └──────────────────────┘
-```
-
-Selective editing with mask controls (blur, expand, feather)
 
 ## Example Workflows
 
-Located in `example_workflows/`:
-- **qwen_text_to_image_2509.json** - Basic text-to-image with template
-- **qwen_multi_image_2509_simplified.json** - Multi-image editing workflow
-- **qwen_edit_2509_mask_inpainting.json** - Mask-based inpainting workflow
-- **nunchaku_qwen_mask_inpainting.json** - Nunchaku variant for inpainting
-
-All include comprehensive documentation and notes.
+Located in `example_workflows/`
 
 ## Key Settings
 
@@ -180,10 +184,10 @@ See [MULTI_IMAGE_ORDERING.md](MULTI_IMAGE_ORDERING.md) for detailed guide.
 
 ## Status
 
-**Production Ready:**
+**Working/Tested:**
 - Text-to-image generation
 - Single and multi-image editing
-- Mask-based inpainting with diffusers blending
+- Resolution control
 - Template system with custom overrides
 - Dimension-aware processing
 

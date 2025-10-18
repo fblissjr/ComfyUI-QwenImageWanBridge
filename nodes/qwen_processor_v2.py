@@ -24,7 +24,9 @@ class QwenProcessorV2:
         # Drop indices from DiffSynth-Studio/Diffusers
         self.drop_indices = {
             "text_to_image": 34,
-            "image_edit": 64
+            "image_edit": 64,
+            "multi_image_edit": 64,  # Same as image_edit
+            "inpainting": 64  # Same as image_edit
         }
 
     def format_template(self,
@@ -74,7 +76,7 @@ class QwenProcessorV2:
         Get the number of embeddings to drop for a given mode.
 
         Args:
-            mode: "text_to_image" or "image_edit"
+            mode: "text_to_image", "image_edit", "multi_image_edit", or "inpainting"
 
         Returns:
             Number of embeddings to drop

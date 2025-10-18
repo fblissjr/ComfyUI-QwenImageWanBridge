@@ -15,19 +15,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Organization
 
 - `nodes/` - Production-ready nodes only
+- `nodes/docs/` - Detailed node documentation (README, per-node docs, guides)
 - `nodes/archive/` - Legacy and experimental nodes
 - `example_workflows/` - Example JSON workflows with comprehensive notes
 - `internal/` - Internal documentation and analysis
+
+## Documentation
+
+- `nodes/docs/README.md` - Documentation index
+- `nodes/docs/QwenImageBatch.md` - Batch node documentation
+- `nodes/docs/QwenVLTextEncoder.md` - Standard encoder documentation
+- `nodes/docs/QwenTemplateBuilder.md` - Template builder documentation
+- `nodes/docs/resolution_tradeoffs.md` - Comprehensive resolution and scaling guide
 
 ## Project Overview
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features:**
+**Key Features (v2.6.2):**
+- QwenImageBatch node (auto-detection, aspect preservation, double-scaling prevention) - [docs](nodes/docs/QwenImageBatch.md)
+- multi_image_edit mode (DiffSynth `encode_prompt_edit_multi` alignment)
+- Template Builder → Encoder auto-sync (mode propagation)
+- Resolution scaling guide - [docs](nodes/docs/resolution_tradeoffs.md)
 - 16-channel VAE latents (vs standard 4-channel)
 - Vision token processing with multi-image support
 - Template system with token dropping (DiffSynth-compatible)
-- Mask-based inpainting with diffusers blending pattern
+- Mask-based inpainting with diffusers blending pattern (experimental, not fully tested)
 - Native ComfyUI integration via `CLIPType.QWEN_IMAGE`
 
 **Models:**
@@ -38,16 +51,18 @@ ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and v
 ## Implementation Status
 
 ### Production Ready
-- Text-to-image generation (QwenVLTextEncoder)
+- Text-to-image generation (QwenVLTextEncoder) - [docs](nodes/docs/QwenVLTextEncoder.md)
 - Single/multi-image editing with vision tokens
-- Mask-based inpainting (QwenMaskProcessor + QwenInpaintSampler)
-- Template system (15+ presets)
+- QwenImageBatch (aspect preservation, auto-detection, double-scaling prevention) - [docs](nodes/docs/QwenImageBatch.md)
+- Template system (15+ presets) - [docs](nodes/docs/QwenTemplateBuilder.md)
+- Resolution scaling guide - [docs](nodes/docs/resolution_tradeoffs.md)
 - 16-channel VAE support
 - Multi-image "Picture X:" labeling (auto, 1-3 images optimal)
-- Token dropping (34 for T2I, 64 for I2E)
+- Token dropping (34 for T2I, 64 for I2E, 64 for multi_image_edit)
 - RoPE position embedding fix for batch processing
 
-### Experimental
+### Experimental (Not Fully Tested)
+- Mask-based inpainting (QwenMaskProcessor + QwenInpaintSampler) - [docs](nodes/docs/QwenMaskProcessor.md), [docs](nodes/docs/QwenInpaintSampler.md)
 - EliGen entity control (mask-based spatial editing, untested)
 - Spatial coordinate tokens (not used by DiffSynth, see `explorations/20251003_diffsynth_spatial_token_analysis.md`)
 - Wrapper nodes (transformers/diffusers, incomplete ComfyUI integration)
@@ -105,15 +120,28 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
 
 ### Core (QwenImage/Loaders, Encoding)
 - QwenVLCLIPLoader - Load Qwen2.5-VL model
-- QwenVLTextEncoder - Main encoder (3 modes: text_to_image, image_edit, inpainting)
-  - Inpainting mode: Accepts optional `inpaint_mask`, auto-resizes to VAE dimensions
+- QwenVLTextEncoder - Main encoder (4 modes: text_to_image, image_edit, multi_image_edit, inpainting)
+  - **multi_image_edit**: DiffSynth-compatible multi-reference mode (vision tokens inside prompt)
+  - **image_edit**: Single/multi image (vision tokens before prompt, auto_label optional)
+  - **inpainting**: Mask-based editing (accepts `inpaint_mask`, auto-resizes to VAE)
   - Default prompts cleared (was "A beautiful landscape")
-- QwenTemplateBuilder - System prompt templates (includes "inpainting" mode)
+- QwenVLTextEncoderAdvanced - Power user encoder (same 4 modes + weighted resolution)
+  - Per-image resolution control and weighted importance
+- QwenTemplateBuilder - System prompt templates (includes "multi_image_edit" and "inpainting" modes)
   - Default prompts cleared
 
 ### Latents (QwenImage/Latents)
 - QwenVLEmptyLatent - 16-channel latent creation
 - QwenVLImageToLatent - Image to 16-channel latent
+
+### Utilities (QwenImage/Utilities)
+- QwenImageBatch - Aspect-ratio preserving batch node
+  - Skips None/empty inputs (no black images)
+  - Preserves aspect ratios (no cropping)
+  - Applies v2.6.1 scaling modes
+  - Up to 10 image inputs
+  - Compatible with both standard and advanced encoders
+  - Two-stage scaling: batch normalizes, advanced encoder applies weights
 
 ### Inpainting (QwenImage/Mask, Sampling)
 - QwenMaskProcessor - Mask preprocessing (outputs: IMAGE, MASK, preview, mask_preview)
@@ -143,12 +171,37 @@ QwenVLCLIPLoader → QwenTemplateBuilder → QwenVLTextEncoder (mode: text_to_im
 QwenVLEmptyLatent → KSampler → VAEDecode → SaveImage
 ```
 
-### Image Editing
+### Image Editing (Single Image)
 ```
 LoadImage → QwenVLTextEncoder (mode: image_edit, with edit_image input)
               ↓
 QwenVLEmptyLatent → KSampler (denoise: 0.5-0.7) → VAEDecode
 ```
+
+### Multi-Image Editing
+```
+LoadImage ─┐
+LoadImage ─┼─> QwenImageBatch → QwenVLTextEncoder (mode: image_edit)
+LoadImage ─┘    (scaling_mode)        ↓
+                              QwenVLEmptyLatent → KSampler → VAEDecode
+```
+
+### Multi-Image with Advanced Encoder
+```
+LoadImage ─┐
+LoadImage ─┼─> QwenImageBatch ────────> QwenVLTextEncoderAdvanced
+LoadImage ─┘    (scaling_mode:          (resolution_mode: hero_first,
+                 preserve_resolution      hero_weight: 1.5,
+                 or no_scaling)           reference_weight: 0.5)
+                                                ↓
+                                   QwenVLEmptyLatent → KSampler → VAEDecode
+```
+
+**Recommended Settings:**
+- **With Standard Encoder**: Use `scaling_mode=preserve_resolution` in QwenImageBatch
+- **With Advanced Encoder**:
+  - Option 1: `scaling_mode=no_scaling` (let advanced encoder handle all scaling)
+  - Option 2: `scaling_mode=preserve_resolution` (batch normalizes, advanced applies weights)
 
 ### Mask Inpainting
 ```
@@ -210,7 +263,8 @@ Multi:  Picture 1: <|vision_start|><|image_pad|><|vision_end|>Picture 2: ...
 
 - ComfyUI CLIP system: `CLIPType.QWEN_IMAGE`
 - Model paths: `models/text_encoders/`, `models/diffusion_models/`, `models/vae/`
-- Dependencies: KJNodes (Image Batch for multi-image)
+- Dependencies: None (QwenImageBatch replaces KJNodes ImageBatchMulti)
+- Optional: KJNodes (for other utilities)
 - Wrapper nodes: transformers, diffusers (optional, experimental)
 
 ## Implementation Decisions

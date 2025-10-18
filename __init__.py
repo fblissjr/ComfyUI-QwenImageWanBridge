@@ -52,6 +52,18 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load helper nodes: {e}")
 
+# Image batching node (aspect-ratio preserving with v2.6.1 scaling)
+try:
+    from .nodes.qwen_image_batch import QwenImageBatch
+
+    NODE_CLASS_MAPPINGS["QwenImageBatch"] = QwenImageBatch
+    NODE_DISPLAY_NAME_MAPPINGS["QwenImageBatch"] = "Qwen Image Batch"
+
+    print("[QwenImageWanBridge] Loaded Qwen Image Batch node")
+    print("[QwenImageWanBridge] FEATURE: Aspect-ratio preserving batching with v2.6.1 scaling modes")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load image batch node: {e}")
+
 # Resolution nodes removed - functionality integrated into encoder
 
 # Mask-based inpainting nodes

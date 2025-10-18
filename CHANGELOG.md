@@ -1,5 +1,38 @@
 # Changelog
 
+## v2.6.2 - Multi-Image Batch & DiffSynth Mode Sync
+
+### Added
+
+**QwenImageBatch Node** - Smart multi-image batching without KJNodes dependency
+- Auto-detects up to 10 images (no manual inputcount)
+- Skips empty inputs (no black images)
+- Two batching strategies: `max_dimensions` (minimal distortion) and `first_image` (hero-driven)
+- Automatic double-scaling prevention (marks images as pre-scaled, encoders skip VAE scaling)
+- Enhanced debug logging (aspect ratios, scale factors, dimension adjustments)
+
+**multi_image_edit Mode** - DiffSynth-compatible multi-reference encoding
+- Vision tokens inside prompt (not before) - matches DiffSynth `encode_prompt_edit_multi`
+- Automatic "Picture X:" labeling
+- Available in both standard and advanced encoders
+
+**Template Builder → Encoder Auto-Sync**
+- Template Builder outputs `mode` (4th output)
+- Encoders auto-sync mode when connected
+- Prevents vision token placement/drop index mismatches
+
+### Fixed
+- KJNodes ImageBatchMulti black image issue (empty inputs)
+- Aspect ratio cropping in standard batch nodes
+- Double-scaling when using batch node → encoder
+- Multi-image template mode mismatch
+
+### Technical Notes
+- QwenImageBatch uses v2.6.1 scaling modes + batch strategy
+- Metadata propagation: `qwen_pre_scaled`, `qwen_scaling_mode`, `qwen_batch_strategy`
+- Vision encoder always scales (384×384 target), VAE skips if pre-scaled
+- 32px alignment maintained throughout pipeline
+
 ## v2.6.1 - Resolution Scaling Fix
 
 ### Fixed

@@ -54,12 +54,12 @@ class QwenTemplateBuilderV2:
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "STRING")
-    RETURN_NAMES = ("prompt", "system_prompt", "mode_info")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING")
+    RETURN_NAMES = ("prompt", "system_prompt", "mode", "mode_info")
     FUNCTION = "build"
     CATEGORY = "QwenImage/Templates"
     TITLE = "Qwen Template Builder"
-    DESCRIPTION = "Simple template builder with all options visible"
+    DESCRIPTION = "Simple template builder with all options visible. Outputs mode for automatic encoder sync."
 
     # Template definitions
     TEMPLATES = {
@@ -81,7 +81,7 @@ class QwenTemplateBuilderV2:
         "multi_image_edit": {
             "system": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",
             "vision": True,
-            "mode": "image_edit",
+            "mode": "multi_image_edit",
             "use_picture_format": True
         },
         "artistic": {
@@ -163,8 +163,8 @@ class QwenTemplateBuilderV2:
     }
 
 
-    def build(self, prompt: str, template_mode: str, custom_system: str) -> Tuple[str, str, str]:
-        """Output the raw prompt and system prompt for the encoder to use"""
+    def build(self, prompt: str, template_mode: str, custom_system: str) -> Tuple[str, str, str, str]:
+        """Output the raw prompt, system prompt, mode, and info for the encoder to use"""
 
         # Handle show all prompts mode - displays all available system prompts
         if template_mode == "show_all_prompts":
@@ -173,34 +173,35 @@ class QwenTemplateBuilderV2:
                 prompt_list += f"[{name}]:\n{template['system']}\n" + "="*50 + "\n\n"
             prompt_list += "\nTO USE: Select a template above and optionally override with custom_system field"
             # Return display in system prompt field for viewing
-            return (prompt, prompt_list, "info|display_only")
+            return (prompt, prompt_list, "text_to_image", "info|display_only")
 
         # Handle raw mode - no system prompt
         if template_mode == "raw":
-            return (prompt, "", "raw|no_template")
+            return (prompt, "", "text_to_image", "raw|no_template")
 
         # Handle custom modes
         if template_mode == "custom_t2i":
             system = custom_system if custom_system else "Generate the image based on the description."
-            return (prompt, system, "custom|text_to_image")
+            return (prompt, system, "text_to_image", "custom|text_to_image")
 
         if template_mode == "custom_edit":
             system = custom_system if custom_system else "Edit the image based on the instructions."
-            return (prompt, system, "custom|image_edit")
+            return (prompt, system, "image_edit", "custom|image_edit")
 
         # Handle preset templates
         if template_mode in self.TEMPLATES:
             template = self.TEMPLATES[template_mode]
             # Use custom_system override if provided, otherwise use template default
             system_prompt = custom_system if custom_system else template["system"]
-            mode_info = f"{template_mode}|{template['mode']}"
+            mode = template['mode']
+            mode_info = f"{template_mode}|{mode}"
 
             # Note: Picture format is now automatic in encoder for 2+ images
 
-            return (prompt, system_prompt, mode_info)
+            return (prompt, system_prompt, mode, mode_info)
 
         # Fallback - no system prompt
-        return (prompt, "", "unknown|text_to_image")
+        return (prompt, "", "text_to_image", "unknown|text_to_image")
 
 
 

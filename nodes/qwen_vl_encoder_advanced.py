@@ -45,7 +45,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
         base_types["optional"].update({
             "scaling_mode": (["preserve_resolution", "max_dimension_1024", "area_1024"], {
                 "default": "preserve_resolution",
-                "tooltip": "Resolution scaling mode:\n\npreserve_resolution (recommended):\n  ✓ No zoom-out, subjects stay full-size\n  ✓ Best quality, minimal cropping (32px alignment)\n  ✗ May use more VRAM with very large images\n  Example: 1477×2056 → 1472×2048 (1.00x)\n\nmax_dimension_1024 (for 4K/large images):\n  ✓ Reduces VRAM usage on large images\n  ✓ Balanced quality vs performance\n  ✗ Some zoom-out on large images\n  Example: 3840×2160 → 1024×576 (0.27x)\n\narea_1024 (legacy):\n  ✓ Consistent ~1MP output size\n  ✗ Aggressive zoom-out on large images\n  ✗ Upscales small images unnecessarily\n  Example: 1477×2056 → 864×1216 (0.58x)"
+                "tooltip": "Resolution scaling mode:\n\npreserve_resolution (recommended):\n  ✓ No zoom-out, subjects stay full-size\n  ✓ Best quality, minimal cropping (32px alignment)\n  ✗ May use more VRAM with very large images\n  Example: 1477×2056 → 1472×2048 (1.00x)\n\nmax_dimension_1024 (for 4K/large images):\n  ✓ Reduces VRAM usage on large images\n  ✓ Balanced quality vs performance\n  ✗ Some zoom-out on large images\n  Example: 3840×2160 → 1024×576 (0.27x)\n\narea_1024 (legacy):\n  ✓ Consistent ~1MP output size\n  ✗ Aggressive zoom-out on large images\n  ✗ Upscales small images unnecessarily\n  Example: 1477×2056 → 864×1216 (0.58x)\n\nNote: Auto-skipped when using QwenImageBatch (no double-scaling)"
             }),
             "resolution_mode": (["balanced", "hero_first", "hero_last", "progressive", "custom", "memory_optimized"], {
                 "default": "balanced",
@@ -198,7 +198,8 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
     def encode(self, clip, text: str, mode: str = "text_to_image",
               edit_image: Optional[torch.Tensor] = None,
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
-              system_prompt: str = "", scaling_mode: str = "preserve_resolution",
+              system_prompt: str = "", template_mode: str = "",
+              scaling_mode: str = "preserve_resolution",
               debug_mode: bool = False,
               resolution_mode: str = "balanced",
               vision_target_area: int = 147456,  # 384*384
@@ -215,6 +216,12 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
         """
 
         import comfy.utils
+
+        # Template mode overrides manual mode selection
+        if template_mode and template_mode.strip():
+            mode = template_mode.strip()
+            if debug_mode:
+                logger.info(f"[Advanced Encoder] Using template_mode override: {mode}")
 
         # Control verbose debug output based on verbose_log parameter
         try:
@@ -233,7 +240,18 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
         debug_info = []
 
         # Process images if provided
-        if mode == "image_edit" and edit_image is not None:
+        if mode in ["image_edit", "multi_image_edit", "inpainting"] and edit_image is not None:
+            # Check if images are pre-scaled from QwenImageBatch
+            is_pre_scaled = getattr(edit_image, 'qwen_pre_scaled', False)
+            if is_pre_scaled:
+                batch_scaling_mode = getattr(edit_image, 'qwen_scaling_mode', 'unknown')
+                batch_strategy = getattr(edit_image, 'qwen_batch_strategy', 'unknown')
+                if debug_mode:
+                    logger.info(f"[Advanced Encoder] Images pre-scaled by QwenImageBatch (mode: {batch_scaling_mode}, strategy: {batch_strategy})")
+                    logger.info(f"[Advanced Encoder] Skipping VAE scaling to prevent double-scaling")
+                debug_info.append(f"Pre-scaled by QwenImageBatch ({batch_scaling_mode}/{batch_strategy})")
+                debug_info.append("VAE scaling: SKIPPED (already scaled)")
+
             if debug_mode:
                 logger.info(f"[Advanced Encoder] Input shape: {edit_image.shape}")
                 logger.info(f"[Advanced Encoder] Resolution mode: {resolution_mode}")
@@ -281,14 +299,22 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
 
                 # Calculate weighted dimensions for VAE encoder if provided - respects scaling_mode
                 if vae is not None:
+                    if is_pre_scaled:
+                        # Use as-is, already scaled by QwenImageBatch (ignore weights)
+                        vae_img_hwc = img
+                        if debug_mode:
+                            logger.info(f"[Advanced Encoder]        VAE: Using pre-scaled {w}x{h} (no resize, weights ignored)")
+                        debug_info.append(f"    VAE: pre-scaled {w}x{h} (skipped, weights N/A)")
                     # Apply scaling_mode to base dimensions, then apply weight
-                    if scaling_mode == "preserve_resolution":
+                    elif scaling_mode == "preserve_resolution":
                         # Start with original dimensions, apply weight
                         base_w = round(w / 32) * 32
                         base_h = round(h / 32) * 32
                         # Apply weight by scaling the base dimensions
                         vae_w = round((base_w * vae_weights[i]) / 32) * 32
                         vae_h = round((base_h * vae_weights[i]) / 32) * 32
+                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
+                        vae_img_hwc = vae_img.movedim(1, -1)
                         if debug_mode:
                             logger.info(f"[Advanced Encoder]        VAE (preserve+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
                         debug_info.append(f"    VAE scaling: preserve_resolution with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
@@ -299,6 +325,8 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                         base_h = round(h * scale / 32) * 32
                         vae_w = round((base_w * vae_weights[i]) / 32) * 32
                         vae_h = round((base_h * vae_weights[i]) / 32) * 32
+                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
+                        vae_img_hwc = vae_img.movedim(1, -1)
                         if debug_mode:
                             logger.info(f"[Advanced Encoder]        VAE (max_dim+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
                         debug_info.append(f"    VAE scaling: max_dimension_1024 with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
@@ -307,12 +335,12 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                         vae_w, vae_h = self.calculate_weighted_dimensions(
                             vae_target_area, aspect_ratio, vae_weights[i]
                         )
+                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
+                        vae_img_hwc = vae_img.movedim(1, -1)
                         if debug_mode:
                             logger.info(f"[Advanced Encoder]        VAE (area+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
                         debug_info.append(f"    VAE scaling: area_1024 with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
 
-                    vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
-                    vae_img_hwc = vae_img.movedim(1, -1)
                     ref_latent = vae.encode(vae_img_hwc[:, :, :, :3])
 
                     # Wan21 latent format expects 5D tensors (batch, channels, time, height, width)
@@ -359,9 +387,18 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
             # Format with vision tokens
             num_images = len(vision_images)
 
-            if num_images == 1:
+            # Build vision tokens based on mode (matches standard encoder logic)
+            if mode == "multi_image_edit":
+                # Multi-image mode: always use labels (DiffSynth standard)
+                vision_tokens = "".join([
+                    f"Picture {i+1}: <|vision_start|><|image_pad|><|vision_end|>"
+                    for i in range(num_images)
+                ])
+            elif num_images == 1:
+                # Single image: no label needed
                 vision_tokens = "<|vision_start|><|image_pad|><|vision_end|>"
             else:
+                # Multiple images in image_edit/inpainting mode: optionally add labels
                 if auto_label:
                     # Use configurable label format
                     vision_tokens = "".join([
