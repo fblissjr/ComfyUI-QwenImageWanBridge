@@ -196,9 +196,10 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
         return vision_weights, vae_weights
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
+              template_output: Optional[Dict[str, Any]] = None,
               edit_image: Optional[torch.Tensor] = None,
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
-              system_prompt: str = "", template_mode: str = "",
+              system_prompt: str = "",
               scaling_mode: str = "preserve_resolution",
               debug_mode: bool = False,
               resolution_mode: str = "balanced",
@@ -217,11 +218,13 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
 
         import comfy.utils
 
-        # Template mode overrides manual mode selection
-        if template_mode and template_mode.strip():
-            mode = template_mode.strip()
+        # Template output overrides individual params
+        if template_output:
+            text = template_output.get("prompt", text)
+            system_prompt = template_output.get("system_prompt", system_prompt)
+            mode = template_output.get("mode", mode)
             if debug_mode:
-                logger.info(f"[Advanced Encoder] Using template_mode override: {mode}")
+                logger.info(f"[Advanced Encoder] Using template_output: mode={mode}, template={template_output.get('template_name')}")
 
         # Control verbose debug output based on verbose_log parameter
         try:

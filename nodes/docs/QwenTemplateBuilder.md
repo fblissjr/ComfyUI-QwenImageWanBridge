@@ -5,7 +5,9 @@
 
 ## Description
 
-Builds DiffSynth-compatible system prompts for Qwen2.5-VL encoding. Provides 15+ pre-configured templates and supports custom system prompt overrides.
+Builds DiffSynth-compatible system prompts for Qwen2.5-VL encoding. Provides 22 pre-configured templates and supports custom system prompt overrides.
+
+**IMPORTANT:** Always connect BOTH `mode` and `system_prompt` outputs to the encoder. The `mode` output ensures vision tokens are formatted correctly for the selected template.
 
 ## Inputs
 
@@ -40,6 +42,8 @@ Builds DiffSynth-compatible system prompts for Qwen2.5-VL encoding. Provides 15+
 
 - **custom_system** (STRING, multiline)
   - Override system prompt for ANY template mode
+  - JavaScript UI auto-fills this when you select a preset
+  - Edit the auto-filled text to customize it
   - Leave empty to use template default
   - Default: ""
 
@@ -55,9 +59,10 @@ Builds DiffSynth-compatible system prompts for Qwen2.5-VL encoding. Provides 15+
   - For show_all_prompts: returns all template info
 
 - **mode** (STRING)
-  - Mode for encoder (text_to_image, image_edit, or multi_image_edit)
-  - Connect to encoder's `template_mode` input for auto-sync
-  - Prevents vision token placement/drop index mismatches
+  - Mode for encoder (text_to_image, image_edit, multi_image_edit, or inpainting)
+  - **REQUIRED CONNECTION:** Connect to encoder's `mode` input for auto-sync
+  - Ensures correct vision token formatting (labels, placement, token dropping)
+  - Without this connection, you risk mismatched vision token formatting
 
 - **mode_info** (STRING)
   - Mode metadata description
@@ -122,19 +127,28 @@ This format enables proper token dropping in the encoder:
 
 ## Example Usage
 
-### Basic Usage
+### Correct Usage (ALWAYS USE THIS)
 ```
 QwenTemplateBuilder (template_mode: default_edit, prompt: "make the sky blue")
-  ↓ (system_prompt)
-QwenVLTextEncoder
+  ├─ (system_prompt) ──> QwenVLTextEncoder (system_prompt input)
+  └─ (mode) ──────────> QwenVLTextEncoder (mode input)
+                        Both connections required!
 ```
 
-### With Mode Auto-Sync (Recommended)
+### Why Both Connections Matter
 ```
-QwenTemplateBuilder (template_mode: multi_image_edit)
-  ↓ (system_prompt)
-  ↓ (mode) ──────> QwenVLTextEncoder (template_mode input)
-                   Mode auto-syncs, prevents mismatches
+Template: multi_image_edit
+  ├─ system_prompt: "Describe features of each input image..."
+  └─ mode: "multi_image_edit"
+       ↓
+    Encoder uses mode to:
+    - Place vision tokens INSIDE prompt (not before)
+    - Add "Picture X:" labels
+    - Apply correct token dropping (64 tokens)
+
+Without mode connection:
+  - Encoder uses default mode (image_edit)
+  - Wrong token placement = broken generation
 ```
 
 ### Custom System Override

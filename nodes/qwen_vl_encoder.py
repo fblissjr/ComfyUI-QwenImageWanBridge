@@ -2,6 +2,7 @@
 Qwen2.5-VL CLIP Wrapper for ComfyUI
 Uses ComfyUI's internal Qwen loader but with DiffSynth-Studio templates
 Includes all fixes from DiffSynth-Studio and DiffSynth-Engine
+Templates loaded from nodes/templates/*.md files
 """
 
 import os
@@ -9,9 +10,6 @@ import torch
 import logging
 from typing import Optional, Dict, Any, Tuple, Union, List
 import folder_paths
-# Removed dimension wrappers - just pass latents through as-is
-
-# Simplified encoder - no longer needs complex processors
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +144,13 @@ class QwenVLTextEncoder:
                 }),
                 "mode": (["text_to_image", "image_edit", "multi_image_edit", "inpainting"], {
                     "default": "image_edit",
-                    "tooltip": "text_to_image: Generate from scratch | image_edit: Single image modify | multi_image_edit: Multiple reference images | inpainting: Mask-based editing"
+                    "tooltip": "text_to_image: Generate from scratch | image_edit: Single image modify | multi_image_edit: Multiple reference images (DiffSynth pattern) | inpainting: Mask-based editing. Overridden by template_output if connected."
                 }),
             },
             "optional": {
+                "template_output": ("QWEN_TEMPLATE", {
+                    "tooltip": "Template from Template Builder - overrides text/system_prompt/mode when connected"
+                }),
                 "edit_image": ("IMAGE", {
                     "tooltip": "Single image or batch. For multiple images, use Image Batch node first."
                 }),
@@ -160,14 +161,9 @@ class QwenVLTextEncoder:
                     "tooltip": "Inpainting mask for selective editing (use with inpainting mode)"
                 }),
                 "system_prompt": ("STRING", {
-                    "tooltip": "System prompt from Template Builder - connect for proper token dropping",
+                    "tooltip": "System prompt (overridden by template_output if connected)",
                     "multiline": True,
                     "default": ""
-                }),
-                "template_mode": ("STRING", {
-                    "tooltip": "Mode from Template Builder - auto-syncs encoder mode (overrides dropdown if connected)",
-                    "default": "",
-                    "forceInput": True
                 }),
                 "scaling_mode": (["preserve_resolution", "max_dimension_1024", "area_1024"], {
                     "default": "preserve_resolution",
@@ -232,9 +228,10 @@ class QwenVLTextEncoder:
 
 
     def encode(self, clip, text: str, mode: str = "text_to_image",
+              template_output: Optional[Dict[str, Any]] = None,
               edit_image: Optional[torch.Tensor] = None,
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
-              system_prompt: str = "", template_mode: str = "",
+              system_prompt: str = "",
               scaling_mode: str = "preserve_resolution",
               debug_mode: bool = False, auto_label: bool = True,
               verbose_log: bool = False) -> Tuple[Any]:
@@ -245,11 +242,13 @@ class QwenVLTextEncoder:
         import math
         import comfy.utils
 
-        # Template mode overrides manual mode selection
-        if template_mode and template_mode.strip():
-            mode = template_mode.strip()
+        # Template output overrides individual params
+        if template_output:
+            text = template_output.get("prompt", text)
+            system_prompt = template_output.get("system_prompt", system_prompt)
+            mode = template_output.get("mode", mode)
             if debug_mode:
-                logger.info(f"[Encoder] Using template_mode override: {mode}")
+                logger.info(f"[Encoder] Using template_output: mode={mode}, template={template_output.get('template_name')}")
 
         vision_images = []
         ref_latents = []

@@ -1,8 +1,8 @@
 {
   "id": "e6e339aa-d8e6-4a89-8473-66320c98d9c3",
   "revision": 0,
-  "last_node_id": 61,
-  "last_link_id": 153,
+  "last_node_id": 66,
+  "last_link_id": 177,
   "nodes": [
     {
       "id": 31,
@@ -176,7 +176,7 @@
         82
       ],
       "flags": {},
-      "order": 9,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -232,8 +232,8 @@
           "type": "CLIP",
           "slot_index": 0,
           "links": [
-            84,
-            126
+            161,
+            167
           ]
         }
       ],
@@ -271,8 +271,8 @@
           "slot_index": 0,
           "links": [
             43,
-            85,
-            128
+            164,
+            169
           ]
         }
       ],
@@ -291,50 +291,6 @@
       ]
     },
     {
-      "id": 28,
-      "type": "ConditioningZeroOut",
-      "pos": [
-        1321.05859375,
-        235.1796875
-      ],
-      "size": [
-        197.712890625,
-        26
-      ],
-      "flags": {},
-      "order": 17,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "link": 153
-        }
-      ],
-      "outputs": [
-        {
-          "name": "CONDITIONING",
-          "type": "CONDITIONING",
-          "links": [
-            47
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "ConditioningZeroOut",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [],
-      "color": "#322",
-      "bgcolor": "#533"
-    },
-    {
       "id": 34,
       "type": "PreviewAny",
       "pos": [
@@ -346,13 +302,13 @@
         108.44389343261719
       ],
       "flags": {},
-      "order": 11,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
           "name": "source",
           "type": "*",
-          "link": 56
+          "link": 159
         }
       ],
       "outputs": [],
@@ -424,7 +380,7 @@
         58
       ],
       "flags": {},
-      "order": 13,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
@@ -468,7 +424,7 @@
         58
       ],
       "flags": {},
-      "order": 16,
+      "order": 17,
       "mode": 0,
       "inputs": [
         {
@@ -501,106 +457,6 @@
       ]
     },
     {
-      "id": 50,
-      "type": "QwenVLTextEncoderAdvanced",
-      "pos": [
-        1800.0524685793778,
-        -274.0204096842114
-      ],
-      "size": [
-        400,
-        534
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 4,
-      "inputs": [
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": 84
-        },
-        {
-          "name": "edit_image",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 150
-        },
-        {
-          "name": "vae",
-          "shape": 7,
-          "type": "VAE",
-          "link": 85
-        },
-        {
-          "name": "inpaint_mask",
-          "shape": 7,
-          "type": "MASK",
-          "link": null
-        },
-        {
-          "name": "template_mode",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "name": "text",
-          "type": "STRING",
-          "widget": {
-            "name": "text"
-          },
-          "link": 141
-        },
-        {
-          "name": "system_prompt",
-          "shape": 7,
-          "type": "STRING",
-          "widget": {
-            "name": "system_prompt"
-          },
-          "link": 140
-        }
-      ],
-      "outputs": [
-        {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "links": []
-        },
-        {
-          "name": "debug_output",
-          "type": "STRING",
-          "links": null
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "QwenVLTextEncoderAdvanced",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.3"
-        }
-      },
-      "widgets_values": [
-        "The old man is painting the mountain painting on a canvas",
-        "multi_image_edit",
-        "",
-        "preserve_resolution",
-        true,
-        true,
-        false,
-        "balanced",
-        147456,
-        1048576,
-        1,
-        0.5,
-        0,
-        "",
-        "Picture"
-      ]
-    },
-    {
       "id": 33,
       "type": "KSampler",
       "pos": [
@@ -609,10 +465,10 @@
       ],
       "size": [
         270,
-        467.6167664670659
+        468.7710843373494
       ],
       "flags": {},
-      "order": 18,
+      "order": 20,
       "mode": 0,
       "inputs": [
         {
@@ -623,12 +479,12 @@
         {
           "name": "positive",
           "type": "CONDITIONING",
-          "link": 152
+          "link": 175
         },
         {
           "name": "negative",
           "type": "CONDITIONING",
-          "link": 47
+          "link": 174
         },
         {
           "name": "latent_image",
@@ -677,7 +533,7 @@
         46
       ],
       "flags": {},
-      "order": 19,
+      "order": 21,
       "mode": 0,
       "inputs": [
         {
@@ -725,7 +581,7 @@
         661.7103359375001
       ],
       "flags": {},
-      "order": 20,
+      "order": 22,
       "mode": 0,
       "inputs": [
         {
@@ -748,65 +604,6 @@
       "widgets_values": []
     },
     {
-      "id": 37,
-      "type": "QwenTemplateBuilder",
-      "pos": [
-        591.3753857421871,
-        780.8446875000002
-      ],
-      "size": [
-        532.3330688476562,
-        413.6612243652344
-      ],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "prompt",
-          "type": "STRING",
-          "links": [
-            56,
-            129,
-            141
-          ]
-        },
-        {
-          "name": "system_prompt",
-          "type": "STRING",
-          "links": [
-            79,
-            130,
-            140
-          ]
-        },
-        {
-          "name": "mode",
-          "type": "STRING",
-          "links": null
-        },
-        {
-          "name": "mode_info",
-          "type": "STRING",
-          "links": null
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "QwenTemplateBuilder",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "The old man is painting the mountain painting on a canvas while the woman in red stands behind him",
-        "multi_image_edit",
-        ""
-      ]
-    },
-    {
       "id": 47,
       "type": "PreviewAny",
       "pos": [
@@ -818,13 +615,13 @@
         265.41015625
       ],
       "flags": {},
-      "order": 12,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
           "name": "source",
           "type": "*",
-          "link": 79
+          "link": 155
         }
       ],
       "outputs": [],
@@ -841,6 +638,53 @@
       "widgets_values": []
     },
     {
+      "id": 62,
+      "type": "QwenTemplateBuilder",
+      "pos": [
+        540.2152294921871,
+        853.3759375000002
+      ],
+      "size": [
+        487.49609375,
+        365.296875
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "template_output",
+          "type": "QWEN_TEMPLATE",
+          "links": [
+            159,
+            162,
+            171
+          ]
+        },
+        {
+          "name": "debug_info",
+          "type": "STRING",
+          "links": [
+            155,
+            170
+          ]
+        }
+      ],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        },
+        "Node name for S&R": "QwenTemplateBuilder"
+      },
+      "widgets_values": [
+        "The old man is painting the mountain painting on a canvas while the woman in red stands behind him",
+        "multi_image_edit",
+        "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate."
+      ]
+    },
+    {
       "id": 61,
       "type": "QwenImageBatch",
       "pos": [
@@ -852,7 +696,7 @@
         286
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -920,8 +764,8 @@
           "name": "images",
           "type": "IMAGE",
           "links": [
-            150,
-            151
+            163,
+            168
           ]
         },
         {
@@ -936,24 +780,183 @@
         }
       ],
       "properties": {
+        "Node name for S&R": "QwenImageBatch",
         "ue_properties": {
           "widget_ue_connectable": {},
-          "input_ue_unconnectable": {}
-        },
-        "Node name for S&R": "QwenImageBatch"
+          "input_ue_unconnectable": {},
+          "version": "7.3"
+        }
       },
       "widgets_values": [
         "preserve_resolution",
         "max_dimensions",
-        false
+        true
       ]
     },
     {
-      "id": 58,
+      "id": 63,
+      "type": "MarkdownNote",
+      "pos": [
+        789.4967970007956,
+        -27.861099854900885
+      ],
+      "size": [
+        392.2734375,
+        246.7421875
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## Use of template builder with encoder and encoder advanced:\n\nIf using the template builder, you just need to connect the `template_mode` and it will override the values in the encoder node's `text` user prompt, `system_prompt`, and `mode` (ex: image_edit, text_to_image, etc), which is important for vision token usage. \n\nTLDR: if you connect template_output from template builder to either encoder or advanced encoder, it will now override whatever values you set or don't set in the encoder for:\n\n1. `text`: user prompt (your instructions)\n2. `system_prompt`: the system prompt used by qwen2.5-vl\n3. `mode`: image edit, multi image edit, t2i, etc. controls token usage for vision encoding."
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 65,
+      "type": "QwenVLTextEncoderAdvanced",
+      "pos": [
+        1800.0524685793778,
+        -274.0204096842114
+      ],
+      "size": [
+        400,
+        534
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 167
+        },
+        {
+          "name": "template_output",
+          "shape": 7,
+          "type": "QWEN_TEMPLATE",
+          "link": 171
+        },
+        {
+          "name": "edit_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 168
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": 169
+        },
+        {
+          "name": "inpaint_mask",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "system_prompt",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "system_prompt"
+          },
+          "link": 170
+        }
+      ],
+      "outputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "links": []
+        },
+        {
+          "name": "debug_output",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        },
+        "Node name for S&R": "QwenVLTextEncoderAdvanced"
+      },
+      "widgets_values": [
+        "",
+        "image_edit",
+        "",
+        "preserve_resolution",
+        false,
+        true,
+        false,
+        "balanced",
+        147456,
+        1048576,
+        1,
+        0.5,
+        0,
+        "",
+        "Picture"
+      ]
+    },
+    {
+      "id": 28,
+      "type": "ConditioningZeroOut",
+      "pos": [
+        1321.05859375,
+        235.1796875
+      ],
+      "size": [
+        197.712890625,
+        26
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 176
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            174
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.60",
+        "Node name for S&R": "ConditioningZeroOut",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 64,
       "type": "QwenVLTextEncoder",
       "pos": [
-        744.4822656249996,
-        300.902890625
+        763.4900781249996,
+        307.266171875
       ],
       "size": [
         400,
@@ -966,48 +969,31 @@
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 126
+          "link": 161
+        },
+        {
+          "name": "template_output",
+          "shape": 7,
+          "type": "QWEN_TEMPLATE",
+          "link": 162
         },
         {
           "name": "edit_image",
           "shape": 7,
           "type": "IMAGE",
-          "link": 151
+          "link": 163
         },
         {
           "name": "vae",
           "shape": 7,
           "type": "VAE",
-          "link": 128
+          "link": 164
         },
         {
           "name": "inpaint_mask",
           "shape": 7,
           "type": "MASK",
           "link": null
-        },
-        {
-          "name": "template_mode",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "name": "text",
-          "type": "STRING",
-          "widget": {
-            "name": "text"
-          },
-          "link": 129
-        },
-        {
-          "name": "system_prompt",
-          "shape": 7,
-          "type": "STRING",
-          "widget": {
-            "name": "system_prompt"
-          },
-          "link": 130
         }
       ],
       "outputs": [
@@ -1015,35 +1001,69 @@
           "name": "conditioning",
           "type": "CONDITIONING",
           "links": [
-            152,
-            153
+            175,
+            176
           ]
         },
         {
           "name": "debug_output",
           "type": "STRING",
-          "links": null
+          "links": [
+            177
+          ]
         }
       ],
       "properties": {
-        "Node name for S&R": "QwenVLTextEncoder",
         "ue_properties": {
           "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.3"
-        }
+          "input_ue_unconnectable": {}
+        },
+        "Node name for S&R": "QwenVLTextEncoder"
       },
       "widgets_values": [
         "",
         "image_edit",
         "",
         "preserve_resolution",
-        true,
+        false,
         true,
         false,
         "test",
         "analyze"
       ]
+    },
+    {
+      "id": 66,
+      "type": "PreviewAny",
+      "pos": [
+        1767.3327345007956,
+        1134.3264001450991
+      ],
+      "size": [
+        140,
+        76
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 177
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        },
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": []
     },
     {
       "id": 10,
@@ -1057,7 +1077,7 @@
         106
       ],
       "flags": {},
-      "order": 8,
+      "order": 9,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -1119,14 +1139,6 @@
       "MODEL"
     ],
     [
-      47,
-      28,
-      0,
-      33,
-      2,
-      "CONDITIONING"
-    ],
-    [
       49,
       27,
       0,
@@ -1151,92 +1163,12 @@
       "LATENT"
     ],
     [
-      56,
-      37,
-      0,
-      34,
-      0,
-      "*"
-    ],
-    [
-      79,
-      37,
-      1,
-      47,
-      0,
-      "*"
-    ],
-    [
       80,
       12,
       0,
       48,
       0,
       "IMAGE"
-    ],
-    [
-      84,
-      29,
-      0,
-      50,
-      0,
-      "CLIP"
-    ],
-    [
-      85,
-      30,
-      0,
-      50,
-      2,
-      "VAE"
-    ],
-    [
-      126,
-      29,
-      0,
-      58,
-      0,
-      "CLIP"
-    ],
-    [
-      128,
-      30,
-      0,
-      58,
-      2,
-      "VAE"
-    ],
-    [
-      129,
-      37,
-      0,
-      58,
-      5,
-      "STRING"
-    ],
-    [
-      130,
-      37,
-      1,
-      58,
-      6,
-      "STRING"
-    ],
-    [
-      140,
-      37,
-      1,
-      50,
-      6,
-      "STRING"
-    ],
-    [
-      141,
-      37,
-      0,
-      50,
-      5,
-      "STRING"
     ],
     [
       147,
@@ -1263,36 +1195,124 @@
       "IMAGE"
     ],
     [
-      150,
+      155,
+      62,
+      1,
+      47,
+      0,
+      "*"
+    ],
+    [
+      159,
+      62,
+      0,
+      34,
+      0,
+      "*"
+    ],
+    [
+      161,
+      29,
+      0,
+      64,
+      0,
+      "CLIP"
+    ],
+    [
+      162,
+      62,
+      0,
+      64,
+      1,
+      "QWEN_TEMPLATE"
+    ],
+    [
+      163,
       61,
       0,
-      50,
-      1,
+      64,
+      2,
       "IMAGE"
     ],
     [
-      151,
+      164,
+      30,
+      0,
+      64,
+      3,
+      "VAE"
+    ],
+    [
+      167,
+      29,
+      0,
+      65,
+      0,
+      "CLIP"
+    ],
+    [
+      168,
       61,
       0,
-      58,
-      1,
+      65,
+      2,
       "IMAGE"
     ],
     [
-      152,
-      58,
+      169,
+      30,
+      0,
+      65,
+      3,
+      "VAE"
+    ],
+    [
+      170,
+      62,
+      1,
+      65,
+      5,
+      "STRING"
+    ],
+    [
+      171,
+      62,
+      0,
+      65,
+      1,
+      "QWEN_TEMPLATE"
+    ],
+    [
+      174,
+      28,
+      0,
+      33,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      175,
+      64,
       0,
       33,
       1,
       "CONDITIONING"
     ],
     [
-      153,
-      58,
+      176,
+      64,
       0,
       28,
       0,
       "CONDITIONING"
+    ],
+    [
+      177,
+      64,
+      1,
+      66,
+      0,
+      "*"
     ]
   ],
   "groups": [
@@ -1352,10 +1372,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.8264462809917354,
+      "scale": 1,
       "offset": [
-        202.59038688937113,
-        386.71515968421136
+        -100.8053907507956,
+        406.8298498549009
       ]
     },
     "frontendVersion": "1.28.7",

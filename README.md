@@ -2,6 +2,29 @@
 
 Custom nodes for Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things to come.
 
+## BREAKING CHANGE (v2.7.0+)
+
+**Existing workflows will break.** You must:
+1. Delete old Template Builder, Encoder, and Encoder Advanced nodes from your workflow
+2. Add new versions of these nodes
+3. Connect: Template Builder `template_output` → Encoder `template_output` (single connection only)
+
+Old multi-connection system (mode + system_prompt) no longer works.
+
+---
+
+## Required Connections
+
+**When using Template Builder:**
+- Connect: Template Builder `template_output` → Encoder `template_output`
+- That's it. One connection handles everything (prompt, mode, system_prompt)
+
+**Without Template Builder:**
+- Use encoder's dropdown for mode selection
+- Type text and system_prompt manually
+
+---
+
 **Documentation:**
 - [CHANGELOG.md](CHANGELOG.md) - Full changelog history
 - [nodes/docs/](nodes/docs/) - Detailed node documentation
@@ -23,7 +46,19 @@ Custom nodes for Qwen-Image-Edit with multi-image support, more flexibility arou
 - Mask-Based Inpainting: Selective editing with diffusers blending, including Eligen entity control
 - All wrapper nodes, probably more stuff I'm omitting
 
-### v2.6.2 Highlights
+### v2.7.0 Highlights
+
+**File-Based Template System** - Single source of truth
+- 9 templates in `nodes/templates/*.md` files (was 22 hardcoded)
+- YAML frontmatter for metadata (mode, vision, experimental flags)
+- Easy to add/edit without code changes
+- JavaScript UI auto-fills `custom_system` field for editing
+- Templates: `default_t2i`, `default_edit`, `multi_image_edit`, `artistic`, `photorealistic`, `minimal_edit`, `technical`, `inpainting`, `raw`
+
+**Template Builder → Encoder Connection**
+- `mode` is now STRING input (accepts connections or manual typing)
+- **REQUIRED**: Connect BOTH `mode` and `system_prompt` to encoder
+- Missing either = broken vision token formatting
 
 **QwenImageBatch** - No more KJNodes dependency ([docs](nodes/docs/QwenImageBatch.md))
 - Auto-detects up to 10 images (no inputcount parameter)
@@ -31,16 +66,6 @@ Custom nodes for Qwen-Image-Edit with multi-image support, more flexibility arou
 - `max_dimensions` strategy (minimal distortion) or `first_image` (hero-driven)
 - Prevents double-scaling with metadata propagation
 - See [resolution_tradeoffs.md](nodes/docs/resolution_tradeoffs.md) for detailed scaling guide
-
-**multi_image_edit Mode** - DiffSynth `encode_prompt_edit_multi` pattern
-- Vision tokens placed inside prompt (not before)
-- Automatic "Picture X:" labeling
-- Proper drop_idx (64) for multi-reference
-
-**Template Builder → Encoder Sync**
-- Connect template `mode` output → encoder `template_mode` input
-- Automatic mode matching (no manual dropdown needed)
-- Prevents token placement/drop index mismatches
 
 ### Nodes
 
@@ -80,10 +105,12 @@ Power user encoder with resolution control.
 - verbose_log for console tracing of model passes
 
 #### QwenTemplateBuilder
-System prompt templates.
-- DiffSynth-Studio templates included
-- custom_system override for any template
-- show_all_prompts mode to view options
+File-based system prompt templates (9 templates).
+- Templates loaded from `nodes/templates/*.md` files
+- YAML frontmatter for metadata
+- JavaScript UI auto-fills `custom_system` field
+- **REQUIRED**: Connect BOTH `mode` and `system_prompt` to encoder
+- Available templates: `default_t2i`, `default_edit`, `multi_image_edit`, `artistic`, `photorealistic`, `minimal_edit`, `technical`, `inpainting`, `raw`
 
 ### Helper Nodes
 - **QwenVLEmptyLatent**: Creates 16-channel empty latents
@@ -147,9 +174,18 @@ Example: "Take the old man from Picture 1 and place him in Picture 2"
 See [MULTI_IMAGE_ORDERING.md](MULTI_IMAGE_ORDERING.md) for detailed guide.
 
 ### Template System
-- Connect Template Builder **prompt** output to Encoder **text** input
-- Connect Template Builder **system_prompt** output to Encoder **system_prompt** input
-- Use `custom_system` field to override any template's system prompt
+- **IMPORTANT**: Always connect BOTH outputs from Template Builder to encoder:
+  - Template Builder **mode** → Encoder **mode** (ensures correct vision token formatting)
+  - Template Builder **system_prompt** → Encoder **system_prompt** (provides instruction text)
+- Template Builder **prompt** → Encoder **text** (your actual prompt text)
+- Use `custom_system` field to edit any template's system prompt before using it
+- JavaScript UI auto-fills `custom_system` when you select a preset
+
+**Why connect both?**
+- `mode` controls how vision tokens are formatted (labels, placement, token dropping)
+- `system_prompt` provides the instruction text for the model
+- Using mismatched mode/system_prompt causes incorrect token formatting
+- Example: `inpainting` system prompt with `image_edit` mode = broken workflow
 
 ## Troubleshooting
 

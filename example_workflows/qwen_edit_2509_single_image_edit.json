@@ -1,8 +1,8 @@
 {
   "id": "6c2273cb-e086-46d1-bad8-928c2ead95bd",
   "revision": 0,
-  "last_node_id": 44,
-  "last_link_id": 76,
+  "last_node_id": 48,
+  "last_link_id": 92,
   "nodes": [
     {
       "id": 26,
@@ -16,7 +16,7 @@
         58
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -69,7 +69,7 @@
           "type": "CLIP",
           "slot_index": 0,
           "links": [
-            68
+            87
           ]
         }
       ],
@@ -107,7 +107,7 @@
           "slot_index": 0,
           "links": [
             43,
-            70
+            90
           ]
         }
       ],
@@ -137,7 +137,7 @@
         58
       ],
       "flags": {},
-      "order": 12,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
@@ -220,13 +220,13 @@
         26
       ],
       "flags": {},
-      "order": 11,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
           "name": "conditioning",
           "type": "CONDITIONING",
-          "link": 73
+          "link": 91
         }
       ],
       "outputs": [
@@ -270,7 +270,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 56
+          "link": 77
         }
       ],
       "outputs": [],
@@ -316,103 +316,6 @@
       "bgcolor": "#653"
     },
     {
-      "id": 42,
-      "type": "QwenVLTextEncoder",
-      "pos": [
-        1200,
-        400
-      ],
-      "size": [
-        400,
-        390
-      ],
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": 68
-        },
-        {
-          "name": "edit_image",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 69
-        },
-        {
-          "name": "vae",
-          "shape": 7,
-          "type": "VAE",
-          "link": 70
-        },
-        {
-          "name": "inpaint_mask",
-          "shape": 7,
-          "type": "MASK",
-          "link": null
-        },
-        {
-          "name": "template_mode",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "name": "text",
-          "type": "STRING",
-          "widget": {
-            "name": "text"
-          },
-          "link": 71
-        },
-        {
-          "name": "system_prompt",
-          "shape": 7,
-          "type": "STRING",
-          "widget": {
-            "name": "system_prompt"
-          },
-          "link": 72
-        }
-      ],
-      "outputs": [
-        {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "links": [
-            73,
-            74
-          ]
-        },
-        {
-          "name": "debug_output",
-          "type": "STRING",
-          "links": null
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "QwenVLTextEncoder",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.3"
-        }
-      },
-      "widgets_values": [
-        "",
-        "image_edit",
-        "",
-        "preserve_resolution",
-        false,
-        true,
-        false,
-        "analyze",
-        "test"
-      ]
-    },
-    {
       "id": 33,
       "type": "KSampler",
       "pos": [
@@ -424,7 +327,7 @@
         720.4444444444445
       ],
       "flags": {},
-      "order": 13,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
@@ -435,7 +338,7 @@
         {
           "name": "positive",
           "type": "CONDITIONING",
-          "link": 74
+          "link": 92
         },
         {
           "name": "negative",
@@ -489,7 +392,7 @@
         46
       ],
       "flags": {},
-      "order": 14,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
@@ -546,7 +449,7 @@
           "type": "IMAGE",
           "slot_index": 0,
           "links": [
-            69
+            89
           ]
         },
         {
@@ -572,62 +475,6 @@
       ]
     },
     {
-      "id": 37,
-      "type": "QwenTemplateBuilder",
-      "pos": [
-        647.6542529296869,
-        770.2428906249992
-      ],
-      "size": [
-        532.3330688476562,
-        413.6612243652344
-      ],
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "prompt",
-          "type": "STRING",
-          "links": [
-            56,
-            71
-          ]
-        },
-        {
-          "name": "system_prompt",
-          "type": "STRING",
-          "links": [
-            72
-          ]
-        },
-        {
-          "name": "mode",
-          "type": "STRING",
-          "links": null
-        },
-        {
-          "name": "mode_info",
-          "type": "STRING",
-          "links": null
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "QwenTemplateBuilder",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "The old man is wearing a top hat",
-        "default_edit",
-        ""
-      ]
-    },
-    {
       "id": 10,
       "type": "QwenVLEmptyLatent",
       "pos": [
@@ -639,7 +486,7 @@
         106
       ],
       "flags": {},
-      "order": 6,
+      "order": 5,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -678,7 +525,7 @@
         26
       ],
       "flags": {},
-      "order": 15,
+      "order": 16,
       "mode": 0,
       "inputs": [
         {
@@ -689,14 +536,16 @@
       ],
       "outputs": [],
       "properties": {
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {}
-        },
         "cnr_id": "comfy-core",
         "ver": "0.3.65",
-        "Node name for S&R": "PreviewImage"
-      }
+        "Node name for S&R": "PreviewImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.3"
+        }
+      },
+      "widgets_values": []
     },
     {
       "id": 25,
@@ -744,6 +593,166 @@
       ],
       "color": "#223",
       "bgcolor": "#335"
+    },
+    {
+      "id": 47,
+      "type": "PreviewAny",
+      "pos": [
+        1048.4503552981291,
+        1098.0210121907896
+      ],
+      "size": [
+        210,
+        88
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 85
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.3"
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 45,
+      "type": "QwenTemplateBuilder",
+      "pos": [
+        353.7802294921868,
+        812.8103124999991
+      ],
+      "size": [
+        525.5374999999999,
+        398.1800390625001
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "template_output",
+          "type": "QWEN_TEMPLATE",
+          "links": [
+            77,
+            88
+          ]
+        },
+        {
+          "name": "debug_info",
+          "type": "STRING",
+          "links": [
+            85
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "QwenTemplateBuilder",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.3"
+        }
+      },
+      "widgets_values": [
+        "The old man is wearing a top hat",
+        "default_edit",
+        "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate."
+      ]
+    },
+    {
+      "id": 48,
+      "type": "QwenVLTextEncoder",
+      "pos": [
+        1200,
+        400
+      ],
+      "size": [
+        400,
+        390
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 87
+        },
+        {
+          "name": "template_output",
+          "shape": 7,
+          "type": "QWEN_TEMPLATE",
+          "link": 88
+        },
+        {
+          "name": "edit_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 89
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": 90
+        },
+        {
+          "name": "inpaint_mask",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "links": [
+            91,
+            92
+          ]
+        },
+        {
+          "name": "debug_output",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "QwenVLTextEncoder",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.3"
+        }
+      },
+      "widgets_values": [
+        "",
+        "image_edit",
+        "",
+        "preserve_resolution",
+        false,
+        true,
+        false,
+        "test",
+        "analyze"
+      ]
     }
   ],
   "links": [
@@ -812,76 +821,76 @@
       "LATENT"
     ],
     [
-      56,
-      37,
-      0,
-      34,
-      0,
-      "*"
-    ],
-    [
-      68,
-      29,
-      0,
-      42,
-      0,
-      "CLIP"
-    ],
-    [
-      69,
-      4,
-      0,
-      42,
-      1,
-      "IMAGE"
-    ],
-    [
-      70,
-      30,
-      0,
-      42,
-      2,
-      "VAE"
-    ],
-    [
-      71,
-      37,
-      0,
-      42,
-      5,
-      "STRING"
-    ],
-    [
-      72,
-      37,
-      1,
-      42,
-      6,
-      "STRING"
-    ],
-    [
-      73,
-      42,
-      0,
-      28,
-      0,
-      "CONDITIONING"
-    ],
-    [
-      74,
-      42,
-      0,
-      33,
-      1,
-      "CONDITIONING"
-    ],
-    [
       76,
       12,
       0,
       44,
       0,
       "IMAGE"
+    ],
+    [
+      77,
+      45,
+      0,
+      34,
+      0,
+      "*"
+    ],
+    [
+      85,
+      45,
+      1,
+      47,
+      0,
+      "*"
+    ],
+    [
+      87,
+      29,
+      0,
+      48,
+      0,
+      "CLIP"
+    ],
+    [
+      88,
+      45,
+      0,
+      48,
+      1,
+      "QWEN_TEMPLATE"
+    ],
+    [
+      89,
+      4,
+      0,
+      48,
+      2,
+      "IMAGE"
+    ],
+    [
+      90,
+      30,
+      0,
+      48,
+      3,
+      "VAE"
+    ],
+    [
+      91,
+      48,
+      0,
+      28,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      92,
+      48,
+      0,
+      33,
+      1,
+      "CONDITIONING"
     ]
   ],
   "groups": [
@@ -930,8 +939,8 @@
     "ds": {
       "scale": 0.8264462809917354,
       "offset": [
-        -117.87055061062892,
-        510.5463706217108
+        -359.87527717312895,
+        550.8781284342106
       ]
     },
     "frontendVersion": "1.28.7",

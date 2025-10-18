@@ -1,10 +1,68 @@
 # Changelog
 
-## v2.6.2 - Multi-Image Batch & DiffSynth Mode Sync
+## BREAKING CHANGE (v2.7.0+)
+
+**Existing workflows will break.** You must:
+1. Delete old Template Builder, Encoder, and Encoder Advanced nodes from your workflow
+2. Add new versions of these nodes
+3. Connect: Template Builder `template_output` → Encoder `template_output` (single connection only)
+
+Old multi-connection system (mode + system_prompt) no longer works.
+
+---
+
+## v2.7.0 - Template System Refactor & Simplified Connection
+
+### BREAKING CHANGES
+
+**Simplified Template Connection**
+- Template Builder now outputs single `template_output` (contains everything)
+- Connect ONE output: Template Builder `template_output` → Encoder `template_output`
+- Old system (separate mode + system_prompt connections) removed
+- **You must recreate Template Builder and Encoder nodes in existing workflows**
+
+### Changed
+
+**File-Based Template System**
+- Templates now stored as `.md` files in `nodes/templates/` directory
+- Single source of truth for all templates (no hardcoded dicts)
+- YAML frontmatter for metadata (mode, vision, experimental flags)
+- Easy to add/edit templates without code changes
+- Shared `template_loader.py` used by all nodes (cached on load)
+
+**Simplified Template Set (9 templates, was 22)**
+- Kept: `default_t2i`, `default_edit`, `multi_image_edit`, `artistic`, `photorealistic`, `minimal_edit`, `technical`, `inpainting`, `raw`
+- Removed: All `face_replacement*`, `*spatial*`, `*identity*`, `style_transfer`, `custom_*`, `show_all_prompts`
+- Reasoning: Removed experimental/untested templates and redundant options
+
+**Template Builder → Encoder Connection**
+- `mode` is now a STRING input in encoders (was COMBO dropdown)
+- Connect Template Builder's `mode` → Encoder's `mode` for auto-sync
+- **IMPORTANT**: Always connect both `mode` and `system_prompt` from Template Builder to encoder
+- This ensures vision token formatting matches the template's intended behavior
+
+**Template Builder UI Enhancement**
+- JavaScript extension now populates `custom_system` field when selecting presets
+- Select a preset → see/edit the system prompt before using it
+- Fixed widget name mismatch (was looking for `system_prompt`, now correctly uses `custom_system`)
+
+### Technical Details
+- `nodes/template_loader.py` - Shared loader with singleton pattern
+- Templates use YAML frontmatter: `mode`, `vision`, `use_picture_format`, `experimental`, `no_template`
+- Python node reads templates on module import (cached)
+- JavaScript keeps hardcoded copy for UI responsiveness (synced manually)
+
+### Why Connect Both?
+- `system_prompt` = instruction text for the model
+- `mode` = controls vision token formatting (labels, placement, token dropping)
+- Mismatch example: Using `inpainting` system prompt with `image_edit` mode → wrong token format
+- **Best practice**: Connect both outputs from Template Builder to corresponding encoder inputs
+
+## v2.6.2 - Multi-Image Batch Node
 
 ### Added
 
-**QwenImageBatch Node** - Smart multi-image batching without KJNodes dependency
+**QwenImageBatch Node** - Smart multi-image batching node to handle images with control over strategy and scaling
 - Auto-detects up to 10 images (no manual inputcount)
 - Skips empty inputs (no black images)
 - Two batching strategies: `max_dimensions` (minimal distortion) and `first_image` (hero-driven)
@@ -17,12 +75,12 @@
 - Available in both standard and advanced encoders
 
 **Template Builder → Encoder Auto-Sync**
-- Template Builder outputs `mode` (4th output)
-- Encoders auto-sync mode when connected
+- Template Builder outputs `mode` (3rd output)
+- Encoders accept mode as STRING input (can be connected or typed manually)
 - Prevents vision token placement/drop index mismatches
 
 ### Fixed
-- KJNodes ImageBatchMulti black image issue (empty inputs)
+- KJNodes ImageBatchMulti black image issue (empty inputs) - resolution was to create a new node that handles our use case exactly as needed
 - Aspect ratio cropping in standard batch nodes
 - Double-scaling when using batch node → encoder
 - Multi-image template mode mismatch

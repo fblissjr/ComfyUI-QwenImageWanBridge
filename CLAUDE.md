@@ -32,14 +32,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.6.2):**
+**Key Features (v2.7.0):**
+- **File-based template system** - 9 templates in `nodes/templates/*.md` files (single source of truth)
+- **Template Builder → Encoder auto-sync** - Connect BOTH `mode` and `system_prompt` outputs (required)
 - QwenImageBatch node (auto-detection, aspect preservation, double-scaling prevention) - [docs](nodes/docs/QwenImageBatch.md)
 - multi_image_edit mode (DiffSynth `encode_prompt_edit_multi` alignment)
-- Template Builder → Encoder auto-sync (mode propagation)
 - Resolution scaling guide - [docs](nodes/docs/resolution_tradeoffs.md)
 - 16-channel VAE latents (vs standard 4-channel)
 - Vision token processing with multi-image support
-- Template system with token dropping (DiffSynth-compatible)
+- Token dropping (34 for T2I, 64 for I2E/multi/inpainting) - DiffSynth-compatible
 - Mask-based inpainting with diffusers blending pattern (experimental, not fully tested)
 - Native ComfyUI integration via `CLIPType.QWEN_IMAGE`
 
@@ -54,11 +55,14 @@ ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and v
 - Text-to-image generation (QwenVLTextEncoder) - [docs](nodes/docs/QwenVLTextEncoder.md)
 - Single/multi-image editing with vision tokens
 - QwenImageBatch (aspect preservation, auto-detection, double-scaling prevention) - [docs](nodes/docs/QwenImageBatch.md)
-- Template system (15+ presets) - [docs](nodes/docs/QwenTemplateBuilder.md)
+- **File-based template system (9 templates)** - [docs](nodes/docs/QwenTemplateBuilder.md)
+  - Templates: `default_t2i`, `default_edit`, `multi_image_edit`, `artistic`, `photorealistic`, `minimal_edit`, `technical`, `inpainting`, `raw`
+  - Stored in `nodes/templates/*.md` with YAML frontmatter
+  - JavaScript UI auto-fills `custom_system` field for editing
 - Resolution scaling guide - [docs](nodes/docs/resolution_tradeoffs.md)
 - 16-channel VAE support
 - Multi-image "Picture X:" labeling (auto, 1-3 images optimal)
-- Token dropping (34 for T2I, 64 for I2E, 64 for multi_image_edit)
+- Token dropping (34 for T2I, 64 for I2E/multi/inpainting)
 - RoPE position embedding fix for batch processing
 
 ### Experimental (Not Fully Tested)
@@ -121,14 +125,16 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
 ### Core (QwenImage/Loaders, Encoding)
 - QwenVLCLIPLoader - Load Qwen2.5-VL model
 - QwenVLTextEncoder - Main encoder (4 modes: text_to_image, image_edit, multi_image_edit, inpainting)
+  - `mode` input is STRING (accepts connection from Template Builder or manual typing)
   - **multi_image_edit**: DiffSynth-compatible multi-reference mode (vision tokens inside prompt)
   - **image_edit**: Single/multi image (vision tokens before prompt, auto_label optional)
   - **inpainting**: Mask-based editing (accepts `inpaint_mask`, auto-resizes to VAE)
-  - Default prompts cleared (was "A beautiful landscape")
 - QwenVLTextEncoderAdvanced - Power user encoder (same 4 modes + weighted resolution)
   - Per-image resolution control and weighted importance
-- QwenTemplateBuilder - System prompt templates (includes "multi_image_edit" and "inpainting" modes)
-  - Default prompts cleared
+- QwenTemplateBuilder - File-based system prompt templates (9 templates)
+  - Templates loaded from `nodes/templates/*.md` with YAML frontmatter
+  - **REQUIRED**: Connect BOTH `mode` and `system_prompt` outputs to encoder
+  - JavaScript UI auto-fills `custom_system` field when selecting presets
 
 ### Latents (QwenImage/Latents)
 - QwenVLEmptyLatent - 16-channel latent creation

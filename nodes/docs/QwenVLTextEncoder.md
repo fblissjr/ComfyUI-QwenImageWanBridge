@@ -7,6 +7,8 @@
 
 Main encoder for Qwen2.5-VL supporting text-to-image generation and image editing. Implements DiffSynth/Diffusers-compatible encoding with proper vision token handling, multi-image support, and automatic mode synchronization with Template Builder.
 
+**IMPORTANT:** When using Template Builder, connect BOTH `mode` and `system_prompt` outputs to this encoder. The `mode` connection ensures vision tokens are formatted correctly.
+
 ## Inputs
 
 ### Required
@@ -17,10 +19,13 @@ Main encoder for Qwen2.5-VL supporting text-to-image generation and image editin
   - Your prompt text
   - Default: "" (empty)
 
-- **mode** (ENUM)
+- **mode** (STRING)
   - `text_to_image`: Generate from scratch (no vision tokens)
   - `image_edit`: Modify existing image (vision tokens before prompt)
   - `multi_image_edit`: Multi-reference editing (vision tokens inside prompt with Picture labels)
+  - `inpainting`: Mask-based editing (vision tokens before prompt)
+  - **Connect from Template Builder `mode` output for auto-sync**
+  - Can also type manually: "text_to_image", "image_edit", etc.
   - Default: `image_edit`
 
 ### Optional
@@ -36,12 +41,7 @@ Main encoder for Qwen2.5-VL supporting text-to-image generation and image editin
 - **system_prompt** (STRING, multiline)
   - System prompt from Template Builder
   - Enables proper token dropping when provided
-  - Default: ""
-
-- **template_mode** (STRING, forceInput)
-  - Mode from Template Builder for auto-sync
-  - Overrides manual mode selection when connected
-  - Prevents vision token placement/drop index mismatches
+  - **Connect from Template Builder `system_prompt` output**
   - Default: ""
 
 - **scaling_mode** (ENUM)
@@ -143,12 +143,18 @@ LoadImage ─┘                            ↓
                                    Conditioning → KSampler
 ```
 
-### With Template Builder Auto-Sync
+### With Template Builder (Recommended)
 ```
 QwenTemplateBuilder (template_mode: multi_image_edit)
-      ↓ (mode output)
-QwenVLTextEncoder (template_mode input connected, mode auto-syncs)
+      ├─ (system_prompt) ──> QwenVLTextEncoder (system_prompt input)
+      └─ (mode) ───────────> QwenVLTextEncoder (mode input)
+                              Both connections required!
 ```
+
+**Why connect both outputs?**
+- `system_prompt`: Provides instruction text for the model
+- `mode`: Ensures correct vision token formatting (labels, placement, token dropping)
+- Missing `mode` connection = vision token mismatch = broken generation
 
 ## Multi-Image Support
 
