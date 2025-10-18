@@ -56,7 +56,6 @@ Old multi-connection system (mode + system_prompt) no longer works as it was get
 - YAML frontmatter for metadata (mode, vision, experimental flags)
 - Easy to add/edit without code changes
 - JavaScript UI auto-fills `custom_system` field for editing
-- Templates: `default_t2i`, `default_edit`, `multi_image_edit`, `artistic`, `photorealistic`, `minimal_edit`, `technical`, `inpainting`, `raw`
 
 **Template Builder → Encoder Connection**
 - `mode` is now STRING input (accepts connections or manual typing)
