@@ -159,6 +159,7 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
 - QwenLowresFixNode - Two-stage upscale refinement
 
 ### Experimental (Archived or Untested)
+- QwenSmartCrop - Automated face cropping with VLM detection (experimental) - [docs](nodes/docs/QwenSmartCrop.md)
 - QwenEliGenEntityControl - Mask-based spatial (untested)
 - QwenSpatialTokenGenerator - Coordinate tokens (deprecated)
 - Wrapper nodes (transformers/diffusers, incomplete)
@@ -191,6 +192,18 @@ LoadImage ─┼─> QwenImageBatch → QwenVLTextEncoder (mode: image_edit)
 LoadImage ─┘    (scaling_mode)        ↓
                               QwenVLEmptyLatent → KSampler → VAEDecode
 ```
+
+### Headshot Swap (Experimental)
+```
+LoadImage (portrait) → QwenSmartCrop (auto_fallback, face_headshot)
+                           ↓ (tight face crop)
+LoadImage (scene) ─────────┼─→ QwenImageBatch → QwenVLTextEncoder (multi_image_edit)
+                                                       ↓
+                                          QwenVLEmptyLatent → KSampler → VAEDecode
+```
+
+**Prompt:** Describe subjects semantically, not by image numbers
+- "Replace the face of [person in scene] with the face of [person in crop], while keeping the same pose, clothing, lighting, background from the scene"
 
 ### Multi-Image with Advanced Encoder
 ```

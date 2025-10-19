@@ -10,8 +10,8 @@ Custom nodes for Qwen-Image-Edit with multi-image support, more flexibility arou
 
 Old multi-connection system (mode + system_prompt) no longer works as it was getting convoluted and confusing. One connection from template builder now handles everything (prompt, mode, system_prompt).
 
-**Updated Workflows Available** [here](example_workflows/nunchaku_qwen_image_edit_2509.json)
-1. [Multi image edit workflow](example_workflows/nunchaku_qwen_image_edit_2509.json)
+**Updated Workflows Available**
+1. [Multi image edit workflow](example_workflows/qwen_multi_image_batch_node_edit_2509.json)
 2. [Single image edit workflow](example_workflows/qwen_edit_2509_single_image_edit.json)
 
 ---
@@ -125,6 +125,7 @@ File-based system prompt templates (9 templates).
 - **QwenInpaintSampler**: Diffusers-pattern inpainting with strength control
 
 ### Experimental Nodes (Available but Low Priority)
+- **QwenSmartCrop**: Automated face isolation with VLM detection (via Qwen3-VL) - [docs](nodes/docs/QwenSmartCrop.md)
 - **QwenSpatialTokenGenerator**: Visual editor for spatial tokens that don't seem to do much of anything right now
 - **QwenEliGenEntityControl**: Entity-level mask control
 - **QwenEliGenMaskPainter**: Simple mask creation
@@ -152,6 +153,19 @@ QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
 ```
 
 Use prompts like: "Combine the person from Picture 1 with the background from Picture 2"
+
+### Face Swap (Experimental)
+```
+LoadImage (portrait) → QwenSmartCrop (auto_fallback, face_headshot) → tight face crop
+LoadImage (scene) ────────────────────────────────────┬────────────→ QwenImageBatch
+                                                                          ↓
+                                                               QwenVLTextEncoder (multi_image_edit)
+                                                               "Replace face... while keeping pose..."
+                                                                          ↓
+                                                               QwenVLEmptyLatent → KSampler
+```
+
+See [Prompt Cookbook](nodes/docs/prompt_cookbook.md) for tested face swap prompts.
 
 
 ## Example Workflows

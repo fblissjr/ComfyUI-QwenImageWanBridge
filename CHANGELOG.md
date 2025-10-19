@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.7.1 - Experimental Face Cropping (QwenSmartCrop)
+
+### Added (Experimental)
+
+**QwenSmartCrop Node** - Automated face isolation for multi-image composition
+- Multiple detection strategies: geometric, saliency-based, VLM-powered
+- VLM mode uses Qwen3-VL via [shrug-prompter nodes](https://github.com/fblissjr/shrug-prompter)
+- Zero-dependency fallback modes (saliency, geometric)
+- `face_headshot` anchor mode (uses bbox width for tight face crops)
+- Adjustable padding and square output options
+- Auto-fallback strategy with graceful degradation
+- Solves community-discovered "tight crop" technique for headshot changing tasks
+- [Documentation](nodes/docs/QwenSmartCrop.md)
+
+### Technical Details
+- Qwen3-VL coordinate system support (0-1000 → converted to percentages)
+  - ** Note - if you worked with Qwen2.5-VL, these coordinates for bbox's are different
+- JSON bbox parsing with markdown fence handling
+- Edge detection using PyTorch gradient computation
+- Configurable VLM parameters (max_tokens, temperature, top_p)
+
 ## BREAKING CHANGE (v2.7.0+)
 
 **Existing workflows will break.** You must:

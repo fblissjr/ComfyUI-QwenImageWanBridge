@@ -154,6 +154,18 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Debug Controller: {e}")
 
+# Experimental Smart Crop node
+try:
+    from .nodes.experimental_smart_crop import QwenSmartCrop
+
+    NODE_CLASS_MAPPINGS["QwenSmartCrop"] = QwenSmartCrop
+    NODE_DISPLAY_NAME_MAPPINGS["QwenSmartCrop"] = "Qwen Smart Crop (Experimental)"
+
+    print("[QwenImageWanBridge] Loaded Experimental Smart Crop node")
+    print("[QwenImageWanBridge] EXPERIMENTAL: Intelligent face cropping with VLM detection support")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Smart Crop node: {e}")
+
 # Inpainting nodes restored - mask-based approach aligns with DiffSynth patterns
 
 # Note: Experimental multi-frame nodes have been archived
