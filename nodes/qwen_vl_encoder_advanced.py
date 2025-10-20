@@ -60,21 +60,18 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                 )
             }),
             "vision_max_dimension": ("INT", {
-                "default": 384,
-                "min": 256,
+                "default": 768,
+                "min": 384,
                 "max": 3584,
-                "step": 64,
+                "step": 384,
                 "tooltip": (
                     "Vision encoder max dimension (semantic understanding).\n\n"
-                    "⚠️ WARNING: Model trained at 384px!\n"
-                    "Higher values EXPERIMENTAL - may cause:\n"
-                    "  • Object duplication\n"
-                    "  • Scaling artifacts\n"
-                    "  • Multi-image issues\n\n"
+                    "Uses 384px multiples (model trained resolution).\n"
+                    "Valid: 384, 768, 1152, 1536...\n\n"
                     "Recommended:\n"
-                    "  • 384 - Model default (SAFE)\n"
-                    "  • 512-768 - Experimental (test carefully)\n"
-                    "  • 1024+ - Likely to cause issues\n\n"
+                    "  • 384 - Model default\n"
+                    "  • 768 - 2x (recommended)\n"
+                    "  • 1152+ - Experimental\n\n"
                     "⚠️ SINGLE-IMAGE MODE ONLY\n"
                     "Ignored when using ImageBatch node.\n\n"
                     "Note: resolution_mode weights apply on top of this base."
@@ -220,7 +217,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
               system_prompt: str = "",
               vae_max_dimension: int = 2048,
-              vision_max_dimension: int = 384,
+              vision_max_dimension: int = 768,
               debug_mode: bool = False,
               resolution_mode: str = "balanced",
               hero_weight: float = 1.0,

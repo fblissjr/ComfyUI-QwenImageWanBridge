@@ -178,19 +178,19 @@ class QwenVLTextEncoder:
                     )
                 }),
                 "vision_max_dimension": ("INT", {
-                    "default": 384,
-                    "min": 256,
+                    "default": 768,
+                    "min": 384,
                     "max": 3584,
-                    "step": 64,
+                    "step": 384,
                     "tooltip": (
                         "⚠️ SINGLE-IMAGE MODE ONLY\n"
                         "Ignored when using ImageBatch node.\n\n"
-                        "⚠️ WARNING: Model trained at 384px!\n"
-                        "Higher values EXPERIMENTAL - may cause:\n"
-                        "  • Object duplication\n"
-                        "  • Scaling artifacts\n"
-                        "  • Multi-image issues\n\n"
-                        "Recommended: 384px (model default)"
+                        "Uses 384px multiples (model trained resolution).\n"
+                        "Valid: 384, 768, 1152, 1536...\n\n"
+                        "Recommended:\n"
+                        "  • 384 - Model default\n"
+                        "  • 768 - 2x (recommended)\n"
+                        "  • 1152+ - Experimental"
                     )
                 }),
                 "debug_mode": ("BOOLEAN", {
@@ -241,7 +241,10 @@ class QwenVLTextEncoder:
 
     @staticmethod
     def calculate_vision_dimensions(w: int, h: int, max_dimension: int) -> tuple:
-        """Calculate vision encoder dimensions with 28px alignment.
+        """Calculate vision encoder dimensions as multiples of trained 384px resolution.
+
+        Vision encoder trained at 384×384, so we scale to nearest multiple (384, 768, 1152...)
+        while preserving aspect ratio. This keeps position embeddings in clean relationship.
 
         Args:
             w: Original width
@@ -249,7 +252,7 @@ class QwenVLTextEncoder:
             max_dimension: Maximum dimension size (0 = unlimited)
 
         Returns:
-            (width, height) with 28px alignment (Qwen vision encoder spec)
+            (width, height) as multiples of 384px, preserving aspect ratio
         """
         # Step 1: Cap to max_dimension if needed
         if max_dimension > 0 and max(w, h) > max_dimension:
@@ -257,11 +260,11 @@ class QwenVLTextEncoder:
             w = int(w * scale)
             h = int(h * scale)
 
-        # Step 2: Apply 28px alignment (Qwen vision: patch_size=14 × SPATIAL_MERGE_SIZE=2)
-        w = round(w / 28) * 28
-        h = round(h / 28) * 28
+        # Step 2: Round to nearest 384px multiple, preserving aspect ratio
+        w = round(w / 384) * 384
+        h = round(h / 384) * 384
 
-        return max(28, int(w)), max(28, int(h))
+        return max(384, int(w)), max(384, int(h))
 
 
 
@@ -271,7 +274,7 @@ class QwenVLTextEncoder:
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
               system_prompt: str = "",
               vae_max_dimension: int = 2048,
-              vision_max_dimension: int = 384,
+              vision_max_dimension: int = 768,
               debug_mode: bool = False, auto_label: bool = True,
               verbose_log: bool = False) -> Tuple[Any]:
 

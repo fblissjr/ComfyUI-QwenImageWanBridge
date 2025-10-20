@@ -83,22 +83,22 @@ class QwenImageBatch:
                     )
                 }),
                 "vision_max_dimension": ("INT", {
-                    "default": 384,
-                    "min": 256,
+                    "default": 768,
+                    "min": 384,
                     "max": 3584,
-                    "step": 64,
+                    "step": 384,
                     "tooltip": (
                         "Vision encoder max dimension (semantic understanding).\n\n"
-                        "⚠️ WARNING: Model trained at 384px!\n"
-                        "Higher values are EXPERIMENTAL and may cause:\n"
-                        "  • Object duplication in outputs\n"
-                        "  • Weird scaling artifacts\n"
-                        "  • Broken multi-image workflows\n\n"
-                        "Recommended:\n"
-                        "  • 384 - Model default (SAFE)\n"
-                        "  • 512-768 - Experimental (test carefully)\n"
-                        "  • 1024+ - Likely to cause issues\n\n"
-                        "Uses 28px alignment, separate from VAE."
+                        "Uses 384px multiples (model's trained resolution).\n"
+                        "Preserves aspect ratio with 384px alignment.\n\n"
+                        "Valid values (384px multiples):\n"
+                        "  • 384 - Model default\n"
+                        "  • 768 - 2x resolution (recommended)\n"
+                        "  • 1152 - 3x resolution\n"
+                        "  • 1536 - 4x resolution\n"
+                        "  • 1920+ - Higher (experimental)\n\n"
+                        "Higher values increase quality but may cause issues.\n"
+                        "Applied to EACH image before batching."
                     )
                 }),
                 "batch_alignment": ([
@@ -168,7 +168,10 @@ class QwenImageBatch:
 
     def calculate_vision_dimensions(self, w: int, h: int, max_dimension: int) -> Tuple[int, int]:
         """
-        Calculate vision encoder dimensions with 28px alignment.
+        Calculate vision encoder dimensions as integer multiples of trained 384px resolution.
+
+        Vision encoder trained at 384×384, so we scale to nearest multiple (384, 768, 1152...)
+        while preserving aspect ratio. This keeps position embeddings in clean relationship.
 
         Args:
             w: Original width
@@ -176,7 +179,7 @@ class QwenImageBatch:
             max_dimension: Maximum dimension size (0 = unlimited)
 
         Returns:
-            (width, height) with 28px alignment (Qwen vision encoder spec)
+            (width, height) as multiples of 384px, preserving aspect ratio
         """
         # Step 1: Cap to max_dimension if needed
         if max_dimension > 0 and max(w, h) > max_dimension:
@@ -184,11 +187,12 @@ class QwenImageBatch:
             w = int(w * scale)
             h = int(h * scale)
 
-        # Step 2: Apply 28px alignment (Qwen vision encoder: patch_size=14 × SPATIAL_MERGE_SIZE=2)
-        w = round(w / 28) * 28
-        h = round(h / 28) * 28
+        # Step 2: Round to nearest 384px multiple, preserving aspect ratio
+        # This maintains the vision encoder's trained resolution relationship
+        w = round(w / 384) * 384
+        h = round(h / 384) * 384
 
-        return (max(28, int(w)), max(28, int(h)))
+        return (max(384, int(w)), max(384, int(h)))
 
     def batch_images(self, image_1,
                     vae_max_dimension: int = 2048,
