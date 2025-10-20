@@ -59,24 +59,6 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                     "Note: resolution_mode weights apply on top of this base."
                 )
             }),
-            "vision_max_dimension": ("INT", {
-                "default": 768,
-                "min": 384,
-                "max": 3584,
-                "step": 384,
-                "tooltip": (
-                    "Vision encoder max dimension (semantic understanding).\n\n"
-                    "Uses 384px multiples (model trained resolution).\n"
-                    "Valid: 384, 768, 1152, 1536...\n\n"
-                    "Recommended:\n"
-                    "  • 384 - Model default\n"
-                    "  • 768 - 2x (recommended)\n"
-                    "  • 1152+ - Experimental\n\n"
-                    "⚠️ SINGLE-IMAGE MODE ONLY\n"
-                    "Ignored when using ImageBatch node.\n\n"
-                    "Note: resolution_mode weights apply on top of this base."
-                )
-            }),
             "resolution_mode": (["balanced", "hero_first", "hero_last", "progressive", "custom", "memory_optimized"], {
                 "default": "balanced",
                 "tooltip": "Resolution weighting strategy for multi-image processing.\n\nApplies weight multipliers to base max_dimension limits:\n  • balanced: All images at 1.0x base (equal quality)\n  • hero_first: First image at hero_weight, others at reference_weight\n  • hero_last: Last image at hero_weight, others at reference_weight\n  • progressive: Gradual weight decrease\n  • custom: Use image_weights string\n  • memory_optimized: Aggressive downscaling for VRAM\n\nExample: vae_max_dimension=2048, hero_weight=1.5, reference_weight=0.5\n  → Hero: 3072px, References: 1024px"
@@ -217,7 +199,6 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
               system_prompt: str = "",
               vae_max_dimension: int = 2048,
-              vision_max_dimension: int = 768,
               debug_mode: bool = False,
               resolution_mode: str = "balanced",
               hero_weight: float = 1.0,
@@ -229,7 +210,9 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
               verbose_log: bool = False) -> Tuple[Any]:
         """
         Advanced encode with per-image resolution control.
-        Applies resolution_mode weights on top of max_dimension base limits.
+
+        Vision encoder hardcoded to 384×384 area (model's trained resolution).
+        Applies resolution_mode weights on top of VAE max_dimension base only.
         """
 
         import comfy.utils
@@ -300,7 +283,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                 # Single-image mode or manual multi-image - calculate base dimensions and apply weights
                 # Get first image dimensions to calculate base
                 h, w = images[0].shape[1], images[0].shape[2]
-                base_vision_w, base_vision_h = self.calculate_vision_dimensions(w, h, vision_max_dimension)
+                base_vision_w, base_vision_h = self.calculate_vision_dimensions(w, h, VISION_MAX)
                 base_vae_w, base_vae_h = self.calculate_vae_dimensions(w, h, vae_max_dimension) if vae is not None else (None, None)
 
                 # Get resolution weights for each image
@@ -321,10 +304,10 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                     vae_weights = weights
 
                 if debug_mode:
-                    logger.info(f"[Advanced Encoder] Single-image mode - Vision max: {vision_max_dimension}px, VAE max: {vae_max_dimension}px")
+                    logger.info(f"[Advanced Encoder] Single-image mode - Vision: {VISION_MAX}px (hardcoded), VAE max: {vae_max_dimension}px")
                     logger.info(f"[Advanced Encoder] Base dimensions - Vision: {base_vision_w}x{base_vision_h}, VAE: {base_vae_w}x{base_vae_h}")
                     logger.info(f"[Advanced Encoder] Resolution mode: {resolution_mode}, weights: {[f'{w:.2f}' for w in vision_weights]}")
-                debug_info.append(f"Resize mode: Single-image (Vision max: {vision_max_dimension}px, VAE max: {vae_max_dimension}px)")
+                debug_info.append(f"Resize mode: Single-image (Vision: {VISION_MAX}px, VAE max: {vae_max_dimension}px)")
                 debug_info.append(f"Resolution mode: {resolution_mode}, weights: {[f'{w:.2f}' for w in vision_weights]}")
 
             # Process each image

@@ -177,22 +177,6 @@ class QwenVLTextEncoder:
                         "Use ImageBatch node for multi-image workflows."
                     )
                 }),
-                "vision_max_dimension": ("INT", {
-                    "default": 768,
-                    "min": 384,
-                    "max": 3584,
-                    "step": 384,
-                    "tooltip": (
-                        "⚠️ SINGLE-IMAGE MODE ONLY\n"
-                        "Ignored when using ImageBatch node.\n\n"
-                        "Uses 384px multiples (model trained resolution).\n"
-                        "Valid: 384, 768, 1152, 1536...\n\n"
-                        "Recommended:\n"
-                        "  • 384 - Model default\n"
-                        "  • 768 - 2x (recommended)\n"
-                        "  • 1152+ - Experimental"
-                    )
-                }),
                 "debug_mode": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Show processing details in console"
@@ -240,31 +224,31 @@ class QwenVLTextEncoder:
         return max(32, int(w)), max(32, int(h))
 
     @staticmethod
-    def calculate_vision_dimensions(w: int, h: int, max_dimension: int) -> tuple:
-        """Calculate vision encoder dimensions as multiples of trained 384px resolution.
+    def calculate_vision_dimensions(w: int, h: int) -> tuple:
+        """Calculate vision encoder dimensions using area-based scaling.
 
-        Vision encoder trained at 384×384, so we scale to nearest multiple (384, 768, 1152...)
-        while preserving aspect ratio. This keeps position embeddings in clean relationship.
+        Vision encoder trained at 384×384. Scale to that target area while
+        preserving aspect ratio, then align to 28px.
 
         Args:
             w: Original width
             h: Original height
-            max_dimension: Maximum dimension size (0 = unlimited)
 
         Returns:
-            (width, height) as multiples of 384px, preserving aspect ratio
+            (width, height) scaled to ~384×384 area with 28px alignment
         """
-        # Step 1: Cap to max_dimension if needed
-        if max_dimension > 0 and max(w, h) > max_dimension:
-            scale = max_dimension / max(w, h)
-            w = int(w * scale)
-            h = int(h * scale)
+        target_area = 384 * 384  # Model's trained resolution
+        aspect_ratio = w / h
 
-        # Step 2: Round to nearest 384px multiple, preserving aspect ratio
-        w = round(w / 384) * 384
-        h = round(h / 384) * 384
+        # Calculate dimensions from target area and aspect ratio
+        vision_w = int((target_area * aspect_ratio) ** 0.5)
+        vision_h = int(vision_w / aspect_ratio)
 
-        return max(384, int(w)), max(384, int(h))
+        # Apply 28px alignment
+        vision_w = round(vision_w / 28) * 28
+        vision_h = round(vision_h / 28) * 28
+
+        return max(28, vision_w), max(28, vision_h)
 
 
 
@@ -274,11 +258,12 @@ class QwenVLTextEncoder:
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
               system_prompt: str = "",
               vae_max_dimension: int = 2048,
-              vision_max_dimension: int = 768,
               debug_mode: bool = False, auto_label: bool = True,
               verbose_log: bool = False) -> Tuple[Any]:
 
         """Encode text and images for Qwen Image generation.
+
+        Vision encoder hardcoded to 384×384 area (model's trained resolution).
         Follows DiffSynth/Diffusers implementation with 32-pixel alignment."""
 
         import math
@@ -354,13 +339,13 @@ class QwenVLTextEncoder:
                 # Single-image mode - calculate using encoder parameters
                 # Get first image dimensions to calculate targets
                 h, w = images[0].shape[1], images[0].shape[2]
-                vision_target_w, vision_target_h = self.calculate_vision_dimensions(w, h, vision_max_dimension)
+                vision_target_w, vision_target_h = self.calculate_vision_dimensions(w, h)
                 vae_target_w, vae_target_h = self.calculate_vae_dimensions(w, h, vae_max_dimension) if vae is not None else (None, None)
 
                 if debug_mode:
-                    logger.info(f"[Encoder] Single-image mode - Vision max: {vision_max_dimension}px, VAE max: {vae_max_dimension}px")
+                    logger.info(f"[Encoder] Single-image mode - Vision: 384×384 area (hardcoded), VAE max: {vae_max_dimension}px")
                     logger.info(f"[Encoder] Calculated targets - Vision: {vision_target_w}x{vision_target_h}, VAE: {vae_target_w}x{vae_target_h}")
-                debug_info.append(f"Resize mode: Single-image (Vision max: {vision_max_dimension}px, VAE max: {vae_max_dimension}px)")
+                debug_info.append(f"Resize mode: Single-image (Vision: 384×384 area, VAE max: {vae_max_dimension}px)")
 
             # Process each image to target dimensions
             for i, img in enumerate(images):

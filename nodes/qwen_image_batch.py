@@ -82,25 +82,6 @@ class QwenImageBatch:
                         "Always preserves aspect ratio with 32px alignment."
                     )
                 }),
-                "vision_max_dimension": ("INT", {
-                    "default": 768,
-                    "min": 384,
-                    "max": 3584,
-                    "step": 384,
-                    "tooltip": (
-                        "Vision encoder max dimension (semantic understanding).\n\n"
-                        "Uses 384px multiples (model's trained resolution).\n"
-                        "Preserves aspect ratio with 384px alignment.\n\n"
-                        "Valid values (384px multiples):\n"
-                        "  • 384 - Model default\n"
-                        "  • 768 - 2x resolution (recommended)\n"
-                        "  • 1152 - 3x resolution\n"
-                        "  • 1536 - 4x resolution\n"
-                        "  • 1920+ - Higher (experimental)\n\n"
-                        "Higher values increase quality but may cause issues.\n"
-                        "Applied to EACH image before batching."
-                    )
-                }),
                 "batch_alignment": ([
                     "match_smallest",
                     "match_first",
@@ -166,46 +147,46 @@ class QwenImageBatch:
 
         return (max(32, int(w)), max(32, int(h)))
 
-    def calculate_vision_dimensions(self, w: int, h: int, max_dimension: int) -> Tuple[int, int]:
+    def calculate_vision_dimensions(self, w: int, h: int) -> Tuple[int, int]:
         """
-        Calculate vision encoder dimensions as integer multiples of trained 384px resolution.
+        Calculate vision encoder dimensions using area-based scaling.
 
-        Vision encoder trained at 384×384, so we scale to nearest multiple (384, 768, 1152...)
-        while preserving aspect ratio. This keeps position embeddings in clean relationship.
+        Vision encoder trained at 384×384. Scale to that target area while
+        preserving aspect ratio, then align to 28px.
 
         Args:
             w: Original width
             h: Original height
-            max_dimension: Maximum dimension size (0 = unlimited)
 
         Returns:
-            (width, height) as multiples of 384px, preserving aspect ratio
+            (width, height) scaled to ~384×384 area with 28px alignment
         """
-        # Step 1: Cap to max_dimension if needed
-        if max_dimension > 0 and max(w, h) > max_dimension:
-            scale = max_dimension / max(w, h)
-            w = int(w * scale)
-            h = int(h * scale)
+        target_area = 384 * 384  # Model's trained resolution
+        aspect_ratio = w / h
 
-        # Step 2: Round to nearest 384px multiple, preserving aspect ratio
-        # This maintains the vision encoder's trained resolution relationship
-        w = round(w / 384) * 384
-        h = round(h / 384) * 384
+        # Calculate dimensions from target area and aspect ratio
+        vision_w = int((target_area * aspect_ratio) ** 0.5)
+        vision_h = int(vision_w / aspect_ratio)
 
-        return (max(384, int(w)), max(384, int(h)))
+        # Apply 28px alignment
+        vision_w = round(vision_w / 28) * 28
+        vision_h = round(vision_h / 28) * 28
+
+        return (max(28, vision_w), max(28, vision_h))
 
     def batch_images(self, image_1,
                     vae_max_dimension: int = 2048,
-                    vision_max_dimension: int = 768,
                     batch_alignment: str = "match_smallest",
                     debug_mode: bool = False, **kwargs) -> Tuple[torch.Tensor, int, str]:
         """
         Batch images with aspect ratio preservation and separate VAE/vision sizing.
         Auto-detects connected images (up to 10).
 
+        Vision encoder hardcoded to 384px (model's trained resolution).
+        Higher values cause object duplication and scaling artifacts.
+
         Args:
             vae_max_dimension: Maximum dimension for VAE encoder (default: 2048)
-            vision_max_dimension: Maximum dimension for vision encoder (default: 768)
             batch_alignment: How to align different-sized images (default: match_smallest)
         """
         if not COMFY_AVAILABLE:
@@ -240,7 +221,7 @@ class QwenImageBatch:
         for img in images:
             h, w = img.shape[1], img.shape[2]
             vae_w, vae_h = self.calculate_vae_dimensions(w, h, vae_max_dimension)
-            vision_w, vision_h = self.calculate_vision_dimensions(w, h, vision_max_dimension)
+            vision_w, vision_h = self.calculate_vision_dimensions(w, h)
             vae_dimensions.append((vae_w, vae_h))
             vision_dimensions.append((vision_w, vision_h))
 
@@ -251,11 +232,11 @@ class QwenImageBatch:
             final_vision_w, final_vision_h = vision_dimensions[0]
             strategy_info = f"match_first (VAE: {final_vae_w}x{final_vae_h}, Vision: {final_vision_w}x{final_vision_h})"
         elif batch_alignment == "match_largest":
-            # Find largest dimensions (by total pixels)
-            largest_vae_idx = max(range(len(vae_dimensions)), key=lambda i: vae_dimensions[i][0] * vae_dimensions[i][1])
-            largest_vision_idx = max(range(len(vision_dimensions)), key=lambda i: vision_dimensions[i][0] * vision_dimensions[i][1])
-            final_vae_w, final_vae_h = vae_dimensions[largest_vae_idx]
-            final_vision_w, final_vision_h = vision_dimensions[largest_vision_idx]
+            # Take maximum of EACH dimension separately to preserve aspect ranges
+            final_vae_w = max(w for w, h in vae_dimensions)
+            final_vae_h = max(h for w, h in vae_dimensions)
+            final_vision_w = max(w for w, h in vision_dimensions)
+            final_vision_h = max(h for w, h in vision_dimensions)
             strategy_info = f"match_largest (VAE: {final_vae_w}x{final_vae_h}, Vision: {final_vision_w}x{final_vision_h})"
             if debug_mode:
                 logger.info(f"[QwenImageBatch] WARNING: match_largest may cause OOM on large images!")
@@ -267,8 +248,15 @@ class QwenImageBatch:
             final_vision_w, final_vision_h = vision_dimensions[smallest_vision_idx]
             strategy_info = f"match_smallest (VAE: {final_vae_w}x{final_vae_h}, Vision: {final_vision_w}x{final_vision_h})"
 
+        # Recalculate vision dimensions from final VAE dimensions to ensure matching aspect ratio
+        # This prevents aspect ratio mismatches when batch_alignment creates "chimera" dimensions
+        final_vision_w, final_vision_h = self.calculate_vision_dimensions(
+            final_vae_w, final_vae_h
+        )
+
         if debug_mode:
             logger.info(f"[QwenImageBatch] Batch alignment: {strategy_info}")
+            logger.info(f"[QwenImageBatch] Recalculated vision dims from VAE aspect: {final_vision_w}x{final_vision_h}")
 
         # Second pass: Scale images to unified VAE dimensions
         # (Note: Vision dimensions stored in metadata, encoder will handle vision resize)
@@ -325,7 +313,7 @@ class QwenImageBatch:
         # Build info string
         info_lines = [
             f"Batched {len(images)} images",
-            f"VAE max: {vae_max_dimension}px, Vision max: {vision_max_dimension}px",
+            f"VAE max: {vae_max_dimension}px, Vision: 384×384 area (hardcoded)",
             f"Batch alignment: {batch_alignment}",
             ""
         ] + image_info + [
