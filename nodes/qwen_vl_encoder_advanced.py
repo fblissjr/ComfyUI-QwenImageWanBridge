@@ -283,7 +283,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                 # Single-image mode or manual multi-image - calculate base dimensions and apply weights
                 # Get first image dimensions to calculate base
                 h, w = images[0].shape[1], images[0].shape[2]
-                base_vision_w, base_vision_h = self.calculate_vision_dimensions(w, h, VISION_MAX)
+                base_vision_w, base_vision_h = self.calculate_vision_dimensions(w, h)
                 base_vae_w, base_vae_h = self.calculate_vae_dimensions(w, h, vae_max_dimension) if vae is not None else (None, None)
 
                 # Get resolution weights for each image
@@ -304,10 +304,10 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
                     vae_weights = weights
 
                 if debug_mode:
-                    logger.info(f"[Advanced Encoder] Single-image mode - Vision: {VISION_MAX}px (hardcoded), VAE max: {vae_max_dimension}px")
+                    logger.info(f"[Advanced Encoder] Single-image mode - Vision: 384×384 area (hardcoded), VAE max: {vae_max_dimension}px")
                     logger.info(f"[Advanced Encoder] Base dimensions - Vision: {base_vision_w}x{base_vision_h}, VAE: {base_vae_w}x{base_vae_h}")
                     logger.info(f"[Advanced Encoder] Resolution mode: {resolution_mode}, weights: {[f'{w:.2f}' for w in vision_weights]}")
-                debug_info.append(f"Resize mode: Single-image (Vision: {VISION_MAX}px, VAE max: {vae_max_dimension}px)")
+                debug_info.append(f"Resize mode: Single-image (Vision: 384×384 area, VAE max: {vae_max_dimension}px)")
                 debug_info.append(f"Resolution mode: {resolution_mode}, weights: {[f'{w:.2f}' for w in vision_weights]}")
 
             # Process each image
