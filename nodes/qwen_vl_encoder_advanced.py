@@ -43,27 +43,46 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
 
         # Add advanced options to optional section
         base_types["optional"].update({
-            "scaling_mode": (["preserve_resolution", "max_dimension_1024", "area_1024"], {
-                "default": "preserve_resolution",
-                "tooltip": "Resolution scaling mode:\n\npreserve_resolution (recommended):\n  ✓ No zoom-out, subjects stay full-size\n  ✓ Best quality, minimal cropping (32px alignment)\n  ✗ May use more VRAM with very large images\n  Example: 1477×2056 → 1472×2048 (1.00x)\n\nmax_dimension_1024 (for 4K/large images):\n  ✓ Reduces VRAM usage on large images\n  ✓ Balanced quality vs performance\n  ✗ Some zoom-out on large images\n  Example: 3840×2160 → 1024×576 (0.27x)\n\narea_1024 (legacy):\n  ✓ Consistent ~1MP output size\n  ✗ Aggressive zoom-out on large images\n  ✗ Upscales small images unnecessarily\n  Example: 1477×2056 → 864×1216 (0.58x)\n\nNote: Auto-skipped when using QwenImageBatch (no double-scaling)"
+            "vae_max_dimension": ("INT", {
+                "default": 2048,
+                "min": 512,
+                "max": 3584,
+                "step": 64,
+                "tooltip": (
+                    "VAE encoder max dimension (pixel-level detail).\n\n"
+                    "Recommended values:\n"
+                    "  • 1024 - Safe for 8GB VRAM\n"
+                    "  • 2048 - Recommended (12GB+ VRAM)\n"
+                    "  • 3584 - Model maximum (24GB+ VRAM)\n\n"
+                    "⚠️ SINGLE-IMAGE MODE ONLY\n"
+                    "Ignored when using ImageBatch node.\n\n"
+                    "Note: resolution_mode weights apply on top of this base."
+                )
+            }),
+            "vision_max_dimension": ("INT", {
+                "default": 384,
+                "min": 256,
+                "max": 3584,
+                "step": 64,
+                "tooltip": (
+                    "Vision encoder max dimension (semantic understanding).\n\n"
+                    "⚠️ WARNING: Model trained at 384px!\n"
+                    "Higher values EXPERIMENTAL - may cause:\n"
+                    "  • Object duplication\n"
+                    "  • Scaling artifacts\n"
+                    "  • Multi-image issues\n\n"
+                    "Recommended:\n"
+                    "  • 384 - Model default (SAFE)\n"
+                    "  • 512-768 - Experimental (test carefully)\n"
+                    "  • 1024+ - Likely to cause issues\n\n"
+                    "⚠️ SINGLE-IMAGE MODE ONLY\n"
+                    "Ignored when using ImageBatch node.\n\n"
+                    "Note: resolution_mode weights apply on top of this base."
+                )
             }),
             "resolution_mode": (["balanced", "hero_first", "hero_last", "progressive", "custom", "memory_optimized"], {
                 "default": "balanced",
-                "tooltip": "Resolution strategy for multi-image processing (applies weight to scaling_mode base resolution)"
-            }),
-            "vision_target_area": ("INT", {
-                "default": 147456,  # 384*384
-                "min": 65536,       # 256*256
-                "max": 1048576,     # 1024*1024
-                "step": 4096,
-                "tooltip": "Target pixel area for vision encoder (default: 384²=147456)"
-            }),
-            "vae_target_area": ("INT", {
-                "default": 1048576,  # 1024*1024
-                "min": 262144,       # 512*512
-                "max": 4194304,      # 2048*2048
-                "step": 16384,
-                "tooltip": "Target pixel area for VAE encoder (default: 1024²=1048576)"
+                "tooltip": "Resolution weighting strategy for multi-image processing.\n\nApplies weight multipliers to base max_dimension limits:\n  • balanced: All images at 1.0x base (equal quality)\n  • hero_first: First image at hero_weight, others at reference_weight\n  • hero_last: Last image at hero_weight, others at reference_weight\n  • progressive: Gradual weight decrease\n  • custom: Use image_weights string\n  • memory_optimized: Aggressive downscaling for VRAM\n\nExample: vae_max_dimension=2048, hero_weight=1.5, reference_weight=0.5\n  → Hero: 3072px, References: 1024px"
             }),
             "hero_weight": ("FLOAT", {
                 "default": 1.0,
@@ -200,11 +219,10 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
               edit_image: Optional[torch.Tensor] = None,
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
               system_prompt: str = "",
-              scaling_mode: str = "preserve_resolution",
+              vae_max_dimension: int = 2048,
+              vision_max_dimension: int = 384,
               debug_mode: bool = False,
               resolution_mode: str = "balanced",
-              vision_target_area: int = 147456,  # 384*384
-              vae_target_area: int = 1048576,    # 1024*1024
               hero_weight: float = 1.0,
               reference_weight: float = 0.5,
               max_memory_mb: int = 0,
@@ -214,6 +232,7 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
               verbose_log: bool = False) -> Tuple[Any]:
         """
         Advanced encode with per-image resolution control.
+        Applies resolution_mode weights on top of max_dimension base limits.
         """
 
         import comfy.utils
@@ -247,13 +266,17 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
             # Check if images are pre-scaled from QwenImageBatch
             is_pre_scaled = getattr(edit_image, 'qwen_pre_scaled', False)
             if is_pre_scaled:
-                batch_scaling_mode = getattr(edit_image, 'qwen_scaling_mode', 'unknown')
-                batch_strategy = getattr(edit_image, 'qwen_batch_strategy', 'unknown')
+                batch_vae_dims = getattr(edit_image, 'qwen_vae_dimensions', None)
+                batch_vision_dims = getattr(edit_image, 'qwen_vision_dimensions', None)
+                batch_alignment = getattr(edit_image, 'qwen_batch_alignment', 'unknown')
                 if debug_mode:
-                    logger.info(f"[Advanced Encoder] Images pre-scaled by QwenImageBatch (mode: {batch_scaling_mode}, strategy: {batch_strategy})")
-                    logger.info(f"[Advanced Encoder] Skipping VAE scaling to prevent double-scaling")
-                debug_info.append(f"Pre-scaled by QwenImageBatch ({batch_scaling_mode}/{batch_strategy})")
-                debug_info.append("VAE scaling: SKIPPED (already scaled)")
+                    logger.info(f"[Advanced Encoder] Images pre-scaled by QwenImageBatch")
+                    logger.info(f"[Advanced Encoder]   VAE target: {batch_vae_dims}, Vision target: {batch_vision_dims}")
+                    logger.info(f"[Advanced Encoder]   Batch alignment: {batch_alignment}")
+                    logger.info(f"[Advanced Encoder]   Note: resolution_mode weights IGNORED (already scaled)")
+                debug_info.append(f"Pre-scaled by QwenImageBatch (alignment: {batch_alignment})")
+                debug_info.append(f"Target dimensions - VAE: {batch_vae_dims}, Vision: {batch_vision_dims}")
+                debug_info.append("Note: resolution_mode weights ignored (pre-scaled)")
 
             if debug_mode:
                 logger.info(f"[Advanced Encoder] Input shape: {edit_image.shape}")
@@ -265,84 +288,89 @@ class QwenVLTextEncoderAdvanced(QwenVLTextEncoder):
             images = [edit_image[i:i+1, :, :, :3] for i in range(edit_image.shape[0])]
             num_images = len(images)
 
-            # Get resolution weights for each image
-            weights = self.get_resolution_weights(
-                num_images, resolution_mode, hero_weight, reference_weight, image_weights
-            )
+            # Determine base dimensions and whether to apply weights
+            if is_pre_scaled:
+                # Trust ImageBatch metadata completely - ignore weights
+                vision_target_w, vision_target_h = batch_vision_dims
+                vae_target_w, vae_target_h = batch_vae_dims if vae is not None else (None, None)
+                vision_weights = [1.0] * num_images  # Ignored, but needed for debug
+                vae_weights = [1.0] * num_images
 
-            # Handle memory optimization
-            if resolution_mode == "memory_optimized" and max_memory_mb > 0:
-                vision_weights, vae_weights = self.optimize_for_memory(
-                    images, max_memory_mb, vision_target_area, vae_target_area
-                )
+                if debug_mode:
+                    logger.info(f"[Advanced Encoder] Using ImageBatch targets - Vision: {vision_target_w}x{vision_target_h}, VAE: {vae_target_w}x{vae_target_h}")
+                debug_info.append(f"Resize mode: Using ImageBatch targets (weights ignored)")
             else:
-                vision_weights = weights
-                vae_weights = weights
+                # Single-image mode or manual multi-image - calculate base dimensions and apply weights
+                # Get first image dimensions to calculate base
+                h, w = images[0].shape[1], images[0].shape[2]
+                base_vision_w, base_vision_h = self.calculate_vision_dimensions(w, h, vision_max_dimension)
+                base_vae_w, base_vae_h = self.calculate_vae_dimensions(w, h, vae_max_dimension) if vae is not None else (None, None)
 
-            debug_info.append(f"Processing {num_images} images with weights: {[f'{w:.2f}' for w in vision_weights]}")
+                # Get resolution weights for each image
+                weights = self.get_resolution_weights(
+                    num_images, resolution_mode, hero_weight, reference_weight, image_weights
+                )
 
-            # Process each image with its weight
+                # Handle memory optimization
+                if resolution_mode == "memory_optimized" and max_memory_mb > 0:
+                    # Calculate base areas for memory optimization
+                    base_vision_area = base_vision_w * base_vision_h
+                    base_vae_area = base_vae_w * base_vae_h if vae is not None else 0
+                    vision_weights, vae_weights = self.optimize_for_memory(
+                        images, max_memory_mb, base_vision_area, base_vae_area
+                    )
+                else:
+                    vision_weights = weights
+                    vae_weights = weights
+
+                if debug_mode:
+                    logger.info(f"[Advanced Encoder] Single-image mode - Vision max: {vision_max_dimension}px, VAE max: {vae_max_dimension}px")
+                    logger.info(f"[Advanced Encoder] Base dimensions - Vision: {base_vision_w}x{base_vision_h}, VAE: {base_vae_w}x{base_vae_h}")
+                    logger.info(f"[Advanced Encoder] Resolution mode: {resolution_mode}, weights: {[f'{w:.2f}' for w in vision_weights]}")
+                debug_info.append(f"Resize mode: Single-image (Vision max: {vision_max_dimension}px, VAE max: {vae_max_dimension}px)")
+                debug_info.append(f"Resolution mode: {resolution_mode}, weights: {[f'{w:.2f}' for w in vision_weights]}")
+
+            # Process each image
             for i, img in enumerate(images):
                 h, w = img.shape[1], img.shape[2]
-                aspect_ratio = w / h
-
-                # Calculate weighted dimensions for vision encoder (always use area mode for vision)
-                vision_w, vision_h = self.calculate_weighted_dimensions(
-                    vision_target_area, aspect_ratio, vision_weights[i]
-                )
-
                 img_chw = img.movedim(-1, 1)
+
+                # Vision encoder: Use targets if pre-scaled, otherwise apply weight to base
+                if is_pre_scaled:
+                    vision_w, vision_h = vision_target_w, vision_target_h
+                else:
+                    # Apply weight to base dimensions, re-align to 28px
+                    vision_w = round((base_vision_w * vision_weights[i]) / 28) * 28
+                    vision_h = round((base_vision_h * vision_weights[i]) / 28) * 28
+                    vision_w = max(28, vision_w)
+                    vision_h = max(28, vision_h)
+
                 vision_img = comfy.utils.common_upscale(img_chw, vision_w, vision_h, "bicubic", "disabled")
                 vision_images.append(vision_img.movedim(1, -1))
 
                 if debug_mode:
-                    logger.info(f"[Advanced Encoder] Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h} (weight: {vision_weights[i]:.2f})")
+                    weight_str = "" if is_pre_scaled else f" (weight: {vision_weights[i]:.2f})"
+                    logger.info(f"[Advanced Encoder] Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}{weight_str}")
+                debug_info.append(f"Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}" + ("" if is_pre_scaled else f" (weight: {vision_weights[i]:.2f})"))
 
-                debug_info.append(f"Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h} (weight: {vision_weights[i]:.2f})")
-
-                # Calculate weighted dimensions for VAE encoder if provided - respects scaling_mode
+                # VAE encoder: Use targets if pre-scaled, otherwise apply weight to base
                 if vae is not None:
                     if is_pre_scaled:
-                        # Use as-is, already scaled by QwenImageBatch (ignore weights)
-                        vae_img_hwc = img
-                        if debug_mode:
-                            logger.info(f"[Advanced Encoder]        VAE: Using pre-scaled {w}x{h} (no resize, weights ignored)")
-                        debug_info.append(f"    VAE: pre-scaled {w}x{h} (skipped, weights N/A)")
-                    # Apply scaling_mode to base dimensions, then apply weight
-                    elif scaling_mode == "preserve_resolution":
-                        # Start with original dimensions, apply weight
-                        base_w = round(w / 32) * 32
-                        base_h = round(h / 32) * 32
-                        # Apply weight by scaling the base dimensions
-                        vae_w = round((base_w * vae_weights[i]) / 32) * 32
-                        vae_h = round((base_h * vae_weights[i]) / 32) * 32
-                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
-                        vae_img_hwc = vae_img.movedim(1, -1)
-                        if debug_mode:
-                            logger.info(f"[Advanced Encoder]        VAE (preserve+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
-                        debug_info.append(f"    VAE scaling: preserve_resolution with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
-                    elif scaling_mode == "max_dimension_1024":
-                        # Scale to max dimension 1024, then apply weight
-                        scale = 1024 / max(w, h)
-                        base_w = round(w * scale / 32) * 32
-                        base_h = round(h * scale / 32) * 32
-                        vae_w = round((base_w * vae_weights[i]) / 32) * 32
-                        vae_h = round((base_h * vae_weights[i]) / 32) * 32
-                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
-                        vae_img_hwc = vae_img.movedim(1, -1)
-                        if debug_mode:
-                            logger.info(f"[Advanced Encoder]        VAE (max_dim+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
-                        debug_info.append(f"    VAE scaling: max_dimension_1024 with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
-                    else:  # area_1024
-                        # Use weighted dimensions calculation (original behavior)
-                        vae_w, vae_h = self.calculate_weighted_dimensions(
-                            vae_target_area, aspect_ratio, vae_weights[i]
-                        )
-                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
-                        vae_img_hwc = vae_img.movedim(1, -1)
-                        if debug_mode:
-                            logger.info(f"[Advanced Encoder]        VAE (area+weight): {w}x{h} -> {vae_w}x{vae_h} (weight: {vae_weights[i]:.2f})")
-                        debug_info.append(f"    VAE scaling: area_1024 with weight {vae_weights[i]:.2f} ({vae_w}x{vae_h})")
+                        vae_w, vae_h = vae_target_w, vae_target_h
+                    else:
+                        # Apply weight to base dimensions, re-align to 32px
+                        vae_w = round((base_vae_w * vae_weights[i]) / 32) * 32
+                        vae_h = round((base_vae_h * vae_weights[i]) / 32) * 32
+                        vae_w = max(32, vae_w)
+                        vae_h = max(32, vae_h)
+
+                    vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
+                    vae_img_hwc = vae_img.movedim(1, -1)
+
+                    if debug_mode:
+                        weight_str = "" if is_pre_scaled else f" (weight: {vae_weights[i]:.2f})"
+                        logger.info(f"[Advanced Encoder]        VAE: {w}x{h} -> {vae_w}x{vae_h}{weight_str}")
+                    debug_info.append(f"    VAE: {vae_w}x{vae_h}" + ("" if is_pre_scaled else f" (weight: {vae_weights[i]:.2f})"))
 
                     ref_latent = vae.encode(vae_img_hwc[:, :, :, :3])
 
