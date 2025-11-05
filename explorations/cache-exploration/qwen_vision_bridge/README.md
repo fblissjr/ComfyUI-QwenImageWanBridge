@@ -2,11 +2,11 @@
 
 **Inject Qwen3-VL's superior vision understanding into Qwen-Image-Edit for enhanced capabilities.**
 
-## 🎯 Goal
+## Goal
 
 Enable new downstream capabilities in image editing by bridging Qwen3-VL's advanced vision understanding to Qwen-Image-Edit's generation pipeline.
 
-### **New Capabilities Unlocked:**
+### **Pursuing Capabilities:**
 
 1. **OCR-Aware Editing** (32 languages vs limited)
    - Detect and modify text in images correctly
@@ -71,9 +71,9 @@ Enable new downstream capabilities in image editing by bridging Qwen3-VL's advan
 
 ---
 
-## 📦 Module Structure
+## Structure
 
-### **Module 1: Cache Extraction** (`cache_extraction.py`)
+### **Cache Extraction** (`cache_extraction.py`)
 
 Extract vision caches from both Qwen3-VL and Qwen2.5-VL.
 
@@ -109,7 +109,7 @@ comparison = extractor.compare_caches(qwen3_cache, qwen25_cache)
 - DeepStack feature extraction (Qwen3 multi-level)
 - Automatic dimension detection
 
-### **Module 2: Vision Bridge** (`vision_bridge.py`)
+### **Vision Bridge** (`vision_bridge.py`)
 
 Project and fuse Qwen3's features into Qwen2.5 format.
 
@@ -143,7 +143,7 @@ enhanced_features, attention_weights = bridge(
 - **Residual Blending**: Learned weight between enhanced and baseline
 - **~5M parameters**: Lightweight and fast
 
-### **Module 3: Enhanced Pipeline** (`enhanced_pipeline.py`) ✅ COMPLETE
+### **Pipeline** (`enhanced_pipeline.py`)
 
 Integrate bridge with Qwen-Image-Edit.
 
@@ -204,17 +204,7 @@ all_results = evaluator.evaluate_all()
 # Returns: Dictionary with results for all categories
 ```
 
----
-
-## 🚀 Quick Start
-
-### **Step 1: Install Dependencies**
-
-```bash
-pip install torch transformers pillow requests accelerate
-```
-
-### **Step 2: Extract Vision Caches**
+### **Extract Vision Caches**
 
 ```python
 python example_extraction.py
@@ -239,7 +229,7 @@ Extracting Qwen3-VL vision cache...
   Early features: torch.Size([1, 256, 4096])
   Mid features: torch.Size([1, 256, 4096])
   Late features: torch.Size([1, 256, 4096])
-✓ Qwen3-VL cache extracted successfully
+Qwen3-VL cache extracted successfully
 
 Cache Comparison:
   Vision token count match: True
@@ -247,10 +237,9 @@ Cache Comparison:
   Dimension ratio: 1.14
 
 Total bridge parameters: ~5.2M
-✓ Bridge is lightweight (<10M params)
 ```
 
-### **Step 3: Test Bridge (Zero-Shot)**
+### **Test Bridge (Zero-Shot)**
 
 ```python
 from cache_extraction import VisionCacheExtractor
@@ -277,25 +266,7 @@ print(f"Enhanced features: {enhanced_features.shape}")
 print(f"Attention weights: {attention_weights.shape if attention_weights else 'N/A'}")
 ```
 
----
-
-## 💾 Memory Requirements
-
-### **VRAM Estimates:**
-
-| Configuration | VRAM Usage | Hardware |
-|---------------|------------|----------|
-| Both models (8-bit) | ~15-20 GB | RTX 4090, A5000 |
-| Sequential loading | ~10-15 GB | RTX 4080 |
-| 8-bit + CPU offload | ~8-12 GB | RTX 4070 Ti |
-
-### **Recommendations:**
-
-- **24GB+ VRAM**: Load both models simultaneously
-- **16GB VRAM**: Use 8-bit quantization, load sequentially
-- **12GB VRAM**: Use 8-bit + CPU offloading (slower but works)
-
-**Optimization tips:**
+**Optimization Notes:**
 ```python
 # Use 8-bit quantization
 extractor = VisionCacheExtractor(load_in_8bit=True)
@@ -307,7 +278,7 @@ torch.cuda.empty_cache()
 
 ---
 
-## 📊 Expected Improvements
+## Improvements to look for (but maybe none)
 
 Based on Qwen3-VL's documented improvements over Qwen2.5-VL:
 
@@ -329,9 +300,7 @@ Based on Qwen3-VL's documented improvements over Qwen2.5-VL:
 
 ---
 
-## 🔬 Training the Bridge (Optional)
-
-If zero-shot fusion isn't sufficient, train the bridge projector:
+## Training the Bridge (TBD)
 
 ```python
 from vision_bridge import VisionCacheBridge, BridgeConfig
@@ -366,70 +335,42 @@ bridge.save("bridge_weights.pt")
 **Training data requirements:**
 - Dataset: 1K-5K image-text pairs
 - Tasks: OCR, spatial edits, detail preservation
-- Hardware: Single RTX 4080 sufficient
-- Time: Few hours to days
+
+### **Module-Specific Examples**
+
+**Cache Extraction** (`example_extraction.py`):
+1. Basic cache extraction and comparison
+2. DeepStack multi-level feature analysis
+3. Dimension mismatch analysis for bridge design
+4. Memory usage estimation
+
+**Pipeline Usage** (in code):
+```python
+from enhanced_pipeline import EnhancedQwenImageEdit
+
+# Initialize
+pipeline = EnhancedQwenImageEdit(load_in_8bit=True)
+
+# Generate with enhancement
+output = pipeline.generate(
+    image="input.jpg",
+    prompt="Change text to 'Hello World'",
+    use_qwen3_vision=True
+)
+
+# Compare baseline vs enhanced
+baseline, enhanced, attention = pipeline.compare(
+    image="input.jpg",
+    prompt="Change text to 'Hello World'",
+    save_comparison="result.png"
+)
+```
 
 ---
 
-## 📝 Implementation Status
-
-### ✅ **Completed:**
-- [x] Vision cache extraction (Qwen3 & Qwen2.5)
-- [x] DeepStack multi-level feature extraction
-- [x] Vision bridge architecture (projector + fusion)
-- [x] Example scripts and documentation
-
-### 🔄 **In Progress:**
-- [ ] Enhanced Qwen-Image-Edit pipeline integration
-- [ ] Capability-specific evaluation suite
-- [ ] Training pipeline for bridge optimization
-
-### 📋 **TODO:**
-- [ ] Test on real OCR editing tasks
-- [ ] Benchmark spatial reasoning improvements
-- [ ] Measure detail preservation metrics
-- [ ] Optimize for inference speed
-- [ ] Create pre-trained bridge weights
-
----
-
-## 🤝 Usage Examples
-
-See `example_extraction.py` for complete examples:
-
-1. **Basic cache extraction and comparison**
-2. **DeepStack multi-level feature analysis**
-3. **Dimension mismatch analysis for bridge design**
-4. **Memory usage estimation**
-
----
-
-## 📚 References
+## References
 
 - **Qwen3-VL**: Enhanced vision-language model with DeepStack
 - **Qwen2.5-VL**: Current vision encoder in Qwen-Image-Edit
 - **Qwen-Image-Edit**: Image editing with VLM + DiT architecture
 - **C2C Paper**: Cache-to-Cache bridging technique
-
----
-
-## 🐛 Known Limitations
-
-1. **Architecture dependency**: Tied to specific Qwen model versions
-2. **Memory intensive**: Requires loading 2 large models
-3. **Untrained bridge**: Zero-shot may be suboptimal (needs training)
-4. **Integration pending**: Not yet connected to Qwen-Image-Edit DiT
-
----
-
-## 🔜 Next Steps
-
-1. **Integrate with Qwen-Image-Edit** (`enhanced_pipeline.py`)
-2. **Build evaluation suite** (`evaluation.py`)
-3. **Train bridge on task-specific data**
-4. **Benchmark improvements on OCR, spatial, detail tasks**
-5. **Release pre-trained weights**
-
----
-
-**Status**: Research prototype - Module 1 & 2 complete, Modules 3 & 4 in progress
