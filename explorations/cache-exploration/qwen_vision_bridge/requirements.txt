@@ -1,0 +1,26 @@
+# Core dependencies
+torch>=2.0.0
+transformers>=4.40.0
+diffusers>=0.27.0
+accelerate>=0.27.0
+pillow>=10.0.0
+numpy>=1.24.0
+
+# For evaluation metrics
+scikit-image>=0.21.0  # For SSIM
+opencv-python>=4.8.0  # For image processing
+
+# Optional: For OCR evaluation (real implementation)
+# pytesseract>=0.3.10
+# easyocr>=1.7.0
+
+# Optional: For visualization
+matplotlib>=3.7.0
+
+# Optional: For faster inference
+bitsandbytes>=0.41.0  # For 8-bit quantization
+xformers>=0.0.20  # For memory-efficient attention
+
+# Development
+requests>=2.31.0
+tqdm>=4.66.0
