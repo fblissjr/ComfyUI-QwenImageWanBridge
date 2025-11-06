@@ -64,6 +64,28 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load image batch node: {e}")
 
+# Qwen-to-Wan Video Bridge nodes
+try:
+    from .nodes.qwen_wan_bridge import (
+        QwenToWanFirstFrameLatent,
+        QwenToWanLatentSaver,
+        QwenToWanImageSaver
+    )
+
+    NODE_CLASS_MAPPINGS["QwenToWanFirstFrameLatent"] = QwenToWanFirstFrameLatent
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToWanFirstFrameLatent"] = "Qwen → Wan First Frame Latent"
+
+    NODE_CLASS_MAPPINGS["QwenToWanLatentSaver"] = QwenToWanLatentSaver
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToWanLatentSaver"] = "Save First Frame Latent (Wan)"
+
+    NODE_CLASS_MAPPINGS["QwenToWanImageSaver"] = QwenToWanImageSaver
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToWanImageSaver"] = "Save First Frame Image"
+
+    print("[QwenImageWanBridge] Loaded Qwen-to-Wan Video Bridge nodes (3 nodes)")
+    print("[QwenImageWanBridge] FEATURE: Image-to-video bridge with first frame conditioning")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Wan bridge nodes: {e}")
+
 # Resolution nodes removed - functionality integrated into encoder
 
 # Mask-based inpainting nodes

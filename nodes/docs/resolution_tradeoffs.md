@@ -2,6 +2,30 @@
 
 Comprehensive guide to resolution handling in Qwen nodes, covering single-image editing, multi-image batching, and scaling strategies.
 
+## VAE Selection Impact
+
+Your choice of VAE affects output resolution and quality. This guide covers both options.
+
+### Standard Wan VAE (qwen_image_vae.safetensors)
+- **Scaling:** 8x (encode 1024px → output 1024px)
+- **Quality:** May have "wan speckles/polka dots" artifacts
+- **Use case:** Anime/stylized content, lineart, backward compatibility
+
+### Wan2.1-VAE-upscale2x (Recommended)
+- **Scaling:** 16x (encode 1024px → output 2048px via 2x decoder)
+- **Quality:** Eliminates speckles, better detail preservation
+- **Limitation:** Trained on real images only (may struggle with anime/lineart)
+- **VRAM:** Same as standard VAE during sampling (upscaling at decode)
+- **Use case:** Real photos, digital art, maximum quality
+- **See:** [Wan2.1-VAE-upscale2x integration guide](wan21_vae_upscale2x_guide.md)
+
+**Resolution examples:**
+- Standard VAE: vae_max_dimension=2048 → 2048px output
+- Wan2.1-upscale2x: vae_max_dimension=2048 → 4096px output
+- Wan2.1-upscale2x: vae_max_dimension=1792 → 3584px output (recommended max)
+
+The rest of this guide uses "output resolution" to account for both VAE types.
+
 ## Single Image Edit - Resolution Tradeoffs
 
 **Small images (<512px - e.g., 384x384, 256x512):**
@@ -138,3 +162,92 @@ Comprehensive guide to resolution handling in Qwen nodes, covering single-image 
 - 32px alignment required throughout pipeline for VAE compatibility
 - Batch node marks images with metadata (`qwen_pre_scaled=True`) to prevent double-scaling in encoders
 - Advanced encoder can apply additional resolution weighting on top of batch scaling
+
+## Wan2.1-VAE-upscale2x Optimization
+
+If using the Wan2.1-VAE-upscale2x (2x decoder upscaling), adjust your `vae_max_dimension` settings for optimal quality/VRAM balance.
+
+### Recommended vae_max_dimension Values
+
+**Standard Wan VAE (current default: 2048):**
+- Encodes at 2048px → Outputs at 2048px
+- Straightforward 1:1 relationship
+
+**Wan2.1-VAE-upscale2x (recommended: 1792):**
+- Encodes at 1792px → Outputs at 3584px (2x upscaling in decoder)
+- Hits model's maximum resolution (3584px = 16,384 tokens)
+- Same quality as encoding at 3584px with standard VAE, but uses half the VRAM
+
+### VRAM-Based Recommendations
+
+| VRAM Tier | vae_max_dimension | Encode Size | Output Size (2x) | Use Case |
+|-----------|-------------------|-------------|------------------|----------|
+| 8GB | 1024 | 1024×1024 | 2048×2048 | Baseline, safe |
+| 10GB | 1280 | 1280×1280 | 2560×2560 | High quality |
+| 12GB | 1536 | 1536×1536 | 3072×3072 | Very high quality |
+| 12GB+ | **1792** | 1792×1792 | **3584×3584** | **Recommended max** |
+| 16GB+ | 2048 | 2048×2048 | 4096×4096 | Experimental |
+
+### Multi-Image Adjustments
+
+**With Wan2.1-upscale2x, lower encode sizes still give great outputs:**
+
+**2-3 images:**
+- vae_max_dimension: 1536 → 3072px output per image
+- Still very high quality, better VRAM safety
+
+**4+ images:**
+- vae_max_dimension: 1280 → 2560px output per image
+- Prevents OOM errors while maintaining quality
+
+**Example comparison:**
+```
+Standard VAE (3 images at 2048px):
+  - Encode: 3 × 2048px = 6144px total processing
+  - Output: 3 × 2048px images
+  - High VRAM usage
+
+Wan2.1-upscale2x (3 images at 1536px):
+  - Encode: 3 × 1536px = 4608px total processing (28% less)
+  - Output: 3 × 3072px images (50% larger than standard!)
+  - Lower VRAM, higher output resolution
+```
+
+### Advanced Encoder with 2x VAE
+
+Use lower base dimensions with hero/reference weighting:
+
+```python
+vae_max_dimension: 1536  # Base for all images
+resolution_mode: "hero_first"
+hero_weight: 1.17        # 1536 × 1.17 ≈ 1792 → 3584px output
+reference_weight: 0.67   # 1536 × 0.67 ≈ 1024 → 2048px output
+```
+
+**Result:**
+- Hero image: 3584×3584 output (model maximum)
+- References: 2048×2048 output (sufficient for context)
+- Optimal VRAM/quality balance
+
+### Why Lower Encode Sizes Work Better with 2x VAE
+
+**Problem with high encode + standard VAE:**
+- Encoding 3584×3584 uses massive VRAM
+- Only outputs 3584×3584 (same as encode)
+- Model maximum anyway, no benefit beyond this
+
+**Solution with lower encode + 2x VAE:**
+- Encoding 1792×1792 uses half the VRAM
+- Outputs 3584×3584 (same final resolution!)
+- Latent degradation training ensures quality
+- Decoder upscaling is high quality (pixel shuffle, not interpolation)
+
+### Vision Encoder Note
+
+Regardless of VAE choice or `vae_max_dimension` setting:
+- Vision encoder ALWAYS processes at 384×384 area
+- This is for semantic understanding, not pixel detail
+- The VAE path handles all pixel-level resolution
+- Both paths see same aspect ratio, different resolutions
+
+See [Wan2.1-VAE-upscale2x integration guide](wan21_vae_upscale2x_guide.md) for complete technical details.
