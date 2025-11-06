@@ -27,6 +27,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `nodes/docs/QwenVLTextEncoder.md` - Standard encoder documentation
 - `nodes/docs/QwenTemplateBuilder.md` - Template builder documentation
 - `nodes/docs/resolution_tradeoffs.md` - Comprehensive resolution and scaling guide
+- `nodes/docs/wan21_vae_upscale2x_guide.md` - Wan2.1-VAE-upscale2x integration and optimization guide
+- `nodes/docs/qwen_wan_bridge_guide.md` - Qwen-to-Wan Video bridge for image-to-video workflows
 
 ## Project Overview
 
@@ -47,7 +49,8 @@ ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and v
 **Models:**
 - Text/Vision Encoder: `Qwen/Qwen2.5-VL-7B-Instruct` → `models/text_encoders/`
 - DiT Model: `qwen-image-edit-2509` (fp8 or Nunchaku quantized) → `models/diffusion_models/`
-- VAE: `qwen_image_vae.safetensors` (16-channel) → `models/vae/`
+- VAE: `qwen_image_vae.safetensors` (16-channel, standard) → `models/vae/`
+  - Alternative: `Wan2.1-VAE-upscale2x` (16-channel, 2x decoder upscaling) - [guide](nodes/docs/wan21_vae_upscale2x_guide.md)
 
 ## Implementation Status
 
@@ -88,14 +91,30 @@ LoadImage → QwenVLTextEncoder → KSampler → VAEDecode
 - Reference latents: Attached to conditioning dict (16-channel, from VAE)
 
 ### Resolution Handling
+
+**Two Separate Paths (IMPORTANT):**
+- **Vision Encoder (VL Model)**: 384×384 area-based scaling (hardcoded, not configurable)
+  - Purpose: Semantic understanding, creates vision tokens
+  - Model: Qwen2.5-VL vision encoder
+  - Not affected by `vae_max_dimension` parameter
+- **VAE Encoder (Generation Model)**: Configurable via `vae_max_dimension` parameter
+  - Purpose: Pixel-level detail, creates reference latents for generation
+  - Controls output resolution (encode 1792px → output 1792px with standard VAE, 3584px with 2x VAE)
+  - Default: 2048px (current), recommended 1792px for Wan2.1-upscale2x
+
+**VAE Options:**
+- **Standard Wan VAE**: 8x spatial scale (encode 1024px → output 1024px)
+- **Wan2.1-VAE-upscale2x**: 16x spatial scale (encode 1024px → output 2048px via 2x decoder)
+  - Same latent space (16-channel), same VRAM during sampling
+  - Upscaling happens at decode, not during generation
+  - Eliminates "wan speckles/polka dots" artifacts
+  - [Full guide](nodes/docs/wan21_vae_upscale2x_guide.md)
+
+**Alignment:**
 - **32-pixel alignment** for VAE (required)
-- Vision encoder: 384×384 target area (always area-based scaling)
-- VAE encoder: Configurable via `scaling_mode` parameter
-  - `preserve_resolution` (default): Keeps original size with 32px alignment
-  - `max_dimension_1024`: Scales largest side to 1024px
-  - `area_1024`: Scales to ~1024×1024 area (legacy)
-- `calculate_dimensions()` in `nodes/qwen_vl_encoder.py:193`
-- Advanced encoder: `scaling_mode` sets base, `resolution_mode` applies weights
+- **28-pixel alignment** for vision encoder
+- `calculate_dimensions()` in `nodes/qwen_vl_encoder.py:203` (VAE), `qwen_vl_encoder.py:227` (vision)
+- Advanced encoder: `vae_max_dimension` sets base, `resolution_mode` applies weights
 
 ### Inpainting System (Simple Blending Approach)
 
@@ -148,6 +167,17 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
   - Up to 10 image inputs
   - Compatible with both standard and advanced encoders
   - Two-stage scaling: batch normalizes, advanced encoder applies weights
+
+### Wan Video Bridge (QwenWanBridge)
+- QwenToWanFirstFrameLatent - Prepare Qwen output for Wan Video first frame
+  - Encodes to 16-channel latent with temporal dimension
+  - Applies Wan Video normalization (mean/std per channel)
+  - Compatible with DiffSynth-Studio and Diffusers pipelines
+  - [Full guide](nodes/docs/qwen_wan_bridge_guide.md)
+- QwenToWanLatentSaver - Export first frame latent for external tools
+  - Formats: safetensors, pt, npz
+  - Includes metadata for compatibility
+- QwenToWanImageSaver - Save edited first frame for verification
 
 ### Inpainting (QwenImage/Mask, Sampling)
 - QwenMaskProcessor - Mask preprocessing (outputs: IMAGE, MASK, preview, mask_preview)
@@ -278,12 +308,35 @@ Multi:  Picture 1: <|vision_start|><|image_pad|><|vision_end|>Picture 2: ...
 - Wan21 format (Qwen-specific)
 - Standard ComfyUI VAE nodes work when loaded correctly
 
+## VAE Compatibility and Recommendations
+
+### Standard Wan VAE (qwen_image_vae.safetensors)
+- 16-channel, 8x spatial scaling
+- Works out of the box, no special configuration
+- May have "wan speckles/polka dots" artifacts
+- Recommended `vae_max_dimension`: 2048px
+
+### Wan2.1-VAE-upscale2x (Recommended for Quality)
+- 16-channel, 16x spatial scaling (2x in decoder)
+- Eliminates speckle/grain artifacts
+- Same VRAM during sampling (upscaling at decode)
+- Trained on real images (may struggle with anime/lineart)
+- Recommended `vae_max_dimension`: 1792px (outputs 3584px, model maximum)
+- Install via: [ComfyUI-VAE-Utils](https://github.com/spacepxl/ComfyUI-VAE-Utils)
+- [Full integration guide](nodes/docs/wan21_vae_upscale2x_guide.md)
+
+**Resolution recommendations with Wan2.1-upscale2x:**
+- 8GB VRAM: vae_max_dimension=1024 → 2048px output
+- 12GB VRAM: vae_max_dimension=1792 → 3584px output (recommended)
+- 16GB+ VRAM: vae_max_dimension=2048 → 4096px output (experimental)
+- Multi-image: Lower by ~256px for VRAM safety (e.g., 1536 for 3 images)
+
 ## Integration Points
 
 - ComfyUI CLIP system: `CLIPType.QWEN_IMAGE`
 - Model paths: `models/text_encoders/`, `models/diffusion_models/`, `models/vae/`
 - Dependencies: None (QwenImageBatch replaces KJNodes ImageBatchMulti)
-- Optional: KJNodes (for other utilities)
+- Optional: KJNodes (for other utilities), ComfyUI-VAE-Utils (for Wan2.1-upscale2x)
 - Wrapper nodes: transformers, diffusers (optional, experimental)
 
 ## Implementation Decisions
