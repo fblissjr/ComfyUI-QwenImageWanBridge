@@ -1,25 +1,60 @@
 # Changelog
 
-## v2.7.1 - Experimental Face Cropping (QwenSmartCrop)
+## v2.8.1 - HunyuanVideo Template Connection Fix
 
-### Added (Experimental)
+### Changed
 
-**QwenSmartCrop Node** - Automated face isolation for multi-image composition
-- Multiple detection strategies: geometric, saliency-based, VLM-powered
-- VLM mode uses Qwen3-VL via [shrug-prompter nodes](https://github.com/fblissjr/shrug-prompter)
-- Zero-dependency fallback modes (saliency, geometric)
-- `face_headshot` anchor mode (uses bbox width for tight face crops)
-- Adjustable padding and square output options
-- Auto-fallback strategy with graceful degradation
-- Solves community-discovered "tight crop" technique for headshot changing tasks
-- [Documentation](nodes/docs/QwenSmartCrop.md)
+**HunyuanVideoTextEncoder Template Input**
+- Added optional `template_input` (HUNYUAN_TEMPLATE) to accept Template Builder connection
+- Priority order: template_input > custom_system_prompt > template_preset dropdown
+- Template Builder `template_output` can now connect to Encoder `template_input`
+- Encoder `text` moved to optional (can be provided by Template Builder)
+
+### Added
+
+**HunyuanVideoPromptExpander Node** - not working, likely not going to pursue due to better alternatives
+
+**8 Structure Test Templates** (for prompt quality experiments)
+- `hunyuan_video_structured_realism` - Full official structure with 5-second constraint
+- `hunyuan_video_minimal_structure` - Tests minimum viable structure
+- `hunyuan_video_temporal_only` - Only temporal markers (Initially/Then/Next/Finally)
+- `hunyuan_video_camera_focused` - Detailed camera movement and angle specs
+- `hunyuan_video_lighting_focused` - Rembrandt, golden hour, practical lighting emphasis
+- `hunyuan_video_style_spam` - Tests if repeating "cinematic realistic style" helps
+- `hunyuan_video_anti_pattern` - Everything the official rewriter avoids (baseline test)
+- `hunyuan_video_self_expand` - System prompt that instructs internal expansion
+
+**8 Experimental Fun Templates** (marked `experimental: true`)
+- `hunyuan_video_drunk_cameraman` - Wobbly, off-center documentary footage
+- `hunyuan_video_80s_music_video` - Dramatic lighting, lens flares, wet surfaces
+- `hunyuan_video_majestic_pigeon` - David Attenborough energy for mundane subjects
+- `hunyuan_video_wes_anderson_fever` - Symmetrical pastel fever dream
+- `hunyuan_video_michael_bay_mundane` - Heroic angles for grocery shopping
+- `hunyuan_video_excited_dog_pov` - Chaotic joyful golden retriever camera
+- `hunyuan_video_infomercial_disaster` - Everything goes wrong dramatically
+- `hunyuan_video_romcom_lighting` - Soft glowing romantic comedy visuals
+
+---
+
+## v2.8.0 - HunyuanVideo 1.5 Text-to-Video Support
+
+### Added
+
+**HunyuanVideo 1.5 T2V Nodes**
+- `HunyuanVideoCLIPLoader` - Load Qwen2.5-VL (byT5 optional for multilingual)
+- `HunyuanVideoTextEncoder` - T2V with 23 templates, dual output (positive, negative)
+  - Default negative: "low quality, blurry, distorted, artifacts, watermark, text, logo"
+  - 23 video templates in `nodes/templates/hunyuan_video_*.md`
+  - For basic encoding without templates, use CLIPTextEncode directly
+
+**Workflow Options**
+- KSampler: Connect positive/negative directly (CFG built-in)
+- SamplerCustomAdvanced: Route through CFGGuider first
 
 ### Technical Details
-- Qwen3-VL coordinate system support (0-1000 → converted to percentages)
-  - ** Note - if you worked with Qwen2.5-VL, these coordinates for bbox's are different
-- JSON bbox parsing with markdown fence handling
-- Edge detection using PyTorch gradient computation
-- Configurable VLM parameters (max_tokens, temperature, top_p)
+- Uses ComfyUI's native HunyuanVideo sampler and VAE
+- byT5 auto-triggered by quoted text for multilingual rendering
+- ComfyUI handles crop_start correction automatically
 
 ## BREAKING CHANGE (v2.7.0+)
 
