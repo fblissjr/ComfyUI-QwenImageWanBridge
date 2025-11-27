@@ -1,6 +1,8 @@
 # Z-Image Nodes
 
-Custom text encoding nodes for Z-Image that fix ComfyUI's missing thinking tokens.
+Text encoding nodes for Z-Image with experimental knobs for testing.
+
+**Note:** After analysis, we found that ComfyUI and diffusers produce identical templates by default. Our nodes now match diffusers exactly, with optional experimental parameters for testing alternative approaches.
 
 ---
 
@@ -8,7 +10,7 @@ Custom text encoding nodes for Z-Image that fix ComfyUI's missing thinking token
 
 **Category:** `ZImage/Encoding`
 
-Full-featured encoder with system prompts, templates, and debug mode. Fixes ComfyUI's missing thinking tokens to match diffusers implementation.
+Full-featured encoder with system prompts, templates, and debug mode. Default behavior matches diffusers exactly.
 
 ### Inputs
 
@@ -19,7 +21,8 @@ Full-featured encoder with system prompts, templates, and debug mode. Fixes Comf
 | `system_prompt_preset` | dropdown | No | "none" | Preset system prompts |
 | `custom_system_prompt` | STRING | No | "" | Custom system prompt (overrides preset) |
 | `template_preset` | dropdown | No | "none" | Template from `nodes/templates/z_image_*.md` |
-| `enable_thinking` | BOOLEAN | No | True | Add thinking tokens (recommended) |
+| `add_think_block` | BOOLEAN | No | **False** | EXPERIMENTAL: Add `<think></think>` block |
+| `thinking_content` | STRING | No | "" | EXPERIMENTAL: Custom reasoning inside `<think>` tags |
 | `max_sequence_length` | INT | No | 512 | Max tokens (matches diffusers default) |
 | `debug_mode` | BOOLEAN | No | False | Show encoding details |
 
@@ -42,10 +45,11 @@ Full-featured encoder with system prompts, templates, and debug mode. Fixes Comf
 
 ### How It Works
 
-1. **Formats prompt with thinking tokens** - Wraps your text in Qwen3's chat template with `<think>` tokens
-2. **Applies system prompt** - Optionally prepends system instructions for style guidance
-3. **Encodes via ComfyUI** - Uses ComfyUI's CLIP tokenizer and encoder
-4. **Warns on long prompts** - Alerts if prompt likely exceeds max_sequence_length
+1. **Formats prompt** - Wraps text in Qwen3's chat template
+2. **Applies system prompt** - Optionally prepends system instructions
+3. **Optionally adds think block** - When `add_think_block=True` (experimental)
+4. **Encodes via ComfyUI** - Uses ComfyUI's CLIP tokenizer and encoder
+5. **Warns on long prompts** - Alerts if exceeding max_sequence_length
 
 ### Input Priority
 
@@ -60,10 +64,10 @@ System prompt is determined by (first match wins):
 
 ### Examples
 
-**Basic (with thinking fix):**
+**Default (matches diffusers):**
 ```
 text: "A serene mountain lake at sunset with reflections"
-enable_thinking: True
+add_think_block: False
 system_prompt_preset: none
 ```
 
@@ -71,21 +75,22 @@ system_prompt_preset: none
 ```
 text: "Professional headshot of a woman in business attire"
 system_prompt_preset: photorealistic
-enable_thinking: True
+add_think_block: False
 ```
 
-**With Custom System Prompt:**
+**Experimental: With Think Block:**
 ```
 text: "A cyberpunk cityscape at night"
-custom_system_prompt: "Generate a highly detailed sci-fi image with neon lighting, rain-slicked streets, and holographic advertisements."
-enable_thinking: True
+add_think_block: True
 ```
 
-**With Template File:**
+**Experimental: With Custom Thinking Content:**
 ```
-text: "A vintage photograph of Paris in the 1920s"
-template_preset: z_image_artistic
-enable_thinking: True
+text: "A golden retriever playing in autumn leaves"
+add_think_block: True
+thinking_content: "Key elements: happy dog, vibrant fall colors.
+Composition: dog as focal point, leaves in mid-air.
+Lighting: warm golden hour, backlit for rim lighting."
 ```
 
 ---
@@ -94,7 +99,7 @@ enable_thinking: True
 
 **Category:** `ZImage/Encoding`
 
-Minimal encoder - just adds the missing thinking tokens. Drop-in replacement for CLIPTextEncode when using Z-Image.
+Drop-in replacement for CLIPTextEncode. Default behavior matches diffusers exactly.
 
 ### Inputs
 
@@ -102,7 +107,7 @@ Minimal encoder - just adds the missing thinking tokens. Drop-in replacement for
 |-------|------|----------|---------|-------------|
 | `clip` | CLIP | Yes | - | Z-Image CLIP model (lumina2 type) |
 | `text` | STRING | Yes | "" | Your prompt |
-| `enable_thinking` | BOOLEAN | No | True | Add thinking tokens (recommended) |
+| `add_think_block` | BOOLEAN | No | **False** | EXPERIMENTAL: Add `<think></think>` block |
 
 ### Outputs
 
@@ -112,9 +117,14 @@ Minimal encoder - just adds the missing thinking tokens. Drop-in replacement for
 
 ### How It Works
 
-Simply wraps your prompt in the correct template:
+**With add_think_block=False (default, matches diffusers):**
+```
+<|im_start|>user
+{your prompt}<|im_end|>
+<|im_start|>assistant
+```
 
-**With enable_thinking=True:**
+**With add_think_block=True (experimental):**
 ```
 <|im_start|>user
 {your prompt}<|im_end|>
@@ -125,17 +135,43 @@ Simply wraps your prompt in the correct template:
 
 ```
 
-**With enable_thinking=False (ComfyUI default):**
-```
-<|im_start|>user
-{your prompt}<|im_end|>
-<|im_start|>assistant
-```
-
 ### When to Use
 
-- **Use Simple** when you just want the thinking token fix without any system prompts
-- **Use Full** when you want to experiment with system prompts, templates, or debugging
+- **Default behavior** matches both ComfyUI and diffusers exactly
+- **Enable add_think_block** to experiment (may or may not improve results)
+- **Use Full encoder** if you need system prompts or templates
+
+---
+
+## Understanding the Parameters
+
+### add_think_block (EXPERIMENTAL)
+
+This parameter is counterintuitively named in the original Qwen3 implementation:
+
+| Qwen3's Name | Our Name | Effect |
+|--------------|----------|--------|
+| `enable_thinking=True` | `add_think_block=False` | NO think block (default) |
+| `enable_thinking=False` | `add_think_block=True` | ADD think block |
+
+We renamed to `add_think_block` for clarity - when True, it adds the block.
+
+### Why Default is False
+
+After testing, we found:
+1. **Diffusers uses `enable_thinking=True`** which does NOT add think tokens
+2. **ComfyUI's hardcoded template** also has no think tokens
+3. **They produce identical output**
+
+So the "fix" is to match diffusers default, which happens to be no think block.
+
+### Tokenizer Caveat
+
+Even with `add_think_block=True`, ComfyUI's bundled tokenizer doesn't have `<think>` as a special token:
+- **Qwen3-4B tokenizer**: `<think>` = single token [151667]
+- **ComfyUI tokenizer**: `<think>` = subwords `['<th', 'ink', '>']`
+
+This means the think block is tokenized differently than intended.
 
 ---
 
@@ -150,27 +186,6 @@ Templates stored in `nodes/templates/z_image_*.md`:
 | `z_image_bilingual_text` | text | English/Chinese text rendering |
 | `z_image_artistic` | art | Creative compositions, visual balance |
 
-### Template File Format
-
-Templates use YAML frontmatter:
-
-```markdown
----
-name: z_image_photorealistic
-description: Photorealistic image generation
-model: z-image
-category: photography
----
-Generate a photorealistic image with accurate lighting, natural textures, and realistic details.
-```
-
-### Adding Custom Templates
-
-1. Create `nodes/templates/z_image_yourtemplate.md`
-2. Add YAML frontmatter with required fields
-3. Add your system prompt as the body
-4. Restart ComfyUI to load
-
 ---
 
 ## Debug Mode
@@ -178,7 +193,7 @@ Generate a photorealistic image with accurate lighting, natural textures, and re
 Enable `debug_mode=True` on ZImageTextEncoder to see:
 
 - System prompt source (preset, template, custom, or none)
-- Whether thinking tokens are enabled
+- Whether think block is added
 - Formatted prompt length in characters
 - Estimated token count vs max_sequence_length
 - Actual conditioning tensor shape
@@ -188,22 +203,18 @@ Enable `debug_mode=True` on ZImageTextEncoder to see:
 
 ```
 Using preset: photorealistic
-enable_thinking: True
+add_think_block: False
 max_sequence_length: 512
-Formatted prompt length: 287 chars
-Conditioning shape: torch.Size([1, 72, 2560])
-Actual sequence length: 72
+Formatted prompt length: 245 chars
+Conditioning shape: torch.Size([1, 68, 2560])
+Actual sequence length: 68
 
 --- FORMATTED PROMPT ---
 <|im_start|>system
-Generate a photorealistic image with accurate lighting, natural textures, and realistic details.<|im_end|>
+Generate a photorealistic image...<|im_end|>
 <|im_start|>user
 A professional headshot of a woman<|im_end|>
 <|im_start|>assistant
-<think>
-
-</think>
-
 --- END ---
 ```
 
@@ -237,10 +248,12 @@ SaveImage
 
 | Feature | ZImageTextEncoderSimple | ZImageTextEncoder |
 |---------|------------------------|-------------------|
-| Thinking tokens | Yes | Yes |
+| Default matches diffusers | Yes | Yes |
+| add_think_block option | Yes | Yes |
 | System prompts | No | Yes (5 presets) |
 | Custom system prompt | No | Yes |
 | Template files | No | Yes (4 templates) |
+| Custom thinking content | No | Yes |
 | Max sequence length | No | Yes (configurable) |
 | Debug mode | No | Yes |
 | Drop-in replacement | Yes | No |
@@ -282,8 +295,14 @@ ComfyUI/models/
 
 ### Token Format
 
-With `enable_thinking=True`, your prompt becomes:
+**Default (add_think_block=False):**
+```
+<|im_start|>user
+{prompt}<|im_end|>
+<|im_start|>assistant
+```
 
+**Experimental (add_think_block=True):**
 ```
 <|im_start|>user
 {prompt}<|im_end|>
@@ -294,53 +313,15 @@ With `enable_thinking=True`, your prompt becomes:
 
 ```
 
-The `<think>` block is empty but present - this matches how the model was trained.
-
-### Why Thinking Tokens Matter
-
-Qwen3-4B (no suffix) is the instruct model with hybrid thinking mode:
-- Model was trained with `<think>` tokens in the template
-- Omitting them puts embeddings out-of-distribution
-- Adding them aligns with how diffusers encodes prompts
-
 ---
 
 ## Tips
 
-1. **Start with Simple** - Use ZImageTextEncoderSimple first, only switch to Full if you need system prompts
-2. **Keep thinking enabled** - `enable_thinking=True` is recommended for best quality
-3. **Watch prompt length** - Debug mode shows if you're exceeding 512 tokens
-4. **Compare outputs** - Test same prompt with/without thinking to verify improvement
+1. **Use defaults first** - They match diffusers exactly
+2. **Experiment with think block** - May or may not help, test it
+3. **Watch prompt length** - Debug mode shows if exceeding 512 tokens
+4. **Compare outputs** - Same prompt, same seed, with/without think block
 5. **Check debug output** - Verify your template/system prompt is being applied
-
----
-
-## Troubleshooting
-
-### "Low quality output"
-
-**Solution:** Ensure `enable_thinking=True` (the whole point of these nodes)
-
-### "Different results than diffusers"
-
-**Possible causes:**
-- Embedding extraction differs (we return padded, diffusers filters)
-- System prompt differences
-- Sampling parameters (Z-Image Turbo uses steps=9, cfg=1)
-
-### "Prompt seems truncated"
-
-**Solution:**
-- Enable debug mode to check actual sequence length
-- Shorten prompt or increase max_sequence_length
-- ComfyUI may handle long prompts differently than diffusers
-
-### "System prompt not applied"
-
-**Solution:**
-- Check input priority (custom > template > preset)
-- Verify template file exists and is valid YAML
-- Enable debug mode to see which source is being used
 
 ---
 
@@ -349,8 +330,9 @@ Qwen3-4B (no suffix) is the instruct model with hybrid thinking mode:
 - **Our encoder**: `nodes/z_image_encoder.py`
 - **Templates**: `nodes/templates/z_image_*.md`
 - **Documentation**: `nodes/docs/z_image_*.md`
-- **ComfyUI's encoder**: `comfy/text_encoders/z_image.py` (has the bug)
+- **ComfyUI's encoder**: `comfy/text_encoders/z_image.py`
 
 ---
 
 **Last Updated:** 2025-11-27
+**Version:** 2.0 (corrected parameter naming)

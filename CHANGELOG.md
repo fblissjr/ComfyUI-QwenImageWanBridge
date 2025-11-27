@@ -1,36 +1,41 @@
 # Changelog
 
-## v2.9.0 - Z-Image Text Encoder Fix
+## v2.9.0 - Z-Image Text Encoder with Experimental Options
 
 ### Added
 
-**Z-Image Text Encoder Nodes** - Fix ComfyUI's missing thinking tokens
+**Z-Image Text Encoder Nodes** - Experimental encoding options for Z-Image
 - `ZImageTextEncoder` - Full-featured encoder with system prompts, templates, debug mode
 - `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode
 
-**Why these nodes exist:**
-- ComfyUI hardcodes: `<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n`
-- Diffusers uses `apply_chat_template(enable_thinking=True)` which adds `<think>\n\n</think>\n\n`
-- Missing thinking tokens = out-of-distribution embeddings = degraded output
+**Key Finding (Corrected Analysis):**
+After testing actual tokenizers, we found:
+- ComfyUI and diffusers produce **identical templates** by default
+- The `enable_thinking` parameter is counterintuitive:
+  - `enable_thinking=True` = NO think block (this is what diffusers uses)
+  - `enable_thinking=False` = ADD think block
+- So ComfyUI is NOT missing anything - both produce the same output
 
 **Features:**
-- `enable_thinking` parameter (default: True, matches diffusers)
+- `add_think_block` parameter (default: False, matches diffusers)
+- `thinking_content` parameter - provide your own reasoning text inside `<think>` tags (experimental)
 - `max_sequence_length` parameter (default: 512, matches diffusers)
 - System prompt presets (none, quality, photorealistic, artistic, bilingual)
 - Template files in `nodes/templates/z_image_*.md`
 - Debug mode showing formatted prompt and sequence length
 
-**Workflow change:** Replace `CLIPTextEncode` with `ZImageTextEncoderSimple`. Everything else stays the same.
+**Use case:** Experimentation with think blocks and system prompts to see if they improve output.
 
 **Key insight:** Qwen3-4B (no suffix) is the INSTRUCT model, not base. Naming is opposite of convention.
 
 ### Known Gaps vs Diffusers (Cannot Fix)
 - **Embedding extraction**: Diffusers filters to valid tokens only; ComfyUI returns full padded sequence
-- **Bundled tokenizer**: ComfyUI bundles Qwen2.5 tokenizer config without Qwen3 thinking template
+- **Tokenizer difference**: ComfyUI bundles Qwen2.5-VL tokenizer; `<think>` becomes subwords not special token
 
 ### Documentation
-- `nodes/docs/z_image_encoder.md` - Full encoder documentation
-- `nodes/docs/z_image_turbo_workflow_analysis.md` - Official workflow analysis
+- `nodes/docs/z_image_analysis.md` - Corrected ComfyUI vs Diffusers comparison
+- `nodes/docs/z_image_nodes.md` - Node reference
+- `nodes/docs/z_image_workflow_guide.md` - Setup and experiments
 
 ---
 

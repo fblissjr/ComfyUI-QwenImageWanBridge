@@ -1,8 +1,24 @@
 # Node Documentation
 
-Comprehensive documentation for all ComfyUI Qwen-Image-Edit nodes.
+Comprehensive documentation for all ComfyUI Qwen nodes.
 
-## Nodes
+## Z-Image (NEW)
+
+Fixes ComfyUI's missing thinking tokens for Z-Image/Qwen3-4B encoding.
+
+### Nodes
+- [ZImageTextEncoder](z_image_nodes.md#zimagetextencoder) - Full encoder with thinking tokens, system prompts, templates
+- [ZImageTextEncoderSimple](z_image_nodes.md#zimagetextencodersimple) - Drop-in CLIPTextEncode replacement
+
+### Guides
+- [Z-Image Nodes Reference](z_image_nodes.md) - Detailed node documentation
+- [Z-Image Workflow Guide](z_image_workflow_guide.md) - Step-by-step setup
+- [Z-Image Analysis](z_image_analysis.md) - ComfyUI vs Diffusers vs Qwen3 comparison
+- [Z-Image Turbo Workflow Analysis](z_image_turbo_workflow_analysis.md) - Official workflow breakdown
+
+---
+
+## Qwen-Image-Edit
 
 ### Loaders
 - [QwenVLCLIPLoader](QwenVLCLIPLoader.md) - Load Qwen2.5-VL text/vision encoder
@@ -76,3 +92,31 @@ Comprehensive documentation for all ComfyUI Qwen-Image-Edit nodes.
 ### Low Priority (Archived/Unclear effectiveness)
 - QwenSpatialTokenGenerator
 - QwenEliGenEntityControl
+
+---
+
+## HunyuanVideo 1.5
+
+### Nodes
+- [HunyuanVideo 1.5 Nodes](hunyuanvideo_15_nodes.md) - CLIP loader, text encoder with 39 templates
+
+### Guides
+- [HunyuanVideo 1.5 Workflow Guide](hunyuanvideo_15_workflow_guide.md) - T2V setup
+- [HunyuanVideo Prompting Experiments](hunyuanvideo_prompting_experiments.md) - Template testing
+
+---
+
+## Example Workflows
+
+Located in `example_workflows/`:
+
+### Z-Image
+- `official_workflows/comfy_z_image_turbo_example_workflow.json` - Official workflow (uses CLIPTextEncode)
+- To use our fix: Replace CLIPTextEncode with ZImageTextEncoderSimple
+
+### Qwen-Image-Edit
+- `qwen_edit_2509_single_image_edit.json` - Single image editing
+- `nunchaku_qwen_image_edit_2509.json` - Multi-image with Nunchaku
+
+### HunyuanVideo
+- `hunyuanvideo_15_t2v_example.json` - Text-to-video

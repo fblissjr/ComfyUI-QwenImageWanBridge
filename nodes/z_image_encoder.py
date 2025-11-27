@@ -1,28 +1,32 @@
 """
 Z-Image Text Encoder for ComfyUI
 
-Fixes ComfyUI's hardcoded template by properly using apply_chat_template
-with enable_thinking=True, matching the diffusers implementation.
+IMPORTANT: Our original analysis was inverted. Here's what actually happens:
 
-Key difference from ComfyUI's built-in:
-- ComfyUI: hardcodes "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
-- Diffusers: uses tokenizer.apply_chat_template(enable_thinking=True)
-- This node: matches diffusers behavior for proper embeddings
+Diffusers (pipeline_z_image.py):
+    tokenizer.apply_chat_template(messages, add_generation_prompt=True, enable_thinking=True)
 
-The enable_thinking=True adds "<think>\n\n</think>\n\n" which the model
-was trained with. Missing these tokens produces out-of-distribution embeddings.
+    enable_thinking=True  -> NO <think> block (let model generate its own)
+    enable_thinking=False -> ADD <think>\n\n</think>\n\n (skip thinking)
 
-Qwen3 Model Variants (as of 2507):
-- Qwen3-4B (no suffix) = INSTRUCT model with hybrid thinking (Z-Image uses this)
-- Qwen3-4B-Base = base model without thinking
-- Qwen3-Instruct-2507 = non-thinking only
-- Qwen3-Thinking-2507 = always thinking
+ComfyUI (z_image.py):
+    self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
 
-Known Gaps vs Diffusers (documented in nodes/docs/z_image_encoder.md):
-1. Thinking tokens: FIXED by this node
-2. Embedding extraction: Cannot fix (ComfyUI returns padded sequence, diffusers filters)
-3. Sequence length: FIXED with max_sequence_length parameter (default 512)
-4. Bundled tokenizer: Cannot fix (no thinking template in ComfyUI's bundled config)
+    This matches diffusers with enable_thinking=True (no think block)
+
+So ComfyUI and diffusers produce IDENTICAL templates by default!
+
+The REAL difference is in embedding extraction:
+- Diffusers: Returns embeddings[attention_mask.bool()] - only non-padded tokens
+- ComfyUI: Returns full padded sequence
+
+Tokenizer Compatibility:
+- ComfyUI bundles Qwen2.5-VL tokenizer (token 151667 = <|meta|>)
+- Qwen3-4B has thinking tokens (token 151667 = <think>)
+- For the basic format, they produce identical token IDs
+- For <think> tokens, ComfyUI's tokenizer treats them as regular subwords
+
+This encoder provides experimental knobs to test what actually improves output quality.
 """
 
 import os
@@ -45,17 +49,13 @@ except ImportError:
 
 class ZImageTextEncoder:
     """
-    Z-Image Text Encoder with proper thinking token support.
+    Z-Image Text Encoder with experimental knobs for testing.
 
-    Matches diffusers' ZImagePipeline._encode_prompt() behavior:
-    - Uses apply_chat_template with enable_thinking=True
-    - Supports optional system prompts (like Lumina2)
-    - Provides template customization
+    Default behavior matches diffusers exactly (no thinking block).
+    Enable add_think_block=True to experiment with thinking tokens.
 
-    Why this matters:
-    - Z-Image was trained with thinking tokens in the template
-    - ComfyUI's hardcoded template omits these tokens
-    - This causes slightly out-of-distribution embeddings
+    Note: ComfyUI's bundled tokenizer treats <think> as regular text (not a special token).
+    For accurate <think> tokenization, you'd need the actual Qwen3-4B tokenizer.
     """
 
     # System prompts inspired by Lumina2's approach
@@ -143,9 +143,14 @@ class ZImageTextEncoder:
                     "default": "none",
                     "tooltip": "Template from nodes/templates/z_image_*.md"
                 }),
-                "enable_thinking": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Enable thinking tokens (matches diffusers, recommended)"
+                "add_think_block": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "EXPERIMENTAL: Add <think></think> block. False=match diffusers, True=add thinking tokens"
+                }),
+                "thinking_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "EXPERIMENTAL: Custom reasoning to put inside <think> tags. Only used if add_think_block=True."
                 }),
                 "max_sequence_length": ("INT", {
                     "default": DEFAULT_MAX_SEQUENCE_LENGTH,
@@ -166,29 +171,33 @@ class ZImageTextEncoder:
     FUNCTION = "encode"
     CATEGORY = "ZImage/Encoding"
     TITLE = "Z-Image Text Encoder"
-    DESCRIPTION = "Proper Z-Image encoding with thinking tokens (fixes ComfyUI's hardcoded template)"
+    DESCRIPTION = "Z-Image encoding with experimental knobs (default matches diffusers exactly)"
 
-    def _format_prompt_with_thinking(
+    def _format_prompt(
         self,
         text: str,
         system_prompt: str = "",
-        enable_thinking: bool = True
+        add_think_block: bool = False,
+        thinking_content: str = ""
     ) -> str:
         """
-        Format prompt matching diffusers' apply_chat_template behavior.
+        Format prompt for Z-Image encoding.
 
-        With enable_thinking=True (diffusers default):
-        <|im_start|>system
-        {system}<|im_end|>
-        <|im_start|>user
-        {text}<|im_end|>
-        <|im_start|>assistant
-        <think>
+        Args:
+            text: User prompt
+            system_prompt: Optional system instructions
+            add_think_block: Whether to add <think> tags (experimental)
+            thinking_content: Optional reasoning to put inside <think> tags
 
-        </think>
+        Returns:
+            Formatted prompt string
 
-        With enable_thinking=False:
-        Same but with empty <think></think> block
+        Note on add_think_block:
+            False (default): Matches diffusers exactly
+                <|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n
+
+            True: Adds thinking block (experimental)
+                <|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n{content}\n</think>\n\n
         """
         parts = []
 
@@ -199,39 +208,20 @@ class ZImageTextEncoder:
         # User message
         parts.append(f"<|im_start|>user\n{text}<|im_end|>")
 
-        # Assistant with thinking
-        if enable_thinking:
-            # This matches what apply_chat_template(enable_thinking=True) produces
-            parts.append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+        # Assistant message with optional thinking block
+        if add_think_block:
+            if thinking_content.strip():
+                # User provided their own thinking content
+                think_block = f"<think>\n{thinking_content.strip()}\n</think>\n\n"
+            else:
+                # Empty thinking block
+                think_block = "<think>\n\n</think>\n\n"
+            parts.append(f"<|im_start|>assistant\n{think_block}")
         else:
-            # Without thinking, just the assistant marker
+            # No thinking block (matches diffusers with enable_thinking=True)
             parts.append("<|im_start|>assistant\n")
 
         return "\n".join(parts)
-
-    def _format_prompt_comfyui_style(
-        self,
-        text: str,
-        system_prompt: str = "",
-        enable_thinking: bool = True
-    ) -> str:
-        """
-        Alternative: Use ComfyUI's simpler format but add thinking tokens.
-
-        This is closer to what ComfyUI does but with the missing thinking block.
-        """
-        if system_prompt:
-            # With system prompt
-            if enable_thinking:
-                return f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
-            else:
-                return f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
-        else:
-            # Without system prompt (closer to ComfyUI default)
-            if enable_thinking:
-                return f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
-            else:
-                return f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
 
     def encode(
         self,
@@ -240,12 +230,13 @@ class ZImageTextEncoder:
         system_prompt_preset: str = "none",
         custom_system_prompt: str = "",
         template_preset: str = "none",
-        enable_thinking: bool = True,
+        add_think_block: bool = False,
+        thinking_content: str = "",
         max_sequence_length: int = DEFAULT_MAX_SEQUENCE_LENGTH,
         debug_mode: bool = False
     ) -> Tuple[Any, str]:
         """
-        Encode text for Z-Image with proper thinking token support.
+        Encode text for Z-Image.
 
         Args:
             clip: ComfyUI CLIP model (lumina2 type for Z-Image)
@@ -253,7 +244,8 @@ class ZImageTextEncoder:
             system_prompt_preset: Preset system prompt name
             custom_system_prompt: Custom system prompt (overrides preset)
             template_preset: Template from nodes/templates/z_image_*.md
-            enable_thinking: Add thinking tokens (default True, matches diffusers)
+            add_think_block: Add <think></think> block (default False = matches diffusers)
+            thinking_content: Optional reasoning text to put inside <think> tags
             max_sequence_length: Max tokens (default 512, matches diffusers)
             debug_mode: Show encoding details
 
@@ -278,21 +270,24 @@ class ZImageTextEncoder:
         else:
             debug_output.append("No system prompt (matching diffusers default)")
 
-        # Format the prompt with thinking tokens
-        formatted_text = self._format_prompt_comfyui_style(
+        # Format the prompt
+        formatted_text = self._format_prompt(
             text=text,
             system_prompt=system_prompt,
-            enable_thinking=enable_thinking
+            add_think_block=add_think_block,
+            thinking_content=thinking_content
         )
 
         if debug_mode:
-            debug_output.append(f"enable_thinking: {enable_thinking}")
+            debug_output.append(f"add_think_block: {add_think_block}")
+            if add_think_block and thinking_content.strip():
+                debug_output.append(f"thinking_content: {len(thinking_content)} chars (custom)")
+            elif add_think_block:
+                debug_output.append("thinking_content: (empty)")
             debug_output.append(f"max_sequence_length: {max_sequence_length}")
             debug_output.append(f"Formatted prompt length: {len(formatted_text)} chars")
 
         # Tokenize and encode using ComfyUI's CLIP
-        # Note: ComfyUI's tokenizer doesn't respect max_length directly,
-        # so we warn if the prompt is likely too long
         tokens = clip.tokenize(formatted_text)
 
         # Estimate token count and warn if exceeding limit
@@ -302,7 +297,6 @@ class ZImageTextEncoder:
             warning_msg = f"WARNING: Prompt may exceed max_sequence_length ({estimated_tokens} estimated vs {max_sequence_length} limit)"
             debug_output.append(warning_msg)
             logger.warning(f"[ZImageTextEncoder] {warning_msg}")
-            logger.warning("[ZImageTextEncoder] ComfyUI may not truncate properly. Consider shortening your prompt.")
 
         conditioning = clip.encode_from_tokens_scheduled(tokens)
 
@@ -324,10 +318,10 @@ class ZImageTextEncoder:
 
 class ZImageTextEncoderSimple:
     """
-    Simplified Z-Image encoder - just adds the missing thinking tokens.
+    Simplified Z-Image encoder - drop-in replacement for CLIPTextEncode.
 
-    Drop-in replacement for CLIPTextEncode when using Z-Image.
-    No system prompts, no templates - just the fix.
+    Default behavior matches diffusers exactly.
+    Toggle add_think_block to experiment with thinking tokens.
     """
 
     @classmethod
@@ -343,9 +337,9 @@ class ZImageTextEncoderSimple:
                 }),
             },
             "optional": {
-                "enable_thinking": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Add thinking tokens (recommended - matches diffusers)"
+                "add_think_block": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "EXPERIMENTAL: Add <think></think> block. False=match diffusers (recommended)"
                 }),
             }
         }
@@ -354,21 +348,21 @@ class ZImageTextEncoderSimple:
     FUNCTION = "encode"
     CATEGORY = "ZImage/Encoding"
     TITLE = "Z-Image Text Encode (Simple)"
-    DESCRIPTION = "Simple Z-Image encoding with thinking token fix"
+    DESCRIPTION = "Simple Z-Image encoding (default matches diffusers exactly)"
 
     def encode(
         self,
         clip,
         text: str,
-        enable_thinking: bool = True
+        add_think_block: bool = False
     ) -> Tuple[Any]:
-        """Encode with thinking tokens."""
+        """Encode with optional thinking tokens."""
 
-        if enable_thinking:
-            # Add the missing thinking tokens
+        if add_think_block:
+            # Experimental: Add empty thinking block
             formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
         else:
-            # ComfyUI's original format (for comparison)
+            # Default: Match diffusers exactly
             formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
 
         tokens = clip.tokenize(formatted_text)
