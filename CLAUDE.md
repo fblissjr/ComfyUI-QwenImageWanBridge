@@ -392,6 +392,7 @@ ComfyUI bundles Qwen2.5-style tokenizer config without Qwen3 thinking template s
   - Custom system prompt support
   - Template files (`nodes/templates/z_image_*.md`)
   - `enable_thinking` toggle (default: True, recommended)
+  - `thinking_content` - provide your own reasoning inside `<think>` tags (experimental)
   - `max_sequence_length` (default: 512, matches diffusers)
   - Debug output showing formatted prompt
 

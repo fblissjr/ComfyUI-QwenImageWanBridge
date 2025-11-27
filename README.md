@@ -11,19 +11,25 @@ Yes, I know that doesn't include Wan yet, but I think eventually it will. Qwen I
 Custom nodes for :
  - Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things
  - HunyuanVideo 1.5 Text-to-Video - Custom system prompts, experiments with attention, and other random experiments
- - Z-Image - Fixed ComfyUI's missing thinking tokens for proper Qwen3 embedding generation
+ - Z-Image - Experimental text encoding with system prompts and optional think block
 
-### NEW: Z-Image Text Encoder Fix
+### Z-Image Text Encoder
 
-Z-Image uses Qwen3-4B as its text encoder. ComfyUI's built-in support is missing critical `<think>` tokens that diffusers includes via `enable_thinking=True`. Our nodes fix this.
+Z-Image uses Qwen3-4B as its text encoder. After analysis, we found ComfyUI and diffusers produce **identical templates** by default. Our nodes add experimental options for testing.
 
 **Nodes:**
-- `ZImageTextEncoder` - Full-featured with system prompts, templates, debug mode
-- `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode (just adds thinking tokens)
+- `ZImageTextEncoder` - Full-featured with system prompts, templates, experimental think block
+- `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode
 
-**Workflow change:** Replace `CLIPTextEncode` with `ZImageTextEncoderSimple`. That's it.
+**Key finding:** The `enable_thinking` parameter in Qwen3's tokenizer is counterintuitive:
+- `enable_thinking=True` = NO think block (diffusers default)
+- `enable_thinking=False` = ADD think block
 
-**Why it matters:** Qwen3-4B (no suffix) is the instruct model trained with thinking mode. Missing `<think>` tokens = out-of-distribution embeddings = degraded output quality.
+ComfyUI matches diffusers exactly. Our nodes expose `add_think_block` (default False) for experimentation.
+
+**Documentation:**
+- [Z-Image Workflow Guide](nodes/docs/z_image_workflow_guide.md) - Setup and experiments
+- [Z-Image Analysis](nodes/docs/z_image_analysis.md) - ComfyUI vs Diffusers comparison (corrected)
 
 ### HunyuanVideo 1.5 Text-to-Video Support
 

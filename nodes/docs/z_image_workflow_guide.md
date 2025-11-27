@@ -1,6 +1,6 @@
 # Z-Image Workflow Guide
 
-Complete guide for text-to-image generation using Z-Image Turbo in ComfyUI with our thinking token fix.
+Complete guide for text-to-image generation using Z-Image Turbo in ComfyUI.
 
 ---
 
@@ -14,7 +14,10 @@ Z-Image is Alibaba's 6B parameter text-to-image model using:
 
 ### Why Our Nodes?
 
-ComfyUI's built-in Z-Image support is missing `<think>` tokens that diffusers includes. Our nodes fix this for better embedding quality.
+After analysis, we found ComfyUI and diffusers produce **identical templates** by default. Our nodes provide:
+- System prompt presets for experimentation
+- Optional `add_think_block` parameter for testing
+- Debug mode for troubleshooting
 
 ---
 
@@ -57,12 +60,12 @@ The official workflow uses:
 CLIPLoader (lumina2) -> CLIPTextEncode -> KSampler
 ```
 
-Our fix:
+Our nodes:
 ```
 CLIPLoader (lumina2) -> ZImageTextEncoderSimple -> KSampler
 ```
 
-That's it. Just swap the text encoder node.
+Default behavior matches diffusers exactly. Use `add_think_block=True` to experiment.
 
 ---
 
@@ -78,8 +81,8 @@ That's it. Just swap the text encoder node.
              │ CLIP
              v
 ┌──────────────────────────┐
-│ ZImageTextEncoderSimple  │ Encode with thinking tokens
-│ (ZImage/Encoding)        │ enable_thinking: True
+│ ZImageTextEncoderSimple  │ Encode prompt
+│ (ZImage/Encoding)        │ add_think_block: False (default)
 └────────────┬─────────────┘
              │ CONDITIONING
              v
@@ -119,7 +122,7 @@ That's it. Just swap the text encoder node.
 
 **Settings:**
 - `text`: Your prompt
-- `enable_thinking`: `True` (recommended)
+- `add_think_block`: `False` (default, matches diffusers)
 
 **Example prompt:**
 ```
@@ -136,7 +139,7 @@ For negative conditioning, add another ZImageTextEncoderSimple:
 
 **Settings:**
 - `text`: What to avoid
-- `enable_thinking`: `True`
+- `add_think_block`: `False`
 
 **Example:**
 ```
@@ -222,7 +225,7 @@ CLIPLoader (lumina2)
 ZImageTextEncoder
   - text: "your prompt"
   - system_prompt_preset: "photorealistic"
-  - enable_thinking: True
+  - add_think_block: False (or True for experiments)
   - debug_mode: True
         |
         | CONDITIONING
@@ -346,7 +349,7 @@ ComfyUI/models/
 ### Poor image quality
 
 **Solutions:**
-1. Ensure `enable_thinking=True` on our encoder
+1. Use our encoder (default settings match diffusers)
 2. Verify you're using our node, not CLIPTextEncode
 3. Check sampling settings (steps=9, cfg=1 for turbo)
 
@@ -440,7 +443,7 @@ architectural visualization, photorealistic rendering
 
 1. Load CLIP with `lumina2` type
 2. Use `ZImageTextEncoderSimple` instead of `CLIPTextEncode`
-3. Keep `enable_thinking=True`
+3. Use default `add_think_block=False` (matches diffusers)
 4. Sample with `steps=9`, `cfg=1`, `euler` sampler
 5. Decode with Z-Image VAE
 
@@ -449,7 +452,7 @@ architectural visualization, photorealistic rendering
 | Component | Setting | Value |
 |-----------|---------|-------|
 | CLIPLoader | type | lumina2 |
-| Encoder | enable_thinking | True |
+| Encoder | add_think_block | False |
 | KSampler | steps | 9 |
 | KSampler | cfg | 1 |
 | KSampler | sampler | euler |
@@ -463,5 +466,133 @@ architectural visualization, photorealistic rendering
 
 ---
 
+## Experiments to Try
+
+These experiments help determine if our fixes actually improve output quality.
+
+### Experiment 1: Think Block A/B Test
+
+**Goal:** Does adding `<think>` block improve or change quality?
+
+**Note:** After analysis, we found ComfyUI and diffusers produce identical templates (no think block). This experiment tests if ADDING a think block helps.
+
+**Setup:**
+1. Same prompt, same seed, same settings
+2. Run A: `ZImageTextEncoderSimple` with `add_think_block=False` (matches diffusers)
+3. Run B: `ZImageTextEncoderSimple` with `add_think_block=True` (experimental)
+4. Compare outputs
+
+**What to look for:**
+- Overall coherence and detail
+- Prompt adherence
+- Any quality differences
+
+### Experiment 2: Custom Thinking Content
+
+**Goal:** Does providing reasoning inside `<think>` tags affect output?
+
+**Setup:**
+1. Use `ZImageTextEncoder` with `add_think_block=True`
+2. Run A: Leave `thinking_content` empty
+3. Run B: Provide structured reasoning:
+
+```
+thinking_content: "Key elements: [list main subjects]
+Composition: [describe layout, focal points]
+Lighting: [specify lighting style]
+Style: [artistic direction]"
+```
+
+4. Compare outputs
+
+**Example thinking content patterns:**
+
+**Analytical:**
+```
+Subject is a mountain landscape at sunset.
+Primary colors: orange, purple, deep blue.
+Focal point: snow-capped peak catching last light.
+Depth: foreground rocks, midground trees, background peaks.
+Mood: serene, majestic, contemplative.
+```
+
+**Technical:**
+```
+Camera: wide angle lens, f/11 for deep DOF.
+Lighting: golden hour, sun 15 degrees above horizon.
+Exposure: HDR blend for highlight/shadow detail.
+Post: warm color grade, slight vignette.
+```
+
+**Compositional:**
+```
+Rule of thirds: horizon on lower third.
+Leading lines: river guides eye to mountain.
+Framing: trees on left create natural frame.
+Balance: large mountain balanced by cloud mass.
+```
+
+### Experiment 3: System Prompts
+
+**Goal:** Do system prompts affect embedding quality?
+
+**Setup:**
+1. Same prompt across all tests
+2. Test each `system_prompt_preset`:
+   - `none` (diffusers default)
+   - `quality`
+   - `photorealistic`
+   - `artistic`
+   - `bilingual`
+
+**Document:**
+- Which preset produces best results for your use case
+- Any noticeable style differences
+
+### Experiment 4: Sequence Length
+
+**Goal:** Does prompt length affect quality?
+
+**Setup:**
+1. Short prompt (~50 chars)
+2. Medium prompt (~200 chars)
+3. Long prompt (~500 chars)
+4. Very long prompt (~1000 chars, near limit)
+
+**Document:**
+- Quality vs length tradeoff
+- Point of diminishing returns
+
+### Experiment 5: Negative Prompts
+
+**Goal:** How much do negative prompts help with turbo model?
+
+**Setup:**
+1. Run A: No negative prompt
+2. Run B: Simple negative: `"blurry, ugly, bad quality"`
+3. Run C: Detailed negative: `"blurry, ugly, bad quality, watermark, text, logo, distorted, artifacts, low resolution, pixelated"`
+
+**Note:** Z-Image Turbo uses CFG=1 (baked in), so negative prompts may have less effect than standard models.
+
+### Recording Results
+
+For each experiment, record:
+- **Prompt used**
+- **Seed** (for reproducibility)
+- **Settings** (steps, cfg, sampler)
+- **Variation** (A/B/C)
+- **Observations** (quality, adherence, artifacts)
+- **Winner** (which variation was best)
+
+### Share Your Findings
+
+If you discover something interesting:
+1. Document your methodology
+2. Include example images if possible
+3. Note your hardware (may affect results)
+4. Share in GitHub issues or discussions
+
+---
+
 **Last Updated:** 2025-11-27
-**Version:** 1.0
+**Version:** 1.1

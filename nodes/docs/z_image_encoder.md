@@ -7,49 +7,59 @@
 
 ## Overview
 
-Custom encoder nodes for Z-Image that fix ComfyUI's incorrect template handling. Z-Image uses Qwen3-4B as its text encoder, and ComfyUI's built-in implementation omits critical tokens that the model was trained with.
+Custom encoder nodes for Z-Image that expose experimental parameters for testing. Z-Image uses Qwen3-4B as its text encoder.
 
-## The Problem: ComfyUI's Missing Thinking Tokens
+**Key Finding:** After analysis, we found ComfyUI and diffusers produce **identical templates** by default. Our nodes match diffusers exactly, with optional experimental parameters.
 
-### What ComfyUI Does (Incorrect)
+## ComfyUI vs Diffusers: What We Found
 
-ComfyUI hardcodes this template in `comfy/text_encoders/z_image.py`:
+### Template Format: IDENTICAL
 
+**ComfyUI** (z_image.py):
 ```python
 self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
 ```
 
-### What Diffusers Does (Correct)
-
-Diffusers uses `apply_chat_template` with thinking mode enabled:
-
+**Diffusers** with `enable_thinking=True` (the default):
 ```python
-prompt_item = self.tokenizer.apply_chat_template(
+tokenizer.apply_chat_template(
     messages,
-    tokenize=False,
     add_generation_prompt=True,
-    enable_thinking=True,  # This is the key difference
+    enable_thinking=True  # Does NOT add think block!
 )
+# Result: "<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 ```
 
-This produces:
+**Both produce the same template** - no think block.
 
+### The `enable_thinking` Confusion
+
+The Qwen3 parameter name is counterintuitive:
+
+| Qwen3 Parameter | Template Result | Explanation |
+|-----------------|-----------------|-------------|
+| `enable_thinking=True` | NO `<think>` block | Allows model to generate thinking (for LLM generation) |
+| `enable_thinking=False` | ADD `<think></think>` | Pre-fills empty block to skip thinking |
+
+For text **encoding** (not generation), diffusers uses `enable_thinking=True`, which produces NO think block. ComfyUI's hardcoded template matches this exactly.
+
+### The Real Difference: Embedding Extraction
+
+| Aspect | Diffusers | ComfyUI |
+|--------|-----------|---------|
+| Template | No think block | No think block |
+| Token IDs | Identical | Identical |
+| Embedding extraction | Filters by attention mask (variable length) | Returns full padded sequence + mask |
+
+**Diffusers** filters embeddings to valid tokens only:
+```python
+for i in range(len(prompt_embeds)):
+    embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
 ```
-<|im_start|>user
-{prompt}<|im_end|>
-<|im_start|>assistant
-<think>
 
-</think>
+**ComfyUI** returns full padded sequence (512 tokens) with attention mask in `extra` dict. The Z-Image model uses this mask during context refinement, but main transformer layers receive `mask=None`.
 
-```
-
-### Why This Matters
-
-- Qwen3-4B (no suffix) is the **instruct model**, not the base model
-- The instruct model was trained with thinking mode support
-- Missing `<think>\n\n</think>\n\n` tokens produce **out-of-distribution embeddings**
-- This can cause subtle quality degradation in generated images
+This difference **cannot be fixed** without modifying ComfyUI core.
 
 ## Nodes
 
@@ -59,16 +69,17 @@ Full encoder with system prompts, templates, and debug mode.
 
 #### Inputs
 
-| Input | Type | Required | Description |
-|-------|------|----------|-------------|
-| clip | CLIP | Yes | Z-Image CLIP model (lumina2 type) |
-| text | STRING | Yes | Your prompt |
-| system_prompt_preset | ENUM | No | Preset system prompts: none, quality, photorealistic, artistic, bilingual |
-| custom_system_prompt | STRING | No | Custom system prompt (overrides preset) |
-| template_preset | ENUM | No | Template from `nodes/templates/z_image_*.md` |
-| enable_thinking | BOOLEAN | No | Add thinking tokens (default: True, recommended) |
-| max_sequence_length | INT | No | Maximum tokens (default: 512, matches diffusers) |
-| debug_mode | BOOLEAN | No | Show encoding details |
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| clip | CLIP | Yes | - | Z-Image CLIP model (lumina2 type) |
+| text | STRING | Yes | "" | Your prompt |
+| system_prompt_preset | ENUM | No | "none" | Preset system prompts: none, quality, photorealistic, artistic, bilingual |
+| custom_system_prompt | STRING | No | "" | Custom system prompt (overrides preset) |
+| template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image_*.md` |
+| add_think_block | BOOLEAN | No | **False** | EXPERIMENTAL: Add `<think></think>` block |
+| thinking_content | STRING | No | "" | EXPERIMENTAL: Custom reasoning inside think tags |
+| max_sequence_length | INT | No | 512 | Maximum tokens (matches diffusers) |
+| debug_mode | BOOLEAN | No | False | Show encoding details |
 
 #### Outputs
 
@@ -79,15 +90,15 @@ Full encoder with system prompts, templates, and debug mode.
 
 ### ZImageTextEncoderSimple (Drop-in Replacement)
 
-Minimal encoder - just adds the missing thinking tokens. Use as a drop-in replacement for CLIPTextEncode when using Z-Image.
+Minimal encoder - drop-in replacement for CLIPTextEncode. Default behavior matches diffusers exactly.
 
 #### Inputs
 
-| Input | Type | Required | Description |
-|-------|------|----------|-------------|
-| clip | CLIP | Yes | Z-Image CLIP model |
-| text | STRING | Yes | Your prompt |
-| enable_thinking | BOOLEAN | No | Add thinking tokens (default: True) |
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| clip | CLIP | Yes | - | Z-Image CLIP model |
+| text | STRING | Yes | "" | Your prompt |
+| add_think_block | BOOLEAN | No | **False** | EXPERIMENTAL: Add `<think></think>` block |
 
 #### Outputs
 
@@ -99,13 +110,13 @@ Minimal encoder - just adds the missing thinking tokens. Use as a drop-in replac
 
 As of the 2507 release, there are three Qwen3 model types:
 
-| Variant | Thinking Mode | `enable_thinking` Support |
-|---------|---------------|---------------------------|
-| **Qwen3-4B** (2504 hybrid) | Switchable | Yes - use `True` for Z-Image |
-| Qwen3-Instruct-2507 | Never | No - parameter not supported |
-| Qwen3-Thinking-2507 | Always | N/A - always thinks |
+| Variant | Thinking Mode | Notes |
+|---------|---------------|-------|
+| **Qwen3-4B** (2504 hybrid) | Switchable | Z-Image uses this |
+| Qwen3-Instruct-2507 | Never | Parameter not supported |
+| Qwen3-Thinking-2507 | Always | Always thinks |
 
-**Z-Image uses the 2504 hybrid model** (Qwen3-4B without suffix), which supports thinking mode switching. Our nodes default to `enable_thinking=True` to match diffusers.
+**Z-Image uses the 2504 hybrid model** (Qwen3-4B without suffix).
 
 ## Known Gaps vs Diffusers
 
@@ -117,23 +128,26 @@ for i in range(len(prompt_embeds)):
     embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
 ```
 
-**ComfyUI** returns the full padded sequence including padding embeddings.
+**ComfyUI** returns the full padded sequence. The attention mask is passed to the model and used during context refinement, but the sequence length differs.
 
-**Why we can't fix this**: ComfyUI's CLIP architecture expects fixed-shape tensors through `clip.encode_from_tokens_scheduled()`. Changing this would require modifying ComfyUI core, not just our nodes.
+**Why we can't fix this**: ComfyUI's CLIP architecture expects fixed-shape tensors. Changing this would require modifying ComfyUI core.
 
-**Impact**: Semantic difference in what the DiT receives. May affect quality, but the thinking token fix is likely more important.
+**Impact**: RoPE position IDs for image patches differ (they start after caption length). May affect quality subtly.
 
 ### Gap 2: Sequence Length (Fixed)
 
 **Diffusers** uses `max_sequence_length=512` with truncation.
 
-**ComfyUI** uses `max_length=99999999` (effectively unlimited).
+**ComfyUI** uses effectively unlimited length.
 
-**Our fix**: Added `max_sequence_length` parameter (default: 512) with truncation warning.
+**Our fix**: Added `max_sequence_length` parameter (default: 512) with warning when exceeded.
 
-### Gap 3: Bundled Tokenizer Template (Cannot Fix)
+### Gap 3: Tokenizer Special Tokens (Minor)
 
-ComfyUI bundles a Qwen2.5-style tokenizer config without Qwen3 thinking template support. This is why we manually construct the template with thinking tokens rather than using `apply_chat_template`.
+ComfyUI bundles a Qwen2.5-VL tokenizer where token 151667 = `<|meta|>`.
+Qwen3-4B tokenizer has token 151667 = `<think>`.
+
+When `add_think_block=True`, ComfyUI tokenizes `<think>` as subwords `['<th', 'ink', '>']` instead of a single special token.
 
 ## Template Files
 
@@ -148,12 +162,12 @@ Templates stored in `nodes/templates/z_image_*.md`:
 
 ## Recommended Workflow
 
-### Basic (with thinking fix)
+### Basic (matches diffusers)
 
 ```
 CLIPLoader (lumina2) --> ZImageTextEncoderSimple --> KSampler
                               |
-                         enable_thinking=True
+                         add_think_block=False (default)
 ```
 
 ### With System Prompts
@@ -162,16 +176,18 @@ CLIPLoader (lumina2) --> ZImageTextEncoderSimple --> KSampler
 CLIPLoader (lumina2) --> ZImageTextEncoder --> KSampler
                               |
                          system_prompt_preset="photorealistic"
-                         enable_thinking=True
+                         add_think_block=False
 ```
 
-### Comparison Testing
+### Experimental: With Think Block
 
-To verify the thinking token fix helps:
+```
+CLIPLoader (lumina2) --> ZImageTextEncoderSimple --> KSampler
+                              |
+                         add_think_block=True
+```
 
-1. Run with `enable_thinking=True` (our fix)
-2. Run with `enable_thinking=False` (ComfyUI default behavior)
-3. Same prompt, same seed, compare outputs
+Test if adding think block helps or hurts quality.
 
 ## Technical Details
 
@@ -186,17 +202,16 @@ To verify the thinking token fix helps:
 | Embedding Layer Used | `hidden_states[-2]` (second-to-last) |
 | dtype | bfloat16 |
 
-### Special Token IDs
+### Template Format
 
-| Token | ID | Purpose |
-|-------|-----|---------|
-| `<\|endoftext\|>` | 151643 | End of document / padding |
-| `<\|im_end\|>` | 151645 | End of turn (eos) |
-| `</think>` | 151668 | Thinking content delimiter |
+**Default (add_think_block=False, matches diffusers):**
+```
+<|im_start|>user
+{prompt}<|im_end|>
+<|im_start|>assistant
+```
 
-### Template Format (What We Generate)
-
-With `enable_thinking=True`:
+**Experimental (add_think_block=True):**
 ```
 <|im_start|>user
 {prompt}<|im_end|>
@@ -207,25 +222,6 @@ With `enable_thinking=True`:
 
 ```
 
-With `enable_thinking=False` (matches ComfyUI default):
-```
-<|im_start|>user
-{prompt}<|im_end|>
-<|im_start|>assistant
-```
-
-## Sampling Recommendations (from Qwen3 Official Docs)
-
-While these are for generation (not embedding), they may inform future experiments:
-
-| Setting | Thinking Mode | Non-Thinking Mode |
-|---------|---------------|-------------------|
-| Temperature | 0.6 | 0.7 |
-| top_p | 0.95 | 0.8 |
-| top_k | 20 | 20 |
-
-**Important**: Qwen3 docs warn "DO NOT use greedy decoding" - though this applies to generation, not embedding extraction.
-
 ## File Locations
 
 - **Our encoder**: `nodes/z_image_encoder.py`
@@ -235,11 +231,12 @@ While these are for generation (not embedding), they may inform future experimen
 
 ## Related Documentation
 
+- [Z-Image Nodes Reference](z_image_nodes.md) - Detailed node documentation
+- [Z-Image Workflow Guide](z_image_workflow_guide.md) - Step-by-step setup guide
+- [Z-Image Analysis](z_image_analysis.md) - Deep dive: ComfyUI vs Diffusers comparison
 - [Z-Image Turbo Workflow Analysis](z_image_turbo_workflow_analysis.md) - Official workflow breakdown
-- [Qwen3 Official Repo](https://github.com/QwenLM/Qwen3) - Model documentation
 
-## References
+---
 
-- [HuggingFace Qwen3-4B](https://huggingface.co/Qwen/Qwen3-4B) - Model card
-- [Qwen3 Naming Convention](https://huggingface.co/Qwen/Qwen3-4B/discussions) - No suffix = instruct model
-- [Unsloth Qwen3 Docs](https://docs.unsloth.ai/basics/qwen3-how-to-run-and-fine-tune) - Thinking mode details
+**Last Updated:** 2025-11-27
+**Version:** 2.0 (corrected analysis)
