@@ -29,12 +29,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `nodes/docs/resolution_tradeoffs.md` - Comprehensive resolution and scaling guide
 - `nodes/docs/wan21_vae_upscale2x_guide.md` - Wan2.1-VAE-upscale2x integration and optimization guide
 - `nodes/docs/qwen_wan_bridge_guide.md` - Qwen-to-Wan Video bridge for image-to-video workflows
+- `nodes/docs/z_image_encoder.md` - Z-Image encoder documentation (thinking token fix)
 
 ## Project Overview
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.8.0):**
+**Key Features (v2.9.0):**
+- **Z-Image encoder fix** - Adds missing thinking tokens for proper Qwen3 embeddings - [docs](nodes/docs/z_image_encoder.md)
 - **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (23 video templates)
 - **File-based template system** - Templates in `nodes/templates/*.md` files (single source of truth)
 - **Template Builder → Encoder** - Single `template_output` connection handles everything
@@ -327,6 +329,117 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 - `nodes/docs/hunyuanvideo_15_resolution_frame_guide.md` - Technical specs
 - `nodes/docs/hunyuanvideo_prompting_experiments.md` - Prompting experiments guide
 - `example_workflows/hunyuanvideo_15_t2v_example.json` - Working T2V workflow
+
+## Z-Image Support (v2.9.0)
+
+### Overview
+Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes fix critical issues in ComfyUI's implementation.
+
+### ComfyUI vs Diffusers Gap Analysis
+
+#### Gap 1: Missing Thinking Tokens (FIXED)
+ComfyUI hardcodes template without thinking tokens:
+```
+<|im_start|>user
+{prompt}<|im_end|>
+<|im_start|>assistant
+```
+
+Diffusers uses `apply_chat_template(enable_thinking=True)`:
+```
+<|im_start|>user
+{prompt}<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+
+```
+
+**Our fix**: ZImageTextEncoder adds thinking tokens to match diffusers.
+
+#### Gap 2: Sequence Length (FIXED)
+- ComfyUI: `max_length=99999999` (unlimited)
+- Diffusers: `max_length=512` with truncation
+
+**Our fix**: `max_sequence_length` parameter (default 512) with truncation warning.
+
+#### Gap 3: Embedding Extraction (CANNOT FIX)
+- Diffusers: Returns variable-length embeddings (filters out padding via attention mask)
+- ComfyUI: Returns full padded tensor including padding embeddings
+
+This is a ComfyUI architecture limitation - would require core changes to fix.
+
+#### Gap 4: Bundled Tokenizer (CANNOT FIX)
+ComfyUI bundles Qwen2.5-style tokenizer config without Qwen3 thinking template support.
+
+### Qwen3 Model Variants
+
+| Variant | Thinking Mode | Notes |
+|---------|---------------|-------|
+| **Qwen3-4B** (no suffix) | Hybrid (switchable) | Z-Image uses this - it's the INSTRUCT model |
+| Qwen3-4B-Base | None | Base model (NOT what Z-Image uses) |
+| Qwen3-Instruct-2507 | Never | Newer variant, no thinking |
+| Qwen3-Thinking-2507 | Always | Newer variant, always thinks |
+
+**Important**: Qwen3 naming is opposite of convention - no suffix = instruct, not base.
+
+### Nodes
+
+#### ZImage/Encoding
+- **ZImageTextEncoder**: Full-featured encoder with thinking tokens
+  - System prompt presets (none, quality, photorealistic, artistic, bilingual)
+  - Custom system prompt support
+  - Template files (`nodes/templates/z_image_*.md`)
+  - `enable_thinking` toggle (default: True, recommended)
+  - `max_sequence_length` (default: 512, matches diffusers)
+  - Debug output showing formatted prompt
+
+- **ZImageTextEncoderSimple**: Drop-in replacement for CLIPTextEncode
+  - Just adds the missing thinking tokens
+  - No system prompts or templates
+  - Minimal overhead
+
+### Workflow
+
+**With our fix (recommended):**
+```
+CLIPLoader (qwen_3_4b, lumina2) → ZImageTextEncoderSimple → KSampler
+                                  (enable_thinking=True)
+```
+
+**With templates:**
+```
+CLIPLoader → ZImageTextEncoder → KSampler
+             (system_prompt_preset: photorealistic)
+```
+
+### Key Differences from Qwen-Image-Edit
+
+| Aspect | Z-Image | Qwen-Image-Edit |
+|--------|---------|-----------------|
+| Text Encoder | Qwen3-4B (instruct, 2560 dim) | Qwen2.5-VL 7B (instruct, 3584 dim) |
+| Vision | None (text-only) | Full vision encoder |
+| Steps | 8-9 (turbo distilled) | 20-50 |
+| CFG | 0 (baked in via DMD) | 5-8 |
+| Template | Chat + thinking tokens | DiffSynth chat template |
+
+### Technical Details
+- **Decoupled DMD distillation**: CFG is "baked" into the model during training
+- **Turbo variant**: 8 NFEs (Number of Function Evaluations)
+- **VAE**: Same 16-channel latent space as other Wan models
+- **Architecture**: S3-DiT (Single-Stream DiT) with 6B parameters
+- **Qwen3-4B specs**: 2560 hidden dim, 36 layers, `hidden_states[-2]` for embeddings
+
+### Templates
+- `z_image_default.md` - No system prompt
+- `z_image_photorealistic.md` - Natural lighting and textures
+- `z_image_bilingual_text.md` - English/Chinese text rendering
+- `z_image_artistic.md` - Creative compositions
+
+### Documentation
+- [z_image_encoder.md](nodes/docs/z_image_encoder.md) - Full encoder documentation
+- [z_image_turbo_workflow_analysis.md](nodes/docs/z_image_turbo_workflow_analysis.md) - Official workflow analysis
 
 ## Technical Details
 

@@ -274,6 +274,24 @@ except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load HunyuanVideo prompt expander: {e}")
 
 # ============================================================================
+# Z-IMAGE NODES - Proper thinking token support
+# ============================================================================
+
+try:
+    from .nodes.z_image_encoder import ZImageTextEncoder, ZImageTextEncoderSimple
+
+    NODE_CLASS_MAPPINGS["ZImageTextEncoder"] = ZImageTextEncoder
+    NODE_DISPLAY_NAME_MAPPINGS["ZImageTextEncoder"] = "Z-Image Text Encoder"
+
+    NODE_CLASS_MAPPINGS["ZImageTextEncoderSimple"] = ZImageTextEncoderSimple
+    NODE_DISPLAY_NAME_MAPPINGS["ZImageTextEncoderSimple"] = "Z-Image Text Encode (Simple)"
+
+    print("[QwenImageWanBridge] Loaded Z-Image encoder nodes (2 nodes)")
+    print("[QwenImageWanBridge] FIX: Adds missing thinking tokens that ComfyUI omits")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Z-Image encoder nodes: {e}")
+
+# ============================================================================
 # EXPERIMENTAL ANALYSIS NODES
 # ============================================================================
 

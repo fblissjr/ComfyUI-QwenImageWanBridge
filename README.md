@@ -11,9 +11,21 @@ Yes, I know that doesn't include Wan yet, but I think eventually it will. Qwen I
 Custom nodes for :
  - Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things
  - HunyuanVideo 1.5 Text-to-Video - Custom system prompts, experiments with attention, and other random experiments
- - Z-Image - uncertain yet, but it uses Qwen3 as
+ - Z-Image - Fixed ComfyUI's missing thinking tokens for proper Qwen3 embedding generation
 
-### NEW: HunyuanVideo 1.5 Text-to-Video Support
+### NEW: Z-Image Text Encoder Fix
+
+Z-Image uses Qwen3-4B as its text encoder. ComfyUI's built-in support is missing critical `<think>` tokens that diffusers includes via `enable_thinking=True`. Our nodes fix this.
+
+**Nodes:**
+- `ZImageTextEncoder` - Full-featured with system prompts, templates, debug mode
+- `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode (just adds thinking tokens)
+
+**Workflow change:** Replace `CLIPTextEncode` with `ZImageTextEncoderSimple`. That's it.
+
+**Why it matters:** Qwen3-4B (no suffix) is the instruct model trained with thinking mode. Missing `<think>` tokens = out-of-distribution embeddings = degraded output quality.
+
+### HunyuanVideo 1.5 Text-to-Video Support
 
 Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampler/VAE.
 
