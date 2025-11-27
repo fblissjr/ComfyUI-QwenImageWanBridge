@@ -376,13 +376,15 @@ except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Template Influence Analyzer: {e}")
 
 # ============================================================================
-# AUTO DEBUG TRACING - Apply patches automatically
+# DEBUG TRACING - Opt-in via environment variable
 # ============================================================================
 
-try:
-    from .nodes import debug_patch
-    debug_patch.apply_debug_patches()
-    print("[QwenImageWanBridge] ✅ Debug patches applied (silent mode by default)")
-    print("[QwenImageWanBridge] Use QwenDebugController node or set QWEN_DEBUG_VERBOSE=true for tracing")
-except Exception as e:
-    print(f"[QwenImageWanBridge] ❌ Debug patches failed: {e}")
+import os
+if os.environ.get('QWEN_ENABLE_DEBUG_PATCHES', '').lower() in ('true', '1', 'yes'):
+    try:
+        from .nodes import debug_patch
+        debug_patch.apply_debug_patches()
+        print("[QwenImageWanBridge] Debug patches applied (requested via QWEN_ENABLE_DEBUG_PATCHES)")
+        print("[QwenImageWanBridge] Set QWEN_DEBUG_VERBOSE=true for verbose tracing output")
+    except Exception as e:
+        print(f"[QwenImageWanBridge] Debug patches failed: {e}")

@@ -162,6 +162,22 @@ QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
 - Use `additional_instructions` to layer modifications on any template
 - Use `custom_system_prompt` for full manual control
 
+## Debugging
+
+Debug patches are **disabled by default**. To enable tracing for troubleshooting reference latent flow:
+
+```bash
+# Enable debug patches (still silent by default)
+export QWEN_ENABLE_DEBUG_PATCHES=true
+
+# Enable verbose output (logs tensor shapes, values, timing)
+export QWEN_DEBUG_VERBOSE=true
+```
+
+Or use the `QwenDebugController` node for runtime control.
+
+**Note:** Verbose mode adds overhead (GPU-CPU sync for tensor stats). Only enable when actively debugging.
+
 ## License
 
 MIT - See LICENSE file for details.

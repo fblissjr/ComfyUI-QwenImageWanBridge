@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.8.2 - Debug Patches Now Opt-In
+
+### Fixed
+
+**Debug patches no longer applied by default** ([#11](https://github.com/fredbliss/ComfyUI-QwenImageWanBridge/issues/11))
+- Removed automatic monkey-patching of `QwenImageTransformer2DModel._forward`
+- Debug patches are now opt-in via `QWEN_ENABLE_DEBUG_PATCHES=true` environment variable
+- Eliminates wrapper overhead on forward passes for all users
+- Verbose tracing still available via `QWEN_DEBUG_VERBOSE=true` when patches enabled
+
+---
+
 ## v2.8.1 - HunyuanVideo Template Connection Fix
 
 ### Changed
