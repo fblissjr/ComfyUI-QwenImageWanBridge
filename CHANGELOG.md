@@ -1,5 +1,39 @@
 # Changelog
 
+## v2.9.0 - Z-Image Text Encoder Fix
+
+### Added
+
+**Z-Image Text Encoder Nodes** - Fix ComfyUI's missing thinking tokens
+- `ZImageTextEncoder` - Full-featured encoder with system prompts, templates, debug mode
+- `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode
+
+**Why these nodes exist:**
+- ComfyUI hardcodes: `<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n`
+- Diffusers uses `apply_chat_template(enable_thinking=True)` which adds `<think>\n\n</think>\n\n`
+- Missing thinking tokens = out-of-distribution embeddings = degraded output
+
+**Features:**
+- `enable_thinking` parameter (default: True, matches diffusers)
+- `max_sequence_length` parameter (default: 512, matches diffusers)
+- System prompt presets (none, quality, photorealistic, artistic, bilingual)
+- Template files in `nodes/templates/z_image_*.md`
+- Debug mode showing formatted prompt and sequence length
+
+**Workflow change:** Replace `CLIPTextEncode` with `ZImageTextEncoderSimple`. Everything else stays the same.
+
+**Key insight:** Qwen3-4B (no suffix) is the INSTRUCT model, not base. Naming is opposite of convention.
+
+### Known Gaps vs Diffusers (Cannot Fix)
+- **Embedding extraction**: Diffusers filters to valid tokens only; ComfyUI returns full padded sequence
+- **Bundled tokenizer**: ComfyUI bundles Qwen2.5 tokenizer config without Qwen3 thinking template
+
+### Documentation
+- `nodes/docs/z_image_encoder.md` - Full encoder documentation
+- `nodes/docs/z_image_turbo_workflow_analysis.md` - Official workflow analysis
+
+---
+
 ## v2.8.3 - C2C Vision Bridge Archived
 
 ### Removed
