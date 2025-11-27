@@ -2,6 +2,19 @@
 
 Custom nodes for Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things to come.
 
+### NEW: HunyuanVideo 1.5 Text-to-Video Support
+
+Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampler/VAE.
+
+**Nodes:**
+- `HunyuanVideoCLIPLoader` - Load Qwen2.5-VL (byT5 optional for multilingual)
+- `HunyuanVideoTextEncoder` - T2V with dual output (positive, negative)
+  - 39 built-in video templates via `template_preset` dropdown
+  - `additional_instructions` to layer modifications on templates
+  - `custom_system_prompt` for full manual control
+
+**Workflow:** `HunyuanVideoCLIPLoader` -> `HunyuanVideoTextEncoder` -> `KSampler` (or `SamplerCustomAdvanced`) -> `VAEDecode`
+
 ## BREAKING CHANGE (v2.7.0+)
 
 **Existing workflows will break.** You must:
@@ -9,10 +22,6 @@ Custom nodes for Qwen-Image-Edit with multi-image support, more flexibility arou
 2. Connect: Template Builder `template_output` → Encoder `template_output` (single connection only)
 
 Old multi-connection system (mode + system_prompt) no longer works as it was getting convoluted and confusing. One connection from template builder now handles everything (prompt, mode, system_prompt).
-
-**Updated Workflows Available**
-1. [Multi image edit workflow](example_workflows/qwen_multi_image_batch_node_edit_2509.json)
-2. [Single image edit workflow](example_workflows/qwen_edit_2509_single_image_edit.json)
 
 ---
 
@@ -30,13 +39,10 @@ Old multi-connection system (mode + system_prompt) no longer works as it was get
 
 **Documentation:**
 - [CHANGELOG.md](CHANGELOG.md) - Full changelog history
-- [nodes/docs/](nodes/docs/) - Detailed node documentation
-- [nodes/docs/resolution_tradeoffs.md](nodes/docs/resolution_tradeoffs.md) - Resolution and scaling guide
-- [nodes/docs/QwenImageBatch.md](nodes/docs/QwenImageBatch.md) - Batch node documentation
 
 ## Features
 
-### Core Capabilities
+### Core Capabilities (Qwen-Image-Edit)
 - **Qwen-Image-Edit-2509**: Multi-image editing (1-3 optimal, up to 10 max because I had to pick something)
 - **QwenImageBatch**: Smart batching with auto-detection, aspect ratio preservation, scaling, batching strategy
 - **Resolution Control & Power User Mode**: Per-image resolution control
@@ -49,25 +55,18 @@ Old multi-connection system (mode + system_prompt) no longer works as it was get
 - Mask-Based Inpainting: Selective editing with diffusers blending, including Eligen entity control
 - All wrapper nodes, probably more stuff I'm omitting
 
-### v2.7.0 Highlights
+### Recent Highlights
 
-**File-Based Template System** - Single source of truth
-- 9 templates in `nodes/templates/*.md` files (was 22 hardcoded)
-- YAML frontmatter for metadata (mode, vision, experimental flags)
-- Easy to add/edit without code changes
-- JavaScript UI auto-fills `custom_system` field for editing
+**HunyuanVideo 1.5 (v2.8.0)**
+- 39 video templates in `nodes/templates/hunyuan_video_*.md`
+- `HunyuanVideoTextEncoder` with template dropdown + additional instructions
+- Dual output (positive/negative) for direct KSampler connection
 
-**Template Builder → Encoder Connection**
-- `mode` is now STRING input (accepts connections or manual typing)
-- **REQUIRED**: Connect BOTH `mode` and `system_prompt` to encoder
-- Missing either = broken vision token formatting
-
-**QwenImageBatch** - No more KJNodes dependency ([docs](nodes/docs/QwenImageBatch.md))
+**QwenImageBatch** - 
 - Auto-detects up to 10 images (no inputcount parameter)
 - Skips empty inputs (no black images)
 - `max_dimensions` strategy (minimal distortion) or `first_image` (hero-driven)
 - Prevents double-scaling with metadata propagation
-- See [resolution_tradeoffs.md](nodes/docs/resolution_tradeoffs.md) for detailed scaling guide
 
 ### Nodes
 
@@ -124,8 +123,8 @@ File-based system prompt templates (9 templates).
 - **QwenMaskProcessor**: Mask preprocessing with blur, expand, feather controls
 - **QwenInpaintSampler**: Diffusers-pattern inpainting with strength control
 
-### Experimental Nodes (Available but Low Priority)
-- **QwenSmartCrop**: Automated face isolation with VLM detection (via Qwen3-VL) - [docs](nodes/docs/QwenSmartCrop.md)
+### Experimental Nodes (Available but likely not working or deprecated)
+- **QwenSmartCrop**: Automated face
 - **QwenSpatialTokenGenerator**: Visual editor for spatial tokens that don't seem to do much of anything right now
 - **QwenEliGenEntityControl**: Entity-level mask control
 - **QwenEliGenMaskPainter**: Simple mask creation
@@ -152,109 +151,32 @@ LoadImage (×N) → Image Batch → QwenVLTextEncoder → KSampler
 QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
 ```
 
-Use prompts like: "Combine the person from Picture 1 with the background from Picture 2"
+### Template System (Qwen-Image-Edit)
+- Use `QwenTemplateBuilder` to select from 9 image editing templates
+- Connect `template_output` to encoder's `template_input`
+- Templates in `nodes/templates/*.md` with YAML frontmatter
 
-### Face Swap (Experimental)
+### Template System (HunyuanVideo)
+- Use `template_preset` dropdown directly on `HunyuanVideoTextEncoder`
+- 39 video templates available (cinematic, animation, documentary, etc.)
+- Use `additional_instructions` to layer modifications on any template
+- Use `custom_system_prompt` for full manual control
+
+## Debugging
+
+Debug patches are **disabled by default**. To enable tracing for troubleshooting reference latent flow:
+
+```bash
+# Enable debug patches (still silent by default)
+export QWEN_ENABLE_DEBUG_PATCHES=true
+
+# Enable verbose output (logs tensor shapes, values, timing)
+export QWEN_DEBUG_VERBOSE=true
 ```
-LoadImage (portrait) → QwenSmartCrop (auto_fallback, face_headshot) → tight face crop
-LoadImage (scene) ────────────────────────────────────┬────────────→ QwenImageBatch
-                                                                          ↓
-                                                               QwenVLTextEncoder (multi_image_edit)
-                                                               "Replace face... while keeping pose..."
-                                                                          ↓
-                                                               QwenVLEmptyLatent → KSampler
-```
 
-See [Prompt Cookbook](nodes/docs/prompt_cookbook.md) for tested face swap prompts.
+Or use the `QwenDebugController` node for runtime control.
 
-
-## Example Workflows
-
-Located in `example_workflows/`
-
-## Key Settings
-
-### Multi-Image Requirements
-- Connect multiple images to **Image Batch** node (from KJNodes pack)
-- Reference images with "Picture 1", "Picture 2" in prompts
-- Images should ideally have similar dimensions for best results
-
-### Image Ordering
-Images are numbered based on connection order to Image Batch:
-- `image_1` input → "Picture 1" in prompts
-- `image_2` input → "Picture 2" in prompts
-- `image_3` input → "Picture 3" in prompts
-
-Example: "Take the old man from Picture 1 and place him in Picture 2"
-
-See [MULTI_IMAGE_ORDERING.md](MULTI_IMAGE_ORDERING.md) for detailed guide.
-
-### Template System
-- **IMPORTANT**: Always connect BOTH outputs from Template Builder to encoder:
-  - Template Builder **mode** → Encoder **mode** (ensures correct vision token formatting)
-  - Template Builder **system_prompt** → Encoder **system_prompt** (provides instruction text)
-- Template Builder **prompt** → Encoder **text** (your actual prompt text)
-- Use `custom_system` field to edit any template's system prompt before using it
-- JavaScript UI auto-fills `custom_system` when you select a preset
-
-**Why connect both?**
-- `mode` controls how vision tokens are formatted (labels, placement, token dropping)
-- `system_prompt` provides the instruction text for the model
-- Using mismatched mode/system_prompt causes incorrect token formatting
-- Example: `inpainting` system prompt with `image_edit` mode = broken workflow
-
-## Troubleshooting
-
-### Subjects appearing zoomed out or too small?
-**Problem:** Characters or objects in edited images appear smaller than expected.
-
-**Solution:** Use `preserve_resolution` scaling mode (default in v2.6.1+)
-- The old `area_1024` mode aggressively downscaled large images
-- Example: 1477×2056 was scaled to 864×1216 (0.58x), causing zoom-out
-- New default preserves original size: 1477×2056 → 1472×2048 (1.00x)
-
-**Alternative:** If hitting VRAM limits, try `max_dimension_1024` mode instead
-
-### System prompt appearing in images?
-- Verify Template Builder **system_prompt** output connects to Encoder **system_prompt** input
-- Check workflow shows proper connection (should be Link 22 in example workflows)
-- Enable debug_mode to see what's being tokenized
-
-### Multi-image not working?
-- Use "Picture 1", "Picture 2" references in prompts
-- Verify Image Batch node connection to edit_image input
-- Enable debug_mode to see Picture formatting
-
-### Dimension mismatch errors?
-- Ensure all images have similar dimensions before batching
-- Use ComfyUI's Image Scale node if needed to match dimensions
-
-### Out of memory (OOM) errors with large images?
-- Switch to `max_dimension_1024` scaling mode
-- This reduces VRAM usage while maintaining reasonable quality
-- For 4K images: max_dimension_1024 is recommended over preserve_resolution
-
-## Status
-
-**Working/Tested:**
-- Text-to-image generation
-- Single and multi-image editing
-- Resolution control
-- Template system with custom overrides
-- Dimension-aware processing
-
-**Experimental (Low Priority):**
-- Spatial token generation (QwenSpatialTokenGenerator - effectiveness unclear)
-- Entity control nodes (QwenEliGenEntityControl - untested with current models)
-- Token debugging tools (QwenTokenDebugger, QwenTokenAnalyzer)
-
-**Latest Updates:**
-- **v2.6.1**: Resolution scaling fix with three modes (preserve/max_dimension/area)
-- **v2.6**: Mask-based inpainting system with QwenMaskProcessor and QwenInpaintSampler
-- **v2.5**: Advanced encoder for power users with resolution control
-- Configurable auto-labeling (can now be disabled)
-- Memory optimization for limited VRAM
-- Hero/reference image weighting
+**Note:** Verbose mode adds overhead (GPU-CPU sync for tensor stats). Only enable when actively debugging.
 
 ## License
 

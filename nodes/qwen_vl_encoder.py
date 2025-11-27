@@ -165,9 +165,17 @@ class QwenVLTextEncoder:
                     "multiline": True,
                     "default": ""
                 }),
-                "scaling_mode": (["preserve_resolution", "max_dimension_1024", "area_1024"], {
-                    "default": "preserve_resolution",
-                    "tooltip": "Resolution scaling mode:\n\npreserve_resolution (recommended):\n  ✓ No zoom-out, subjects stay full-size\n  ✓ Best quality, minimal cropping (32px alignment)\n  ✗ May use more VRAM with very large images\n  Example: 1477×2056 → 1472×2048 (1.00x)\n\nmax_dimension_1024 (for 4K/large images):\n  ✓ Reduces VRAM usage on large images\n  ✓ Balanced quality vs performance\n  ✗ Some zoom-out on large images\n  Example: 3840×2160 → 1024×576 (0.27x)\n\narea_1024 (legacy):\n  ✓ Consistent ~1MP output size\n  ✗ Aggressive zoom-out on large images\n  ✗ Upscales small images unnecessarily\n  Example: 1477×2056 → 864×1216 (0.58x)\n\nNote: Auto-skipped when using QwenImageBatch (no double-scaling)"
+                "vae_max_dimension": ("INT", {
+                    "default": 2048,
+                    "min": 512,
+                    "max": 3584,
+                    "step": 64,
+                    "tooltip": (
+                        "⚠️ SINGLE-IMAGE MODE ONLY\n"
+                        "Ignored when using ImageBatch node.\n\n"
+                        "VAE encoder max dimension.\n"
+                        "Use ImageBatch node for multi-image workflows."
+                    )
                 }),
                 "debug_mode": ("BOOLEAN", {
                     "default": False,
@@ -192,38 +200,55 @@ class QwenVLTextEncoder:
     DESCRIPTION = "DiffSynth/Diffusers-compatible encoder with 32-pixel alignment"
 
     @staticmethod
-    def calculate_dimensions(target_area: int, aspect_ratio: float, original_w: int = None, original_h: int = None, mode: str = "area", max_size: int = 1024) -> tuple:
-        """Calculate dimensions for image scaling.
+    def calculate_vae_dimensions(w: int, h: int, max_dimension: int) -> tuple:
+        """Calculate VAE dimensions with 32px alignment.
 
         Args:
-            target_area: Target area in pixels (for area mode)
-            aspect_ratio: Width/height ratio
-            original_w: Original width (for preserve/max_dimension modes)
-            original_h: Original height (for preserve/max_dimension modes)
-            mode: "area" | "preserve" | "max_dimension"
-            max_size: Maximum dimension size (for max_dimension mode)
+            w: Original width
+            h: Original height
+            max_dimension: Maximum dimension size (0 = unlimited)
 
-        Uses 32-pixel alignment for VAE compatibility (DiffSynth/Diffusers standard).
+        Returns:
+            (width, height) with 32px alignment
         """
-        import math
+        # Step 1: Cap to max_dimension if needed
+        if max_dimension > 0 and max(w, h) > max_dimension:
+            scale = max_dimension / max(w, h)
+            w = int(w * scale)
+            h = int(h * scale)
 
-        if mode == "preserve" and original_w is not None and original_h is not None:
-            # Preserve original dimensions, only apply 32-pixel alignment
-            width = round(original_w / 32) * 32
-            height = round(original_h / 32) * 32
-        elif mode == "max_dimension" and original_w is not None and original_h is not None:
-            # Scale so largest dimension equals max_size
-            scale = max_size / max(original_w, original_h)
-            width = round(original_w * scale / 32) * 32
-            height = round(original_h * scale / 32) * 32
-        else:
-            # Area-based scaling (original behavior)
-            width = math.sqrt(target_area * aspect_ratio)
-            height = width / aspect_ratio
-            width = round(width / 32) * 32
-            height = round(height / 32) * 32
+        # Step 2: Apply 32px alignment (VAE requirement)
+        w = round(w / 32) * 32
+        h = round(h / 32) * 32
 
-        return max(32, int(width)), max(32, int(height))
+        return max(32, int(w)), max(32, int(h))
+
+    @staticmethod
+    def calculate_vision_dimensions(w: int, h: int) -> tuple:
+        """Calculate vision encoder dimensions using area-based scaling.
+
+        Vision encoder trained at 384×384. Scale to that target area while
+        preserving aspect ratio, then align to 28px.
+
+        Args:
+            w: Original width
+            h: Original height
+
+        Returns:
+            (width, height) scaled to ~384×384 area with 28px alignment
+        """
+        target_area = 384 * 384  # Model's trained resolution
+        aspect_ratio = w / h
+
+        # Calculate dimensions from target area and aspect ratio
+        vision_w = int((target_area * aspect_ratio) ** 0.5)
+        vision_h = int(vision_w / aspect_ratio)
+
+        # Apply 28px alignment
+        vision_w = round(vision_w / 28) * 28
+        vision_h = round(vision_h / 28) * 28
+
+        return max(28, vision_w), max(28, vision_h)
 
 
 
@@ -232,11 +257,13 @@ class QwenVLTextEncoder:
               edit_image: Optional[torch.Tensor] = None,
               vae=None, inpaint_mask: Optional[torch.Tensor] = None,
               system_prompt: str = "",
-              scaling_mode: str = "preserve_resolution",
+              vae_max_dimension: int = 2048,
               debug_mode: bool = False, auto_label: bool = True,
               verbose_log: bool = False) -> Tuple[Any]:
 
         """Encode text and images for Qwen Image generation.
+
+        Vision encoder hardcoded to 384×384 area (model's trained resolution).
         Follows DiffSynth/Diffusers implementation with 32-pixel alignment."""
 
         import math
@@ -281,13 +308,15 @@ class QwenVLTextEncoder:
             # Check if images are pre-scaled from QwenImageBatch
             is_pre_scaled = getattr(edit_image, 'qwen_pre_scaled', False)
             if is_pre_scaled:
-                batch_scaling_mode = getattr(edit_image, 'qwen_scaling_mode', 'unknown')
-                batch_strategy = getattr(edit_image, 'qwen_batch_strategy', 'unknown')
+                batch_vae_dims = getattr(edit_image, 'qwen_vae_dimensions', None)
+                batch_vision_dims = getattr(edit_image, 'qwen_vision_dimensions', None)
+                batch_alignment = getattr(edit_image, 'qwen_batch_alignment', 'unknown')
                 if debug_mode:
-                    logger.info(f"[Encoder] Images pre-scaled by QwenImageBatch (mode: {batch_scaling_mode}, strategy: {batch_strategy})")
-                    logger.info(f"[Encoder] Skipping encoder scaling to prevent double-scaling")
-                debug_info.append(f"Pre-scaled by QwenImageBatch ({batch_scaling_mode}/{batch_strategy})")
-                debug_info.append("Encoder scaling: SKIPPED (already scaled)")
+                    logger.info(f"[Encoder] Images pre-scaled by QwenImageBatch")
+                    logger.info(f"[Encoder]   VAE target: {batch_vae_dims}, Vision target: {batch_vision_dims}")
+                    logger.info(f"[Encoder]   Batch alignment: {batch_alignment}")
+                debug_info.append(f"Pre-scaled by QwenImageBatch (alignment: {batch_alignment})")
+                debug_info.append(f"Target dimensions - VAE: {batch_vae_dims}, Vision: {batch_vision_dims}")
 
             if debug_mode:
                 logger.info(f"[Encoder] Input shape: {edit_image.shape}")
@@ -297,57 +326,51 @@ class QwenVLTextEncoder:
             images = [edit_image[i:i+1, :, :, :3] for i in range(edit_image.shape[0])]
             debug_info.append(f"Processing {len(images)} images")
 
-            # Process each image with DiffSynth/Diffusers standard sizing
+            # Determine target dimensions
+            if is_pre_scaled:
+                # Trust QwenImageBatch metadata completely
+                vision_target_w, vision_target_h = batch_vision_dims
+                vae_target_w, vae_target_h = batch_vae_dims if vae is not None else (None, None)
+
+                if debug_mode:
+                    logger.info(f"[Encoder] Using ImageBatch targets - Vision: {vision_target_w}x{vision_target_h}, VAE: {vae_target_w}x{vae_target_h}")
+                debug_info.append(f"Resize mode: Using ImageBatch targets")
+            else:
+                # Single-image mode - calculate using encoder parameters
+                # Get first image dimensions to calculate targets
+                h, w = images[0].shape[1], images[0].shape[2]
+                vision_target_w, vision_target_h = self.calculate_vision_dimensions(w, h)
+                vae_target_w, vae_target_h = self.calculate_vae_dimensions(w, h, vae_max_dimension) if vae is not None else (None, None)
+
+                if debug_mode:
+                    logger.info(f"[Encoder] Single-image mode - Vision: 384×384 area (hardcoded), VAE max: {vae_max_dimension}px")
+                    logger.info(f"[Encoder] Calculated targets - Vision: {vision_target_w}x{vision_target_h}, VAE: {vae_target_w}x{vae_target_h}")
+                debug_info.append(f"Resize mode: Single-image (Vision: 384×384 area, VAE max: {vae_max_dimension}px)")
+
+            # Process each image to target dimensions
             for i, img in enumerate(images):
                 # Get original dimensions
                 h, w = img.shape[1], img.shape[2]
-                aspect_ratio = w / h
                 img_chw = img.movedim(-1, 1)  # HWC to CHW for upscale
 
-                # Vision encoder: Always resize (vision needs specific input size)
-                vision_w, vision_h = self.calculate_dimensions(384*384, aspect_ratio, mode="area")
-                vision_img = comfy.utils.common_upscale(img_chw, vision_w, vision_h, "bicubic", "disabled")
+                # Vision encoder: Resize to target dimensions
+                vision_img = comfy.utils.common_upscale(img_chw, vision_target_w, vision_target_h, "bicubic", "disabled")
                 vision_images.append(vision_img.movedim(1, -1))  # CHW to HWC
 
                 if debug_mode:
-                    logger.info(f"[Encoder] Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}")
-                debug_info.append(f"Image {i+1}: {w}x{h} -> vision: {vision_w}x{vision_h}")
+                    logger.info(f"[Encoder] Image {i+1}: {w}x{h} -> vision: {vision_target_w}x{vision_target_h}")
+                debug_info.append(f"Image {i+1}: {w}x{h} -> vision: {vision_target_w}x{vision_target_h}")
 
-                # VAE encoder: Skip if pre-scaled, otherwise apply scaling_mode
+                # VAE encoder: Resize to target dimensions
                 if vae is not None:
-                    if is_pre_scaled:
-                        # Use as-is, already scaled by QwenImageBatch
-                        vae_img_hwc = img
-                        if debug_mode:
-                            logger.info(f"[Encoder]        VAE: Using pre-scaled {w}x{h} (no resize)")
-                        debug_info.append(f"    VAE: pre-scaled {w}x{h} (skipped)")
-                    elif scaling_mode == "preserve_resolution":
-                        # Preserve original dimensions with 32-pixel alignment
-                        vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio, original_w=w, original_h=h, mode="preserve")
-                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
-                        vae_img_hwc = vae_img.movedim(1, -1)
-                        if debug_mode:
-                            logger.info(f"[Encoder]        VAE (preserve): {w}x{h} -> {vae_w}x{vae_h} (32px aligned)")
-                        debug_info.append(f"    VAE scaling: preserve_resolution ({vae_w}x{vae_h}, 32px aligned)")
-                    elif scaling_mode == "max_dimension_1024":
-                        # Scale largest dimension to 1024px
-                        vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio, original_w=w, original_h=h, mode="max_dimension", max_size=1024)
-                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
-                        vae_img_hwc = vae_img.movedim(1, -1)
-                        if debug_mode:
-                            logger.info(f"[Encoder]        VAE (max_dim): {w}x{h} -> {vae_w}x{vae_h} (max 1024px)")
-                        debug_info.append(f"    VAE scaling: max_dimension_1024 ({vae_w}x{vae_h})")
-                    else:  # area_1024
-                        # Area-based scaling (original behavior)
-                        vae_w, vae_h = self.calculate_dimensions(1024*1024, aspect_ratio, mode="area")
-                        vae_img = comfy.utils.common_upscale(img_chw, vae_w, vae_h, "bicubic", "disabled")
-                        vae_img_hwc = vae_img.movedim(1, -1)
-                        if debug_mode:
-                            logger.info(f"[Encoder]        VAE (area): {w}x{h} -> {vae_w}x{vae_h} (1024x1024 area)")
-                        debug_info.append(f"    VAE scaling: area_1024 ({vae_w}x{vae_h})")
+                    vae_img = comfy.utils.common_upscale(img_chw, vae_target_w, vae_target_h, "bicubic", "disabled")
+                    vae_img_hwc = vae_img.movedim(1, -1)  # CHW to HWC
+
+                    if debug_mode:
+                        logger.info(f"[Encoder]        VAE: {w}x{h} -> {vae_target_w}x{vae_target_h}")
+                    debug_info.append(f"    VAE: {vae_target_w}x{vae_target_h}")
 
                     ref_latent = vae.encode(vae_img_hwc[:, :, :, :3])
-                    # Just pass through as-is - VAE knows what format to return
                     ref_latents.append(ref_latent)
 
                     if debug_mode:

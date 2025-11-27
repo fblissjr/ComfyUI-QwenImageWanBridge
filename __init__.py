@@ -64,6 +64,40 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load image batch node: {e}")
 
+# Qwen-to-Wan Video Bridge nodes
+try:
+    from .nodes.qwen_wan_bridge import (
+        QwenToWanFirstFrameLatent,
+        QwenToWanLatentSaver,
+        QwenToWanImageSaver
+    )
+
+    NODE_CLASS_MAPPINGS["QwenToWanFirstFrameLatent"] = QwenToWanFirstFrameLatent
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToWanFirstFrameLatent"] = "Qwen → Wan First Frame Latent"
+
+    NODE_CLASS_MAPPINGS["QwenToWanLatentSaver"] = QwenToWanLatentSaver
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToWanLatentSaver"] = "Save First Frame Latent (Wan)"
+
+    NODE_CLASS_MAPPINGS["QwenToWanImageSaver"] = QwenToWanImageSaver
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToWanImageSaver"] = "Save First Frame Image"
+
+    print("[QwenImageWanBridge] Loaded Qwen-to-Wan Video Bridge nodes (3 nodes)")
+    print("[QwenImageWanBridge] FEATURE: Image-to-video bridge with first frame conditioning")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Wan bridge nodes: {e}")
+
+# Qwen-to-ChronoEdit Bridge node
+try:
+    from .nodes.qwen_chronoedit_bridge import QwenToChronoEditBridge
+
+    NODE_CLASS_MAPPINGS["QwenToChronoEditBridge"] = QwenToChronoEditBridge
+    NODE_DISPLAY_NAME_MAPPINGS["QwenToChronoEditBridge"] = "Qwen → ChronoEdit Bridge"
+
+    print("[QwenImageWanBridge] Loaded Qwen-to-ChronoEdit Bridge node")
+    print("[QwenImageWanBridge] FEATURE: Qwen image editing → ChronoEdit video animation")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load ChronoEdit bridge node: {e}")
+
 # Resolution nodes removed - functionality integrated into encoder
 
 # Mask-based inpainting nodes
@@ -166,6 +200,30 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Smart Crop node: {e}")
 
+# C2C Vision Bridge nodes (Qwen3-VL → Qwen2.5-VL enhancement)
+try:
+    from .nodes.qwen_c2c_bridge import (
+        QwenC2CBridgeLoader,
+        QwenC2CCacheExtractor,
+        QwenC2CVisionEnhancer
+    )
+
+    NODE_CLASS_MAPPINGS["QwenC2CBridgeLoader"] = QwenC2CBridgeLoader
+    NODE_DISPLAY_NAME_MAPPINGS["QwenC2CBridgeLoader"] = "Qwen C2C Bridge Loader"
+
+    NODE_CLASS_MAPPINGS["QwenC2CCacheExtractor"] = QwenC2CCacheExtractor
+    NODE_DISPLAY_NAME_MAPPINGS["QwenC2CCacheExtractor"] = "Qwen C2C Cache Extractor"
+
+    NODE_CLASS_MAPPINGS["QwenC2CVisionEnhancer"] = QwenC2CVisionEnhancer
+    NODE_DISPLAY_NAME_MAPPINGS["QwenC2CVisionEnhancer"] = "Qwen C2C Vision Enhancer"
+
+    print("[QwenImageWanBridge] Loaded C2C Vision Bridge nodes (3 nodes)")
+    print("[QwenImageWanBridge] FEATURE: Cache-to-Cache vision enhancement (Qwen3-VL → Qwen2.5-VL)")
+    print("[QwenImageWanBridge] FEATURE: OCR (+20-30%), spatial (+15-25%), detail (+10-15%) improvements")
+    print("[QwenImageWanBridge] FEATURE: ~5.2M bridge parameters, lazy 8-bit Qwen3-VL loading (~4.5GB)")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load C2C vision bridge nodes: {e}")
+
 # Inpainting nodes restored - mask-based approach aligns with DiffSynth patterns
 
 # Note: Experimental multi-frame nodes have been archived
@@ -253,13 +311,80 @@ print(f"[QwenImageWanBridge] Total nodes loaded: {len(NODE_CLASS_MAPPINGS)}")
 # Engine nodes removed - incomplete implementation
 
 # ============================================================================
-# AUTO DEBUG TRACING - Apply patches automatically
+# HUNYUANVIDEO 1.5 NODES - Dual text encoder (Qwen2.5-VL + byT5)
 # ============================================================================
 
+# Loader nodes
 try:
-    from .nodes import debug_patch
-    debug_patch.apply_debug_patches()
-    print("[QwenImageWanBridge] ✅ Debug patches applied (silent mode by default)")
-    print("[QwenImageWanBridge] Use QwenDebugController node or set QWEN_DEBUG_VERBOSE=true for tracing")
+    from .nodes.hunyuan_video_nodes import (
+        HunyuanVideoCLIPLoader,
+        HunyuanVideoVisionLoader,
+        HunyuanVideoEmptyLatent,
+    )
+
+    NODE_CLASS_MAPPINGS["HunyuanVideoCLIPLoader"] = HunyuanVideoCLIPLoader
+    NODE_DISPLAY_NAME_MAPPINGS["HunyuanVideoCLIPLoader"] = "HunyuanVideo CLIP Loader"
+
+    NODE_CLASS_MAPPINGS["HunyuanVideoVisionLoader"] = HunyuanVideoVisionLoader
+    NODE_DISPLAY_NAME_MAPPINGS["HunyuanVideoVisionLoader"] = "HunyuanVideo Vision Loader (SigLIP)"
+
+    NODE_CLASS_MAPPINGS["HunyuanVideoEmptyLatent"] = HunyuanVideoEmptyLatent
+    NODE_DISPLAY_NAME_MAPPINGS["HunyuanVideoEmptyLatent"] = "HunyuanVideo Empty Latent"
+
+    print("[QwenImageWanBridge] Loaded HunyuanVideo 1.5 loader nodes (3 nodes)")
+    print("[QwenImageWanBridge] FEATURE: Dual CLIP loader (Qwen2.5-VL + byT5)")
 except Exception as e:
-    print(f"[QwenImageWanBridge] ❌ Debug patches failed: {e}")
+    print(f"[QwenImageWanBridge] Failed to load HunyuanVideo loader nodes: {e}")
+
+# Text encoder with template system
+try:
+    from .nodes.hunyuan_video_encoder import HunyuanVideoTextEncoder
+
+    NODE_CLASS_MAPPINGS["HunyuanVideoTextEncoder"] = HunyuanVideoTextEncoder
+    NODE_DISPLAY_NAME_MAPPINGS["HunyuanVideoTextEncoder"] = "HunyuanVideo Text Encoder"
+
+    print("[QwenImageWanBridge] Loaded HunyuanVideo text encoder")
+    print("[QwenImageWanBridge] FEATURE: 23 video templates, dual pos/neg output")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load HunyuanVideo encoder: {e}")
+
+# Prompt expander (lightweight alternative to Qwen3-235B rewriter)
+try:
+    from .nodes.hunyuan_video_prompt_expander import HunyuanVideoPromptExpander
+
+    NODE_CLASS_MAPPINGS["HunyuanVideoPromptExpander"] = HunyuanVideoPromptExpander
+    NODE_DISPLAY_NAME_MAPPINGS["HunyuanVideoPromptExpander"] = "HunyuanVideo Prompt Expander"
+
+    print("[QwenImageWanBridge] Loaded HunyuanVideo prompt expander")
+    print("[QwenImageWanBridge] FEATURE: Lightweight prompt expansion using loaded Qwen2.5-VL")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load HunyuanVideo prompt expander: {e}")
+
+# ============================================================================
+# EXPERIMENTAL ANALYSIS NODES
+# ============================================================================
+
+# Template Influence Analyzer - tests if system prompts affect embeddings
+try:
+    from .nodes.template_influence_analyzer import TemplateInfluenceAnalyzer
+
+    NODE_CLASS_MAPPINGS["TemplateInfluenceAnalyzer"] = TemplateInfluenceAnalyzer
+    NODE_DISPLAY_NAME_MAPPINGS["TemplateInfluenceAnalyzer"] = "Template Influence Analyzer"
+
+    print("[QwenImageWanBridge] Loaded Template Influence Analyzer (experimental)")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Template Influence Analyzer: {e}")
+
+# ============================================================================
+# DEBUG TRACING - Opt-in via environment variable
+# ============================================================================
+
+import os
+if os.environ.get('QWEN_ENABLE_DEBUG_PATCHES', '').lower() in ('true', '1', 'yes'):
+    try:
+        from .nodes import debug_patch
+        debug_patch.apply_debug_patches()
+        print("[QwenImageWanBridge] Debug patches applied (requested via QWEN_ENABLE_DEBUG_PATCHES)")
+        print("[QwenImageWanBridge] Set QWEN_DEBUG_VERBOSE=true for verbose tracing output")
+    except Exception as e:
+        print(f"[QwenImageWanBridge] Debug patches failed: {e}")
