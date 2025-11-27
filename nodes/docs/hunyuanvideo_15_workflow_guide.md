@@ -1,6 +1,8 @@
 # HunyuanVideo 1.5 Workflow Guide
 
-Complete guide for text-to-video (T2V) and image-to-video (I2V) generation using HunyuanVideo 1.5 in ComfyUI.
+Complete guide for text-to-video (T2V) generation using HunyuanVideo 1.5 in ComfyUI.
+
+**Note:** Image-to-video (I2V) is NOT currently implemented in this node pack.
 
 ---
 
@@ -13,9 +15,6 @@ Complete guide for text-to-video (T2V) and image-to-video (I2V) generation using
 - `byt5-small` (optional, for multilingual text)
 - `Glyph-SDXL-v2` (optional, for multilingual text rendering)
 
-**Vision Encoder (in `models/clip_vision/`):**
-- `siglip_vision_patch14_384.safetensors` (for I2V only)
-
 **HunyuanVideo Models (ComfyUI native, in standard model folders):**
 - HunyuanVideo 1.5 DiT transformer
 - HunyuanVideo 1.5 VAE
@@ -25,17 +24,16 @@ Complete guide for text-to-video (T2V) and image-to-video (I2V) generation using
 
 Our custom nodes appear in:
 - `HunyuanVideo/Loaders` - Model loaders
-- `HunyuanVideo/Encoding` - Text/vision encoding
+- `HunyuanVideo/Encoding` - Text encoding
 
 ComfyUI native nodes you'll also use:
-- `loaders` - LoadImage, VAELoader, etc.
-- `conditioning` - CLIPVisionEncode (for I2V)
-- `sampling` - HunyuanVideoSampler
+- `loaders` - VAELoader, etc.
+- `sampling` - KSampler
 - `latent` - VAEDecode
 
 ---
 
-## Workflow 1: Text-to-Video (T2V)
+## Text-to-Video (T2V)
 
 Generate video from text description only.
 
@@ -49,16 +47,17 @@ Generate video from text description only.
              │ clip
              ↓
 ┌──────────────────────────┐
-│ HunyuanVideoTextEncode   │ Encode prompt
+│ HunyuanVideoTextEncoder  │ Encode prompt (dual output)
 │ (HunyuanVideo/Encoding)  │
 └────────────┬─────────────┘
-             │ conditioning
+             │ positive
+             │ negative
              ↓
 ┌──────────────────────────┐
-│ HunyuanVideoSampler      │ Generate video (ComfyUI native)
-│ (sampling)               │
+│ KSampler                 │ Generate video (ComfyUI native)
+│ (sampling)               │ positive, negative, model, latent_image
 └────────────┬─────────────┘
-             │ latent
+             │ LATENT
              ↓
 ┌──────────────────────────┐
 │ VAEDecode                │ Decode to frames (ComfyUI native)
@@ -67,9 +66,12 @@ Generate video from text description only.
              │ IMAGE
              ↓
 ┌──────────────────────────┐
-│ SaveImage / VideoSave    │ Save output
+│ VHS_VideoCombine or      │ Save output
+│ SaveAnimatedWEBP         │
 └──────────────────────────┘
 ```
+
+**Important:** All encoder nodes output both `positive` and `negative` conditioning. Connect both to the sampler.
 
 ### Step-by-Step Setup
 
@@ -85,42 +87,62 @@ Generate video from text description only.
   - Set `true` only if you need multilingual text rendering
 
 **Outputs:**
-- `clip` → Connect to HunyuanVideoTextEncode
+- `clip` → Connect to HunyuanVideoTextEncoder
 
 **Notes:**
 - byT5 adds ~2-3GB VRAM and slower encoding
 - Only enable if your prompt contains non-English text in quotes
 
-#### 2. HunyuanVideoTextEncode
+#### 2. HunyuanVideoTextEncoder
 **Category:** `HunyuanVideo/Encoding`
 
 **Inputs:**
 - `clip`: From HunyuanVideoCLIPLoader
 - `text`: Your video description
-  - Example: `"A cinematic shot of ocean waves crashing on a beach at sunset. The camera slowly pans right, revealing palm trees swaying in the breeze. Warm golden light fills the scene."`
+- `negative_prompt`: What to avoid (defaults to standard quality terms)
+- `template_preset`: Select from 39 built-in video templates (optional)
+- `custom_system_prompt`: Manual system prompt override (optional)
+- `additional_instructions`: Extra instructions appended to any template (optional)
+- `debug_mode`: Show encoding details (optional)
+
+Example positive prompt:
+```
+A cinematic shot of ocean waves crashing on a beach at sunset.
+The camera slowly pans right, revealing palm trees swaying in the breeze.
+Warm golden light fills the scene.
+```
 
 **Outputs:**
-- `conditioning` → Connect to HunyuanVideoSampler
+- `positive` → Connect to sampler's positive input
+- `negative` → Connect to sampler's negative input
+- `debug_output` → Optional debug info string
+
+**Template Options:**
+- `none`: Use ComfyUI default behavior
+- `hunyuan_video_cinematic`: Professional cinematography
+- `hunyuan_video_animation`: Animation style
+- 36 more templates for various genres and styles
 
 **Prompt Tips:**
 - Describe the scene, motion, camera movement, lighting
 - Be specific about timing (e.g., "slowly", "quickly")
 - Include atmosphere/mood descriptors
 - Natural language works best
-- No need to manually add system templates (handled automatically)
+- Use templates to guide style, add `additional_instructions` for fine-tuning
 
-#### 3. HunyuanVideoSampler (ComfyUI Native)
+#### 3. KSampler (ComfyUI Native)
 **Category:** `sampling`
 
 **Inputs:**
-- `model`: HunyuanVideo 1.5 DiT model
-- `positive`: From HunyuanVideoTextEncode
-- `negative`: (optional) Negative prompt
-- `latent_image`: Empty latent or first frame latent
-- `steps`: 50 (default)
-- `cfg`: 6.0-8.0 (recommended)
-- `sampler_name`: `euler` (recommended)
-- `scheduler`: `normal`
+- `model`: HunyuanVideo 1.5 DiT model (from UNETLoader or similar)
+- `positive`: From HunyuanVideoTextEncoder positive output
+- `negative`: From HunyuanVideoTextEncoder negative output
+- `latent_image`: From EmptyHunyuanLatentVideo
+- `seed`: Any integer
+- `steps`: 30-50 (30 for distilled, 50 for standard)
+- `cfg`: 1.0 (distilled) or 6.0 (standard)
+- `sampler_name`: `euler`
+- `scheduler`: `simple` or `normal`
 - `denoise`: 1.0 (for T2V)
 
 **Outputs:**
@@ -130,7 +152,7 @@ Generate video from text description only.
 **Category:** `latent`
 
 **Inputs:**
-- `samples`: From HunyuanVideoSampler
+- `samples`: From KSampler
 - `vae`: HunyuanVideo VAE
 
 **Outputs:**
@@ -144,173 +166,6 @@ on a spider web at dawn. Soft focus bokeh in the background. The camera slowly p
 back to reveal the web hanging between two branches in a misty forest. Golden morning
 sunlight filters through the trees, creating volumetric rays of light. The motion
 is smooth and ethereal, with a dreamlike quality.
-```
-
----
-
-## Workflow 2: Image-to-Video (I2V)
-
-Animate a static image using text to describe the motion.
-
-### Node Chain
-
-```
-┌──────────────────────────┐
-│ LoadImage                │ Load reference frame
-└────────────┬─────────────┘
-             │ IMAGE
-             ↓
-         ┌───────────────────────┐
-         │ CLIPVisionEncode      │ Encode reference image
-         │ (ComfyUI native)      │ with SigLIP
-         └───────┬───────────────┘
-                 │ CLIP_VISION_OUTPUT
-                 │
-┌──────────────────────────┐     │
-│ HunyuanVideoVisionLoader │     │
-│ (HunyuanVideo/Loaders)   │     │
-└────────────┬─────────────┘     │
-             │ clip_vision        │
-             └────────────────────┘
-                 (connect to CLIPVisionEncode)
-
-┌──────────────────────────┐
-│ HunyuanVideoCLIPLoader   │ Load text encoders
-└────────────┬─────────────┘
-             │ clip
-             ↓
-┌──────────────────────────┐
-│ HunyuanVideoTextEncodeI2V│ Combine text + vision
-│ (HunyuanVideo/Encoding)  │
-└────────────┬─────────────┘
-             │ conditioning
-             ↓
-┌──────────────────────────┐
-│ HunyuanVideoSampler      │ Generate video
-└────────────┬─────────────┘
-             │ latent
-             ↓
-┌──────────────────────────┐
-│ VAEDecode                │ Decode to frames
-└────────────┬─────────────┘
-             │ IMAGE
-             ↓
-┌──────────────────────────┐
-│ SaveImage / VideoSave    │ Save output
-└──────────────────────────┘
-```
-
-### Step-by-Step Setup
-
-#### 1. LoadImage (ComfyUI Native)
-**Category:** `loaders`
-
-**Inputs:**
-- `image`: Your reference frame (first frame of the video)
-
-**Outputs:**
-- `IMAGE` → Connect to CLIPVisionEncode
-
-**Notes:**
-- Resolution will be handled by the model
-- Aspect ratio preserved during encoding
-
-#### 2. HunyuanVideoVisionLoader
-**Category:** `HunyuanVideo/Loaders`
-
-**Inputs:**
-- `vision_model`: Select SigLIP model
-  - Example: `siglip_vision_patch14_384.safetensors`
-
-**Outputs:**
-- `clip_vision` → Connect to CLIPVisionEncode
-
-#### 3. CLIPVisionEncode (ComfyUI Native)
-**Category:** `conditioning`
-
-**Inputs:**
-- `clip_vision`: From HunyuanVideoVisionLoader
-- `image`: From LoadImage
-- `crop`: `center` (recommended)
-
-**Outputs:**
-- `CLIP_VISION_OUTPUT` → Connect to HunyuanVideoTextEncodeI2V
-
-**Notes:**
-- This extracts visual features from your reference image
-- SigLIP processes it at 384×384 internally
-
-#### 4. HunyuanVideoCLIPLoader
-**Category:** `HunyuanVideo/Loaders`
-
-Same as T2V workflow (see above).
-
-#### 5. HunyuanVideoTextEncodeI2V
-**Category:** `HunyuanVideo/Encoding`
-
-**Inputs:**
-- `clip`: From HunyuanVideoCLIPLoader
-- `clip_vision_output`: From CLIPVisionEncode
-- `text`: Motion description (NOT image description)
-
-**Outputs:**
-- `conditioning` → Connect to HunyuanVideoSampler
-
-**IMPORTANT Prompting for I2V:**
-- **Don't** describe the static image
-- **Do** describe the motion/animation
-- **Do** describe camera movement
-- **Do** describe timing and speed
-
-**Good I2V Prompt:**
-```
-The camera slowly zooms in on the subject's face. They turn their head
-to the left and smile slightly. Soft natural lighting remains constant.
-The motion is smooth and cinematic, taking 3-4 seconds total.
-```
-
-**Bad I2V Prompt:**
-```
-A portrait of a person with brown hair wearing a blue shirt against
-a white background.
-```
-(This describes the image, not the motion!)
-
-#### 6. HunyuanVideoSampler (ComfyUI Native)
-**Category:** `sampling`
-
-Same as T2V, but:
-- `denoise`: 0.75-0.85 (for I2V, not 1.0)
-- Lower denoise = more faithful to reference image
-- Higher denoise = more creative interpretation
-
-#### 7. VAEDecode (ComfyUI Native)
-Same as T2V workflow.
-
-### Example I2V Prompts
-
-**Portrait Animation:**
-```
-The subject slowly turns their head from facing forward to looking over their
-right shoulder. Their expression changes from neutral to a subtle smile.
-Natural lighting creates soft shadows. The motion takes about 3 seconds and
-is smooth and natural.
-```
-
-**Landscape Animation:**
-```
-The camera performs a slow right-to-left pan across the scene. Clouds drift
-slowly in the sky. Leaves rustle gently in the breeze. Golden hour lighting
-gradually shifts as the sun lowers. The entire motion takes 5-6 seconds with
-a cinematic, contemplative pace.
-```
-
-**Product Animation:**
-```
-The camera orbits 90 degrees clockwise around the product. Studio lighting
-remains constant with a key light from the left. The product rotates on its
-base to reveal different angles. Motion is smooth and commercial-quality,
-completing in 4 seconds.
 ```
 
 ---
@@ -344,10 +199,6 @@ completing in 4 seconds.
 
 **Denoise:**
 - **T2V**: 1.0 (generate from scratch)
-- **I2V**: 0.75-0.85 (animate reference image)
-  - 0.75: Very faithful to reference
-  - 0.85: More creative interpretation
-  - 0.90+: May lose reference details
 
 ### Resolution & Aspect Ratios
 
@@ -380,8 +231,6 @@ ComfyUI/models/
     Qwen2.5-VL-7B-Instruct/
     byt5-small/
     Glyph-SDXL-v2/
-  clip_vision/
-    siglip_vision_patch14_384.safetensors
   diffusion_models/
     hunyuan-video-1.5/
   vae/
@@ -397,21 +246,12 @@ ComfyUI/models/
 4. Enable CPU offloading in ComfyUI settings
 5. Close other applications
 
-### I2V doesn't match reference image
-
-**Solutions:**
-1. Increase `denoise` (try 0.80-0.85)
-2. Improve prompt specificity
-3. Check that CLIPVisionEncode is properly connected
-4. Verify reference image loaded correctly
-
 ### Jerky or unnatural motion
 
 **Solutions:**
 1. Increase steps (60-80)
 2. Adjust CFG (try 6.0-7.0)
 3. Improve prompt with timing words ("slowly", "smoothly", "gradually")
-4. Use I2V with lower denoise for smoother interpolation
 
 ### byT5 text rendering not working
 
@@ -473,41 +313,63 @@ completing at 5 seconds.
 1. **Loop Creation**: Generate 4-5 second clips designed to loop seamlessly
 2. **Style Mixing**: Try different artistic styles in prompts (cinematic, documentary, commercial)
 3. **Speed Variations**: Test slow-motion vs real-time motion
-4. **Multi-Stage**: Chain multiple I2V generations with last frame as next reference
-5. **Upsampling**: Use HunyuanVideo upsampler for higher resolution output
+4. **Upsampling**: Use HunyuanVideo upsampler for higher resolution output
 
 ### Workflow Variations
 
+**T2V with Templates:**
+Use the template_preset dropdown to select a style:
+- `hunyuan_video_cinematic` - dramatic narrative, professional cinematography
+- `hunyuan_video_documentary` - factual, observational
+- `hunyuan_video_slowmo` - slow motion effects
+- `hunyuan_video_animation` - character design, motion principles
+- `hunyuan_video_nature` - landscapes, natural phenomena
+- `hunyuan_video_action` - fast-paced, dynamic movement
+- Plus 33 more templates (horror, comedy, scifi, fantasy, urban, aerial, etc.)
+
+**T2V with Additional Instructions:**
+Layer modifications on top of templates:
+- Template: `hunyuan_video_cinematic`
+- Additional: `"noir style, high contrast, rain-soaked streets"`
+
 **T2V with Negative Prompts:**
-Add negative prompt node to avoid:
+Use the negative_prompt input to avoid:
 - "static camera, no motion"
 - "blurry, low quality"
 - "jerky motion, stuttering"
-
-**I2V with Multiple References:**
-(Advanced) Use sequence of images for smoother animations
 
 **Batch Processing:**
 Create multiple variations by connecting multiple text encode nodes
 
 ---
 
-## Resources
+## Quick Reference
 
-- **Resolution & Frame Guide:** `nodes/docs/hunyuanvideo_15_resolution_frame_guide.md`
-  - Complete technical reference for resolutions, aspect ratios, frame counts
-  - VRAM requirements by configuration
-  - Model versions (standard, distilled, sparse)
-  - Super-resolution upsampling details
-- Example workflows: `example_workflows/hunyuanvideo_15_*.json`
-- Technical details: `CLAUDE.md` (HunyuanVideo 1.5 section)
-- Model downloads:
-  - Qwen2.5-VL: https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
-  - byT5: https://huggingface.co/google/byt5-small
-  - Glyph-SDXL-v2: https://huggingface.co/AI-ModelScope/Glyph-SDXL-v2
-  - SigLIP: https://huggingface.co/timm (or included in ComfyUI)
+### All 39 Templates
+
+**Core:** t2v, cinematic, animation
+
+**Genre:** action, horror, comedy, scifi, fantasy
+
+**Subject:** nature, wildlife, sports, urban, underwater, aerial
+
+**Production:** product, commercial, documentary, educational, music, interview
+
+**Technical:** timelapse, slowmo, abstract
+
+**Experimental:** structured_realism, minimal_structure, temporal_only, camera_focused, lighting_focused, style_spam, anti_pattern, self_expand
+
+**Fun:** drunk_cameraman, 80s_music_video, majestic_pigeon, wes_anderson_fever, michael_bay_mundane, excited_dog_pov, infomercial_disaster, romcom_lighting
+
+All templates are in `nodes/templates/hunyuan_video_*.md`
+
+### Model Downloads
+
+- **Qwen2.5-VL:** huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct
+- **byT5:** huggingface.co/google/byt5-small
+- **Glyph-SDXL-v2:** huggingface.co/AI-ModelScope/Glyph-SDXL-v2
 
 ---
 
-**Last Updated:** 2025-01-24
-**Version:** 1.0
+**Last Updated:** 2025-11-27
+**Version:** 1.3
