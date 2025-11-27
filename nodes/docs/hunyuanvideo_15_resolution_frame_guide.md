@@ -87,30 +87,27 @@ latent_frames = (121 - 1) // 8 + 1 = 16
 
 ## Model Versions & Configurations
 
+**Note:** This node pack currently supports T2V (text-to-video) only. I2V (image-to-video) is not implemented.
+
 ### Standard Models
 
 | Version | Resolution | Task | Flow Shift | Guidance Scale | Steps | Description |
 |---------|------------|------|------------|----------------|-------|-------------|
 | 480p_t2v | 480p | T2V | 5.0 | 6.0 | 50 | Text-to-video standard |
-| 480p_i2v | 480p | I2V | 5.0 | 6.0 | 50 | Image-to-video standard |
 | 720p_t2v | 720p | T2V | 9.0 | 6.0 | 50 | High-res T2V standard |
-| 720p_i2v | 720p | I2V | 7.0 | 6.0 | 50 | High-res I2V standard |
 
 ### Distilled Models (Fast)
 
 | Version | Resolution | Task | Flow Shift | Guidance Scale | Steps | Description |
 |---------|------------|------|------------|----------------|-------|-------------|
 | 480p_t2v_distilled | 480p | T2V | 5.0 | 1.0 | 25-30 | Fast T2V |
-| 480p_i2v_distilled | 480p | I2V | 5.0 | 1.0 | 25-30 | Fast I2V |
 | 720p_t2v_distilled | 720p | T2V | 9.0 | 1.0 | 25-30 | Fast high-res T2V |
-| 720p_i2v_distilled | 720p | I2V | 7.0 | 1.0 | 25-30 | Fast high-res I2V |
 
 ### Sparse Attention Models
 
 | Version | Resolution | Task | Flow Shift | GPU Requirement | Description |
 |---------|------------|------|------------|-----------------|-------------|
 | 720p_t2v_distilled_sparse | 720p | T2V | 7.0 | H100 only | Sparse attention T2V |
-| 720p_i2v_distilled_sparse | 720p | I2V | 9.0 | H100 only | Sparse attention I2V |
 
 **Note:** Sparse attention models require NVIDIA H100 GPU and `flex-block-attn` library.
 
@@ -334,18 +331,20 @@ Number of diffusion sampling steps.
 
 ## Workflow Integration
 
-### ComfyUI Native Nodes
+### ComfyUI Workflow
 
 When using our HunyuanVideo encoder nodes with ComfyUI's native sampler:
 
-1. **HunyuanVideoCLIPLoader** - Loads text encoders
-2. **HunyuanVideoTextEncode** - Encodes prompt
+1. **HunyuanVideoCLIPLoader** - Loads Qwen2.5-VL + optional byT5
+2. **HunyuanVideoTextEncoder** - Encodes prompt with 39 templates
+   - Outputs: `positive`, `negative` (both connect to sampler)
+   - Optional: `template_preset` dropdown, `additional_instructions`
 3. **EmptyLatentVideo** (native) - Create latent with:
    - `width`: Based on resolution tier (see table above)
    - `height`: Based on resolution tier
    - `length`: 121 (default) or custom frame count
    - `batch_size`: 1 (multi-batch not supported)
-4. **KSampler** or **HunyuanVideoSampler** (native) - Generate
+4. **KSampler** (native) - Generate
 5. **VAEDecode** (native) - Decode frames
 
 ### Resolution Selection Logic
@@ -426,6 +425,6 @@ Best for: H100 users wanting maximum speed
 
 ---
 
-**Last Updated:** 2025-01-24
-**Version:** 1.0
+**Last Updated:** 2025-11-27
+**Version:** 1.1
 **Based on:** HunyuanVideo 1.5 official codebase

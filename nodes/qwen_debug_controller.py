@@ -11,7 +11,7 @@ import json
 import re
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, deque
 import traceback
 import sys
 
@@ -27,11 +27,17 @@ except ImportError:
 class DebugCollector:
     """Collects and manages debug information from across the system"""
 
+    # Maximum entries to keep in logs (prevents unbounded RAM growth)
+    MAX_LOG_ENTRIES = 1000
+    MAX_MEMORY_SNAPSHOTS = 500
+    MAX_ERROR_ENTRIES = 200
+    MAX_PERFORMANCE_ENTRIES_PER_COMPONENT = 100
+
     def __init__(self):
-        self.execution_logs = []
-        self.performance_data = defaultdict(list)
-        self.memory_snapshots = []
-        self.error_log = []
+        self.execution_logs = deque(maxlen=self.MAX_LOG_ENTRIES)
+        self.performance_data = defaultdict(lambda: deque(maxlen=self.MAX_PERFORMANCE_ENTRIES_PER_COMPONENT))
+        self.memory_snapshots = deque(maxlen=self.MAX_MEMORY_SNAPSHOTS)
+        self.error_log = deque(maxlen=self.MAX_ERROR_ENTRIES)
         self.node_statistics = defaultdict(lambda: {
             'executions': 0,
             'total_time': 0.0,
@@ -41,7 +47,7 @@ class DebugCollector:
         self.start_time = time.time()
 
     def log_execution(self, component: str, message: str, level: str = "INFO"):
-        """Log an execution event"""
+        """Log an execution event (deque auto-evicts oldest when full)"""
         self.execution_logs.append({
             'timestamp': datetime.now().isoformat(),
             'elapsed': time.time() - self.start_time,

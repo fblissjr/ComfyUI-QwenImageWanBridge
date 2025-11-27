@@ -1,6 +1,17 @@
 # Changelog
 
-## v2.8.2 - Debug Patches Now Opt-In
+## v2.8.3 - C2C Vision Bridge Archived
+
+### Removed
+
+**C2C Vision Bridge nodes archived**
+- Moved to `nodes/archive/c2c/` (3 nodes: QwenC2CBridgeLoader, QwenC2CCacheExtractor, QwenC2CVisionEnhancer)
+- Feature was experimental and not providing practical value
+- Related documentation and setup scripts also archived
+
+---
+
+## v2.8.2 - Debug Patches Opt-In, Wrapper Nodes Archived
 
 ### Fixed
 
@@ -9,6 +20,16 @@
 - Debug patches are now opt-in via `QWEN_ENABLE_DEBUG_PATCHES=true` environment variable
 - Eliminates wrapper overhead on forward passes for all users
 - Verbose tracing still available via `QWEN_DEBUG_VERBOSE=true` when patches enabled
+
+**Wrapper nodes archived** ([#12](https://github.com/fredbliss/ComfyUI-QwenImageWanBridge/issues/12))
+- Moved all wrapper nodes to `nodes/archive/wrapper/` (11 nodes)
+- Moved custom DiT implementation (`models/`) to archive
+- Addresses VRAM leak concerns (unbounded RoPE cache, unmanaged model memory)
+- Main workflow uses ComfyUI's native Qwen support - no wrapper nodes needed
+
+**Debug controller RAM leak fixed** ([#12](https://github.com/fredbliss/ComfyUI-QwenImageWanBridge/issues/12))
+- Replaced unbounded lists with `deque` ring buffers (auto-evict oldest entries)
+- Limits: 1000 execution logs, 500 memory snapshots, 200 errors, 100 perf entries/component
 
 ---
 

@@ -53,7 +53,6 @@ Old multi-connection system (mode + system_prompt) no longer works as it was get
 
 ### Still Experimental or Not Working Well (or at all)
 - Mask-Based Inpainting: Selective editing with diffusers blending, including Eligen entity control
-- All wrapper nodes, probably more stuff I'm omitting
 
 ### Recent Highlights
 
