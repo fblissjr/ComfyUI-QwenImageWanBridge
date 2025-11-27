@@ -99,6 +99,11 @@ class ZImageTextEncoder:
                     "default": False,
                     "tooltip": "Add <think></think> block (experimental)"
                 }),
+                "thinking_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content to insert between <think> tags (only used if add_think_block=True)"
+                }),
                 "max_sequence_length": ("INT", {
                     "default": DEFAULT_MAX_SEQUENCE_LENGTH,
                     "min": 64,
@@ -123,6 +128,7 @@ class ZImageTextEncoder:
         system_prompt: str = "",
         raw_prompt: str = "",
         add_think_block: bool = False,
+        thinking_content: str = "",
         max_sequence_length: int = DEFAULT_MAX_SEQUENCE_LENGTH,
     ) -> Tuple[Any, str]:
 
@@ -131,7 +137,7 @@ class ZImageTextEncoder:
             formatted_text = raw_prompt
         else:
             # Build formatted prompt with chat template
-            formatted_text = self._format_prompt(text, system_prompt, add_think_block)
+            formatted_text = self._format_prompt(text, system_prompt, add_think_block, thinking_content)
 
         # Encode
         tokens = clip.tokenize(formatted_text)
@@ -139,7 +145,7 @@ class ZImageTextEncoder:
 
         return (conditioning, formatted_text)
 
-    def _format_prompt(self, text: str, system_prompt: str = "", add_think_block: bool = False) -> str:
+    def _format_prompt(self, text: str, system_prompt: str = "", add_think_block: bool = False, thinking_content: str = "") -> str:
         parts = []
 
         if system_prompt.strip():
@@ -148,7 +154,10 @@ class ZImageTextEncoder:
         parts.append(f"<|im_start|>user\n{text}<|im_end|>")
 
         if add_think_block:
-            parts.append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+            if thinking_content.strip():
+                parts.append(f"<|im_start|>assistant\n<think>\n{thinking_content.strip()}\n</think>\n\n")
+            else:
+                parts.append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
         else:
             parts.append("<|im_start|>assistant\n")
 
@@ -180,6 +189,11 @@ class ZImageTextEncoderSimple:
                 "add_think_block": ("BOOLEAN", {
                     "default": False,
                 }),
+                "thinking_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content between <think> tags (only if add_think_block=True)"
+                }),
             }
         }
 
@@ -194,13 +208,17 @@ class ZImageTextEncoderSimple:
         clip,
         text: str,
         raw_prompt: str = "",
-        add_think_block: bool = False
+        add_think_block: bool = False,
+        thinking_content: str = ""
     ) -> Tuple[Any, str]:
 
         if raw_prompt.strip():
             formatted_text = raw_prompt
         elif add_think_block:
-            formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+            if thinking_content.strip():
+                formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n{thinking_content.strip()}\n</think>\n\n"
+            else:
+                formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
         else:
             formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
 
