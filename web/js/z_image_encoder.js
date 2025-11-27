@@ -1,6 +1,6 @@
 /**
  * Z-Image Text Encoder UI Extension
- * Auto-fills system_prompt when template_preset changes
+ * Updates system_prompt value when template_preset changes
  *
  * NOTE: Templates are loaded from nodes/templates/z_image_*.md files by Python.
  * This JS file contains a subset for auto-fill. Templates not listed here
@@ -46,68 +46,79 @@ const Z_IMAGE_TEMPLATES = {
 app.registerExtension({
   name: "Comfy.ZImageTextEncoder",
 
-  async nodeCreated(node) {
-    if (node.comfyClass !== "ZImageTextEncoder") return;
+  async beforeRegisterNodeDef(nodeType, nodeData, app) {
+    if (nodeData.name !== "ZImageTextEncoder") return;
 
-    const templateWidget = node.widgets?.find((w) => w.name === "template_preset");
-    const systemPromptWidget = node.widgets?.find((w) => w.name === "system_prompt");
+    const onNodeCreated = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function () {
+      const ret = onNodeCreated
+        ? onNodeCreated.apply(this, arguments)
+        : undefined;
 
-    if (!templateWidget || !systemPromptWidget) {
-      console.warn("ZImageTextEncoder: Widgets not found", {
-        template: !!templateWidget,
-        system: !!systemPromptWidget,
-        allWidgets: node.widgets?.map(w => w.name)
-      });
-      return;
-    }
+      const node = this;
 
-    console.log("ZImageTextEncoder: Setting up auto-fill for", node.id);
+      // Find widgets after a short delay to ensure they're initialized
+      setTimeout(() => {
+        const templateWidget = node.widgets?.find(
+          (w) => w.name === "template_preset"
+        );
+        const systemPromptWidget = node.widgets?.find(
+          (w) => w.name === "system_prompt"
+        );
 
-    // Store original callback
-    const originalCallback = templateWidget.callback;
-
-    // New callback that auto-fills system_prompt
-    templateWidget.callback = function(value, ...args) {
-      console.log("ZImageTextEncoder: Template changed to:", value);
-
-      // Call original if exists
-      if (originalCallback) {
-        originalCallback.call(this, value, ...args);
-      }
-
-      // Auto-fill system_prompt if we have content for this template
-      if (value in Z_IMAGE_TEMPLATES) {
-        const content = Z_IMAGE_TEMPLATES[value];
-        console.log("ZImageTextEncoder: Auto-filling system_prompt");
-        systemPromptWidget.value = content;
-
-        // Force widget update
-        if (systemPromptWidget.inputEl) {
-          systemPromptWidget.inputEl.value = content;
+        if (!templateWidget || !systemPromptWidget) {
+          console.log("ZImageTextEncoder: Missing widget", {
+            templateWidget: !!templateWidget,
+            systemPromptWidget: !!systemPromptWidget,
+          });
+          return;
         }
 
-        node.setDirtyCanvas(true, true);
-      } else {
-        // Template exists in Python (loaded from file) but not in JS auto-fill list
-        // This is fine - user can edit system_prompt manually
-        console.log("ZImageTextEncoder: Template", value, "loaded from file (edit system_prompt manually)");
-      }
+        console.log("ZImageTextEncoder: Widgets found, setting up callback");
+
+        // Store original callback
+        const originalCallback = templateWidget.callback;
+
+        // Override callback to update system_prompt field
+        templateWidget.callback = function (value) {
+          console.log("ZImageTextEncoder: Callback triggered", {
+            value,
+            hasTemplate: Z_IMAGE_TEMPLATES[value] !== undefined,
+          });
+
+          // Call original callback if exists
+          if (originalCallback) {
+            originalCallback.call(this, value);
+          }
+
+          // Update system_prompt based on preset
+          if (Z_IMAGE_TEMPLATES[value] !== undefined) {
+            const newValue = Z_IMAGE_TEMPLATES[value] || "";
+            console.log(
+              "ZImageTextEncoder: Setting system_prompt to:",
+              newValue.substring(0, 50) + (newValue.length > 50 ? "..." : "")
+            );
+            systemPromptWidget.value = newValue;
+          } else {
+            // Template loaded from file but not in JS - user can edit manually
+            console.log(
+              "ZImageTextEncoder: Template",
+              value,
+              "loaded from file (edit system_prompt manually)"
+            );
+          }
+
+          // Mark node as needing update
+          node.setDirtyCanvas(true, true);
+        };
+
+        // Trigger initial update if there's a value
+        if (templateWidget.value) {
+          templateWidget.callback(templateWidget.value);
+        }
+      }, 10);
+
+      return ret;
     };
-
-    // Also intercept direct value changes via setter
-    let currentValue = templateWidget.value;
-    Object.defineProperty(templateWidget, 'value', {
-      get() {
-        return currentValue;
-      },
-      set(newValue) {
-        const oldValue = currentValue;
-        currentValue = newValue;
-        if (oldValue !== newValue && templateWidget.callback) {
-          templateWidget.callback(newValue);
-        }
-      },
-      configurable: true
-    });
   },
 });
