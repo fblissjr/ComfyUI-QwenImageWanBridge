@@ -383,8 +383,6 @@ class ZImageTextEncoder:
 
             # Auto-enable think block if thinking_content provided
             use_think_block = add_think_block or bool(thinking_content.strip())
-            logger.debug(f"encode: add_think_block={add_think_block}, use_think_block={use_think_block}")
-            print(f"[Z-Image DEBUG] encode: add_think_block={add_think_block}, use_think_block={use_think_block}")
 
             # Build formatted prompt with chat template
             formatted_text = self._format_prompt(user_prompt, effective_system, use_think_block, thinking_content, assistant_content)
@@ -436,7 +434,12 @@ class ZImageTextEncoder:
 
         debug_lines.append("")
         debug_lines.append("=== Formatted Prompt ===")
-        debug_lines.append(formatted_text)
+        # Escape angle brackets for HTML preview to show think tags
+        debug_lines.append(formatted_text.replace("<", "&lt;").replace(">", "&gt;"))
+        debug_lines.append("")
+        debug_lines.append("=== Think Tag Check ===")
+        debug_lines.append(f"Contains '<think>': {'<think>' in formatted_text}")
+        debug_lines.append(f"Contains '</think>': {'</think>' in formatted_text}")
 
         # Estimate tokens (rough: ~4 chars per token for English)
         debug_lines.append("")
@@ -445,6 +448,9 @@ class ZImageTextEncoder:
         debug_lines.append(f"~{est_tokens} tokens (estimate)")
 
         debug_output = "\n".join(debug_lines)
+
+        # Log formatted prompt to console
+        print(f"\n[Z-Image] Formatted prompt:\n{formatted_text}\n")
 
         # Encode
         tokens = clip.tokenize(formatted_text)
@@ -476,8 +482,6 @@ class ZImageTextEncoder:
         parts.append(f"<|im_start|>user\n{user_prompt}<|im_end|>")
 
         # Build assistant section - match Qwen3 template exactly
-        logger.debug(f"_format_prompt: add_think_block={add_think_block}, thinking_content={repr(thinking_content)}")
-        print(f"[Z-Image DEBUG] _format_prompt: add_think_block={add_think_block}")
         if add_think_block:
             # Format: <|im_start|>assistant\n<think>\n{content}\n</think>\n\n{assistant}
             think_inner = thinking_content.strip() if thinking_content.strip() else ""
