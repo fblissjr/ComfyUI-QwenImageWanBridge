@@ -22,16 +22,16 @@ except ImportError:
 
 
 def load_z_image_templates() -> Dict[str, str]:
-    """Load Z-Image templates from nodes/templates/z_image_*.md files."""
+    """Load Z-Image templates from nodes/templates/z_image/*.md files."""
     templates = {}
-    templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+    templates_dir = os.path.join(os.path.dirname(__file__), "templates", "z_image")
 
     if not os.path.exists(templates_dir):
         return templates
 
     for filename in os.listdir(templates_dir):
-        if filename.startswith('z_image_') and filename.endswith('.md'):
-            template_name = filename[8:-3]  # Remove 'z_image_' prefix and '.md' suffix
+        if filename.endswith('.md'):
+            template_name = filename[:-3]  # Remove '.md' suffix
             template_path = os.path.join(templates_dir, filename)
             try:
                 with open(template_path, 'r', encoding='utf-8') as f:

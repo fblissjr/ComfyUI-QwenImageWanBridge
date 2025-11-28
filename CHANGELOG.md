@@ -9,6 +9,11 @@
 - `thinking_content` now correctly placed inside `<think>...</think>` tags
 - Added `assistant_content` field for content AFTER `</think>` tags
 
+**Template Loading Bug**
+- Python now loads templates from files if `system_prompt` is empty (JS fallback)
+- Previously, `template_preset` was received but never used - relied entirely on JS auto-fill
+- Now works even if JS fails (browser cache, errors, etc.)
+
 **Template Structure:**
 ```
 <|im_start|>system
@@ -27,6 +32,13 @@
 - `add_think_block` now auto-enables when `thinking_content` is provided
 - Both `ZImageTextEncoder` and `ZImageTextEncoderSimple` updated with `assistant_content`
 - JS uses `beforeRegisterNodeDef` pattern (matches qwen_template_builder.js)
+
+### Architecture
+- **Single source of truth**: Templates only in `nodes/templates/z_image_*.md`
+- **API endpoint**: `/api/z_image_templates` serves templates to JS
+- **JS fetches from API**: No hardcoded templates (was 134 duplicated in JS)
+- **Python fallback**: Encoder loads from files if JS fails
+- **Adding templates**: Just add `.md` file - no JS/Python changes needed
 
 ---
 
