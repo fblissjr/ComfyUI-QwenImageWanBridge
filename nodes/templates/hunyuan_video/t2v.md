@@ -1,4 +1,7 @@
 ---
+name: t2v
+description: Default text-to-video template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

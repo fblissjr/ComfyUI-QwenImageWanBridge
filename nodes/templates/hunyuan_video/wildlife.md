@@ -1,4 +1,7 @@
 ---
+name: wildlife
+description: HunyuanVideo wildlife template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

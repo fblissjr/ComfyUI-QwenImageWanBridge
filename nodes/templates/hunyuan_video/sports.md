@@ -1,4 +1,7 @@
 ---
+name: sports
+description: Sports and athletic action
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

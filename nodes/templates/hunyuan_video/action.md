@@ -1,4 +1,7 @@
 ---
+name: action
+description: High-energy action sequences with dynamic movement
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

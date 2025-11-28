@@ -1,4 +1,7 @@
 ---
+name: horror
+description: Horror and suspense atmosphere
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

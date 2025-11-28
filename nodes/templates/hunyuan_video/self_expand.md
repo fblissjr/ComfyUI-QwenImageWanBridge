@@ -1,4 +1,7 @@
 ---
+name: self_expand
+description: HunyuanVideo self expand template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

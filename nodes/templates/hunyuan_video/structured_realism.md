@@ -1,4 +1,7 @@
 ---
+name: structured_realism
+description: HunyuanVideo structured realism template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

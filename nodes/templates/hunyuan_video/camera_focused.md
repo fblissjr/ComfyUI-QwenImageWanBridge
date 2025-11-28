@@ -1,4 +1,7 @@
 ---
+name: camera_focused
+description: Camera technique focused descriptions
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

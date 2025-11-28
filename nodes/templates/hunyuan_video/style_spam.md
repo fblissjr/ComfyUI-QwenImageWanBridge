@@ -1,4 +1,7 @@
 ---
+name: style_spam
+description: HunyuanVideo style spam template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

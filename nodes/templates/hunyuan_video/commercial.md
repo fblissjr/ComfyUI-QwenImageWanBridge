@@ -1,4 +1,7 @@
 ---
+name: commercial
+description: Commercial and advertisement style video
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

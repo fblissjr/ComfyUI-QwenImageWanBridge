@@ -1,4 +1,7 @@
 ---
+name: animation
+description: Animated style video with cartoon-like qualities
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

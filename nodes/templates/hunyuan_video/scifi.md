@@ -1,4 +1,7 @@
 ---
+name: scifi
+description: Science fiction futuristic aesthetic
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

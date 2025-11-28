@@ -1,4 +1,7 @@
 ---
+name: infomercial_disaster
+description: HunyuanVideo infomercial disaster template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

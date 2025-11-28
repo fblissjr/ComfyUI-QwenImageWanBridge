@@ -1,4 +1,7 @@
 ---
+name: temporal_only
+description: HunyuanVideo temporal only template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

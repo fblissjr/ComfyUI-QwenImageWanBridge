@@ -1,4 +1,7 @@
 ---
+name: comedy
+description: Comedic and humorous video content
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

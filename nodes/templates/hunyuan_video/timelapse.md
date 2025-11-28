@@ -1,4 +1,7 @@
 ---
+name: timelapse
+description: Timelapse photography style
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

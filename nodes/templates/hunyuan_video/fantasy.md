@@ -1,4 +1,7 @@
 ---
+name: fantasy
+description: HunyuanVideo fantasy template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

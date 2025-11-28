@@ -1,4 +1,7 @@
 ---
+name: slowmo
+description: HunyuanVideo slowmo template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

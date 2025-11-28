@@ -1,4 +1,7 @@
 ---
+name: documentary
+description: Documentary style with informative approach
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

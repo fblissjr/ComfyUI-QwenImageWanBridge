@@ -1,4 +1,7 @@
 ---
+name: nature
+description: Nature and wildlife focused
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

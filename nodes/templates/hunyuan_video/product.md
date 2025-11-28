@@ -1,4 +1,7 @@
 ---
+name: product
+description: Product showcase and demonstration
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

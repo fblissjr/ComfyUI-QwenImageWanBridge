@@ -1,4 +1,7 @@
 ---
+name: lighting_focused
+description: HunyuanVideo lighting focused template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

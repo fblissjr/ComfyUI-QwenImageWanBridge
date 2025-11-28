@@ -1,4 +1,7 @@
 ---
+name: 80s_music_video
+description: Retro 80s music video aesthetic with neon colors and vintage effects
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

@@ -1,4 +1,7 @@
 ---
+name: minimal_structure
+description: HunyuanVideo minimal structure template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

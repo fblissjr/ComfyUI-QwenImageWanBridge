@@ -1,4 +1,7 @@
 ---
+name: excited_dog_pov
+description: HunyuanVideo excited dog pov template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

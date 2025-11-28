@@ -88,7 +88,7 @@ Old multi-connection system (mode + system_prompt) no longer works as it was get
 ### Recent Highlights
 
 **HunyuanVideo 1.5 (v2.8.0)**
-- 39 video templates in `nodes/templates/hunyuan_video_*.md`
+- Video templates in `nodes/templates/hunyuan_video/`
 - `HunyuanVideoTextEncoder` with template dropdown + additional instructions
 - Dual output (positive/negative) for direct KSampler connection
 
@@ -188,7 +188,7 @@ QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
 
 ### Template System (HunyuanVideo)
 - Use `template_preset` dropdown directly on `HunyuanVideoTextEncoder`
-- 39 video templates available (cinematic, animation, documentary, etc.)
+- Video templates in `nodes/templates/hunyuan_video/` (cinematic, animation, documentary, etc.)
 - Use `additional_instructions` to layer modifications on any template
 - Use `custom_system_prompt` for full manual control
 

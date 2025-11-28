@@ -1,4 +1,7 @@
 ---
+name: abstract
+description: Abstract visual compositions with non-representational forms
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

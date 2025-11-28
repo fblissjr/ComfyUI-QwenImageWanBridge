@@ -1,4 +1,7 @@
 ---
+name: cinematic
+description: Cinematic video with professional film qualities
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

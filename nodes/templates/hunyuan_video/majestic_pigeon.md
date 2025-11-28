@@ -1,4 +1,7 @@
 ---
+name: majestic_pigeon
+description: HunyuanVideo majestic pigeon template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 experimental: true

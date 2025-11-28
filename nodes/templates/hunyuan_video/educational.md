@@ -1,4 +1,7 @@
 ---
+name: educational
+description: Educational and instructional content
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

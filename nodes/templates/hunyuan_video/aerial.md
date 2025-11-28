@@ -1,4 +1,7 @@
 ---
+name: aerial
+description: Aerial and drone-style footage perspectives
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---

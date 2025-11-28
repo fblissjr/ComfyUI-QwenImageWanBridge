@@ -1,4 +1,7 @@
 ---
+name: urban
+description: HunyuanVideo urban template
+model: hunyuan-video
 mode: text_to_video
 data_type: video
 ---
