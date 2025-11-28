@@ -4,15 +4,19 @@ Z-Image Text Encoder for ComfyUI
 Transparent encoder - see exactly what gets sent to the model.
 Templates auto-fill the system prompt field so you can edit them.
 Use raw_prompt for complete control with your own special tokens.
+Use ZImageMessageChain for multi-turn conversations.
 """
 
 import os
+import copy
 import logging
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List, Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_SEQUENCE_LENGTH = 512
+
+# Custom type for conversation chains
+ZIMAGE_CONVERSATION_TYPE = "ZIMAGE_CONVERSATION"
 
 try:
     import yaml
@@ -22,16 +26,16 @@ except ImportError:
 
 
 def load_z_image_templates() -> Dict[str, str]:
-    """Load Z-Image templates from nodes/templates/z_image_*.md files."""
+    """Load Z-Image templates from nodes/templates/z_image/*.md files."""
     templates = {}
-    templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+    templates_dir = os.path.join(os.path.dirname(__file__), "templates", "z_image")
 
     if not os.path.exists(templates_dir):
         return templates
 
     for filename in os.listdir(templates_dir):
-        if filename.startswith('z_image_') and filename.endswith('.md'):
-            template_name = filename[8:-3]  # Remove 'z_image_' prefix and '.md' suffix
+        if filename.endswith('.md'):
+            template_name = filename[:-3]  # Remove '.md' suffix
             template_path = os.path.join(templates_dir, filename)
             try:
                 with open(template_path, 'r', encoding='utf-8') as f:
@@ -56,10 +60,173 @@ def get_templates() -> Dict[str, str]:
     return _TEMPLATE_CACHE
 
 
+def format_conversation(conversation: Dict[str, Any]) -> str:
+    """
+    Format a conversation dict into Qwen3-4B chat template format.
+
+    Conversation structure:
+    {
+        "enable_thinking": bool,
+        "messages": [
+            {"role": "system", "content": "..."},
+            {"role": "user", "content": "..."},
+            {"role": "assistant", "content": "...", "thinking": "..."},
+            ...
+        ]
+    }
+
+    Output format:
+    <|im_start|>system
+    {content}<|im_end|>
+    <|im_start|>user
+    {content}<|im_end|>
+    <|im_start|>assistant
+    <think>
+    {thinking}
+    </think>
+
+    {content}<|im_end|>
+    ...
+
+    Note: Last message does NOT get <|im_end|> (still being generated).
+    """
+    enable_thinking = conversation.get("enable_thinking", False)
+    messages = conversation.get("messages", [])
+
+    if not messages:
+        return ""
+
+    parts = []
+    for i, msg in enumerate(messages):
+        role = msg.get("role", "user")
+        content = msg.get("content", "").strip()
+        thinking = msg.get("thinking", "").strip()
+        is_last = (i == len(messages) - 1)
+
+        if role == "system":
+            if content:
+                if is_last:
+                    parts.append(f"<|im_start|>system\n{content}")
+                else:
+                    parts.append(f"<|im_start|>system\n{content}<|im_end|>")
+
+        elif role == "user":
+            if is_last:
+                parts.append(f"<|im_start|>user\n{content}")
+            else:
+                parts.append(f"<|im_start|>user\n{content}<|im_end|>")
+
+        elif role == "assistant":
+            if enable_thinking:
+                # With thinking: <|im_start|>assistant\n<think>\n{think}\n</think>\n\n{content}
+                think_inner = thinking if thinking else ""
+                if is_last:
+                    parts.append(f"<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n{content}")
+                else:
+                    parts.append(f"<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n{content}<|im_end|>")
+            else:
+                # Without thinking: <|im_start|>assistant\n{content}
+                if is_last:
+                    parts.append(f"<|im_start|>assistant\n{content}")
+                else:
+                    parts.append(f"<|im_start|>assistant\n{content}<|im_end|>")
+
+    return "\n".join(parts)
+
+
+class ZImageMessageChain:
+    """
+    Build multi-turn conversations for Z-Image encoding.
+
+    Chain multiple nodes together:
+    1. First node: Set role=system with your system prompt, enable_thinking as desired
+    2. Next nodes: Add user and assistant messages
+    3. Connect final output to ZImageTextEncoder's conversation_override input
+
+    Thinking tokens:
+    - If enable_thinking=True (set on first node), assistant messages get <think></think>
+    - Provide thinking content in thinking_content field
+    - Empty thinking_content = empty <think></think> tags
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "role": (["system", "user", "assistant"], {
+                    "default": "user",
+                    "tooltip": "Message role"
+                }),
+                "content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Message content"
+                }),
+            },
+            "optional": {
+                "previous": (ZIMAGE_CONVERSATION_TYPE, {
+                    "tooltip": "Previous conversation chain (connect from another ZImageMessageChain)"
+                }),
+                "thinking_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Thinking content (only for assistant role, requires enable_thinking)"
+                }),
+                "enable_thinking": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Enable thinking mode (only used when starting new conversation)"
+                }),
+            }
+        }
+
+    RETURN_TYPES = (ZIMAGE_CONVERSATION_TYPE,)
+    RETURN_NAMES = ("conversation",)
+    FUNCTION = "add_message"
+    CATEGORY = "ZImage/Conversation"
+    TITLE = "Z-Image Message Chain"
+
+    def add_message(
+        self,
+        role: str,
+        content: str,
+        previous: Optional[Dict[str, Any]] = None,
+        thinking_content: str = "",
+        enable_thinking: bool = False,
+    ) -> Tuple[Dict[str, Any]]:
+
+        if previous is None:
+            # Start new conversation
+            conversation = {
+                "enable_thinking": enable_thinking,
+                "messages": []
+            }
+        else:
+            # Continue existing conversation (deep copy to avoid shared references)
+            conversation = {
+                "enable_thinking": previous.get("enable_thinking", False),
+                "messages": copy.deepcopy(previous.get("messages", []))
+            }
+
+        # Build message
+        message = {
+            "role": role,
+            "content": content.strip(),
+        }
+
+        # Add thinking for assistant messages
+        if role == "assistant" and thinking_content.strip():
+            message["thinking"] = thinking_content.strip()
+
+        conversation["messages"].append(message)
+
+        return (conversation,)
+
+
 class ZImageTextEncoder:
     """
     Z-Image Text Encoder - transparent and editable.
 
+    - conversation_override: Connect ZImageMessageChain for multi-turn (overrides all below)
     - template_preset: Dropdown loads template into system_prompt field (via JS)
     - system_prompt: Editable - modify any template or write your own
     - raw_prompt: Complete control - bypass all formatting, use your own special tokens
@@ -77,10 +244,13 @@ class ZImageTextEncoder:
                 "text": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "tooltip": "Your prompt"
+                    "tooltip": "Your prompt (ignored if conversation_override connected)"
                 }),
             },
             "optional": {
+                "conversation_override": (ZIMAGE_CONVERSATION_TYPE, {
+                    "tooltip": "Connect ZImageMessageChain output - overrides all other inputs"
+                }),
                 "template_preset": (template_names, {
                     "default": "none",
                     "tooltip": "Select template - auto-fills system_prompt field (editable)"
@@ -109,13 +279,6 @@ class ZImageTextEncoder:
                     "default": "",
                     "tooltip": "Content AFTER </think> tags (what assistant says after thinking)"
                 }),
-                "max_sequence_length": ("INT", {
-                    "default": DEFAULT_MAX_SEQUENCE_LENGTH,
-                    "min": 64,
-                    "max": 4096,
-                    "step": 64,
-                    "tooltip": "Max tokens (512 matches diffusers)"
-                }),
             }
         }
 
@@ -129,17 +292,20 @@ class ZImageTextEncoder:
         self,
         clip,
         text: str,
+        conversation_override: Optional[Dict[str, Any]] = None,
         template_preset: str = "none",
         system_prompt: str = "",
         raw_prompt: str = "",
         add_think_block: bool = False,
         thinking_content: str = "",
         assistant_content: str = "",
-        max_sequence_length: int = DEFAULT_MAX_SEQUENCE_LENGTH,
     ) -> Tuple[Any, str]:
 
+        # CONVERSATION OVERRIDE: multi-turn from ZImageMessageChain
+        if conversation_override is not None and conversation_override.get("messages"):
+            formatted_text = format_conversation(conversation_override)
         # RAW MODE: complete control
-        if raw_prompt.strip():
+        elif raw_prompt.strip():
             formatted_text = raw_prompt
         else:
             # Determine system prompt: use provided, or fallback to template file
@@ -199,83 +365,6 @@ class ZImageTextEncoder:
         return "\n".join(parts)
 
 
-class ZImageTextEncoderSimple:
-    """
-    Simple Z-Image encoder with raw output visibility.
-    Follows Qwen3-4B chat template format.
-    """
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "clip": ("CLIP",),
-                "text": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "dynamicPrompts": True,
-                }),
-            },
-            "optional": {
-                "raw_prompt": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "tooltip": "RAW: Bypass formatting, use your own special tokens"
-                }),
-                "add_think_block": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Add <think></think> block (auto-enabled if thinking_content provided)"
-                }),
-                "thinking_content": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "tooltip": "Content inside <think>...</think> tags"
-                }),
-                "assistant_content": ("STRING", {
-                    "multiline": True,
-                    "default": "",
-                    "tooltip": "Content AFTER </think> (what assistant says after thinking)"
-                }),
-            }
-        }
-
-    RETURN_TYPES = ("CONDITIONING", "STRING")
-    RETURN_NAMES = ("conditioning", "formatted_prompt")
-    FUNCTION = "encode"
-    CATEGORY = "ZImage/Encoding"
-    TITLE = "Z-Image Text Encode (Simple)"
-
-    def encode(
-        self,
-        clip,
-        text: str,
-        raw_prompt: str = "",
-        add_think_block: bool = False,
-        thinking_content: str = "",
-        assistant_content: str = ""
-    ) -> Tuple[Any, str]:
-
-        if raw_prompt.strip():
-            formatted_text = raw_prompt
-        else:
-            # Auto-enable think block if thinking_content provided
-            use_think_block = add_think_block or bool(thinking_content.strip())
-
-            if use_think_block:
-                # Qwen3 format: <|im_start|>assistant\n<think>\n{think}\n</think>\n\n{assistant}
-                think_inner = thinking_content.strip() if thinking_content.strip() else ""
-                assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
-                formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n{assistant_inner}"
-            else:
-                assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
-                formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n{assistant_inner}"
-
-        tokens = clip.tokenize(formatted_text)
-        conditioning = clip.encode_from_tokens_scheduled(tokens)
-
-        return (conditioning, formatted_text)
-
-
 # Export templates for JS
 def get_z_image_template_systems() -> Dict[str, str]:
     """Get template systems for JS auto-fill. Called by __init__.py for API."""
@@ -284,10 +373,10 @@ def get_z_image_template_systems() -> Dict[str, str]:
 
 NODE_CLASS_MAPPINGS = {
     "ZImageTextEncoder": ZImageTextEncoder,
-    "ZImageTextEncoderSimple": ZImageTextEncoderSimple,
+    "ZImageMessageChain": ZImageMessageChain,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ZImageTextEncoder": "Z-Image Text Encoder",
-    "ZImageTextEncoderSimple": "Z-Image Text Encode (Simple)",
+    "ZImageMessageChain": "Z-Image Message Chain",
 }

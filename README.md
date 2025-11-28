@@ -19,7 +19,7 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 
 **Nodes:**
 - `ZImageTextEncoder` - Full-featured with templates, system prompts, raw mode, thinking/assistant content
-- `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode
+- `ZImageMessageChain` - Build multi-turn conversations for advanced control
 
 **Features:**
 - `template_preset` dropdown auto-fills `system_prompt` (editable via JS)
@@ -27,11 +27,11 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 - `formatted_prompt` output - see exactly what gets encoded
 - `thinking_content` - content inside `<think>...</think>` tags
 - `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
-- `add_think_block` (default False, auto-enabled if thinking_content provided)
+- Multi-turn conversation support via ZImageMessageChain
 
 **Documentation:**
-- [Z-Image Workflow Guide](nodes/docs/z_image_workflow_guide.md) - Setup and experiments
-- 
+- [Z-Image Encoder Guide](nodes/docs/z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)
+
 ### HunyuanVideo 1.5 Text-to-Video Support
 
 Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampler/VAE.
@@ -39,7 +39,7 @@ Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampl
 **Nodes:**
 - `HunyuanVideoCLIPLoader` - Load Qwen2.5-VL (byT5 optional for multilingual)
 - `HunyuanVideoTextEncoder` - T2V with dual output (positive, negative)
-  - 39 built-in video templates via `template_preset` dropdown
+  - Built-in video templates via `template_preset` dropdown
   - `additional_instructions` to layer modifications on templates
   - `custom_system_prompt` for full manual control
 
@@ -87,7 +87,7 @@ Old multi-connection system (mode + system_prompt) no longer works as it was get
 ### Recent Highlights
 
 **HunyuanVideo 1.5 (v2.8.0)**
-- 39 video templates in `nodes/templates/hunyuan_video_*.md`
+- Video templates in `nodes/templates/hunyuan_video/`
 - `HunyuanVideoTextEncoder` with template dropdown + additional instructions
 - Dual output (positive/negative) for direct KSampler connection
 
@@ -187,7 +187,7 @@ QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
 
 ### Template System (HunyuanVideo)
 - Use `template_preset` dropdown directly on `HunyuanVideoTextEncoder`
-- 39 video templates available (cinematic, animation, documentary, etc.)
+- Video templates in `nodes/templates/hunyuan_video/` (cinematic, animation, documentary, etc.)
 - Use `additional_instructions` to layer modifications on any template
 - Use `custom_system_prompt` for full manual control
 

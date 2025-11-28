@@ -251,13 +251,27 @@ except Exception as e:
 
 # Text encoder with template system
 try:
-    from .nodes.hunyuan_video_encoder import HunyuanVideoTextEncoder
+    from .nodes.hunyuan_video_encoder import HunyuanVideoTextEncoder, get_templates as get_hunyuan_video_templates
 
     NODE_CLASS_MAPPINGS["HunyuanVideoTextEncoder"] = HunyuanVideoTextEncoder
     NODE_DISPLAY_NAME_MAPPINGS["HunyuanVideoTextEncoder"] = "HunyuanVideo Text Encoder"
 
-    print("[QwenImageWanBridge] Loaded HunyuanVideo text encoder")
-    print("[QwenImageWanBridge] FEATURE: 23 video templates, dual pos/neg output")
+    # Register API endpoint for templates (single source of truth)
+    try:
+        from aiohttp import web
+        from server import PromptServer
+
+        @PromptServer.instance.routes.get("/api/hunyuan_video_templates")
+        async def get_hunyuan_video_templates_api(request):
+            """API endpoint for HunyuanVideo templates - JS fetches from here."""
+            templates = get_hunyuan_video_templates()
+            return web.json_response(templates)
+
+        print("[QwenImageWanBridge] Loaded HunyuanVideo text encoder")
+        print("[QwenImageWanBridge] API: /api/hunyuan_video_templates endpoint registered")
+    except Exception as api_err:
+        print(f"[QwenImageWanBridge] Loaded HunyuanVideo encoder (API endpoint failed: {api_err})")
+
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load HunyuanVideo encoder: {e}")
 
@@ -278,16 +292,30 @@ except Exception as e:
 # ============================================================================
 
 try:
-    from .nodes.z_image_encoder import ZImageTextEncoder, ZImageTextEncoderSimple
+    from .nodes.z_image_encoder import ZImageTextEncoder, ZImageMessageChain, get_templates
 
     NODE_CLASS_MAPPINGS["ZImageTextEncoder"] = ZImageTextEncoder
     NODE_DISPLAY_NAME_MAPPINGS["ZImageTextEncoder"] = "Z-Image Text Encoder"
 
-    NODE_CLASS_MAPPINGS["ZImageTextEncoderSimple"] = ZImageTextEncoderSimple
-    NODE_DISPLAY_NAME_MAPPINGS["ZImageTextEncoderSimple"] = "Z-Image Text Encode (Simple)"
+    NODE_CLASS_MAPPINGS["ZImageMessageChain"] = ZImageMessageChain
+    NODE_DISPLAY_NAME_MAPPINGS["ZImageMessageChain"] = "Z-Image Message Chain"
 
-    print("[QwenImageWanBridge] Loaded Z-Image encoder nodes (2 nodes)")
-    print("[QwenImageWanBridge] FIX: Adds missing thinking tokens that ComfyUI omits")
+    # Register API endpoint for templates (single source of truth)
+    try:
+        from aiohttp import web
+        from server import PromptServer
+
+        @PromptServer.instance.routes.get("/api/z_image_templates")
+        async def get_z_image_templates(request):
+            """API endpoint for Z-Image templates - JS fetches from here."""
+            templates = get_templates()
+            return web.json_response(templates)
+
+        print("[QwenImageWanBridge] Loaded Z-Image encoder nodes (2 nodes)")
+        print("[QwenImageWanBridge] API: /api/z_image_templates endpoint registered")
+    except Exception as api_err:
+        print(f"[QwenImageWanBridge] Loaded Z-Image nodes (API endpoint failed: {api_err})")
+
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Z-Image encoder nodes: {e}")
 

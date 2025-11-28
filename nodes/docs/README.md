@@ -2,18 +2,16 @@
 
 Comprehensive documentation for all ComfyUI Qwen nodes.
 
-## Z-Image (NEW)
+## Z-Image
 
-Fixes ComfyUI's missing thinking tokens for Z-Image/Qwen3-4B encoding.
+Text encoding for Z-Image with Qwen3-4B. Matches diffusers by default, with optional experimental parameters.
 
 ### Nodes
-- [ZImageTextEncoder](z_image_nodes.md#zimagetextencoder) - Full encoder with thinking tokens, system prompts, templates
-- [ZImageTextEncoderSimple](z_image_nodes.md#zimagetextencodersimple) - Drop-in CLIPTextEncode replacement
+- [ZImageTextEncoder](z_image_encoder.md#zimagetextencoder-full-featured) - Full encoder with templates, system prompts, multi-turn support
+- [ZImageMessageChain](z_image_encoder.md#zimagemessagechain-multi-turn-conversations) - Build multi-turn conversations
 
-### Guides
-- [Z-Image Nodes Reference](z_image_nodes.md) - Detailed node documentation
-- [Z-Image Workflow Guide](z_image_workflow_guide.md) - Step-by-step setup
-- [Z-Image Analysis](z_image_analysis.md) - ComfyUI vs Diffusers vs Qwen3 comparison
+### Documentation
+- [Z-Image Encoder Guide](z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)
 - [Z-Image Turbo Workflow Analysis](z_image_turbo_workflow_analysis.md) - Official workflow breakdown
 
 ---
@@ -112,7 +110,7 @@ Located in `example_workflows/`:
 
 ### Z-Image
 - `official_workflows/comfy_z_image_turbo_example_workflow.json` - Official workflow (uses CLIPTextEncode)
-- To use our fix: Replace CLIPTextEncode with ZImageTextEncoderSimple
+- To use our encoder: Replace CLIPTextEncode with ZImageTextEncoder
 
 ### Qwen-Image-Edit
 - `qwen_edit_2509_single_image_edit.json` - Single image editing
