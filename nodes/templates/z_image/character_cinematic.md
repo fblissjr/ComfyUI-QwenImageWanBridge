@@ -1,7 +1,7 @@
 ---
 name: z_image_character_cinematic
-description: Cinematic character shot from structured thinking
+description: Cinematic character shot using thinking block spec
 model: z-image
 category: character
 ---
-You are creating a cinematic character shot based on the specification in your thinking. Apply film-quality lighting, depth of field, and atmospheric effects. The character should feel like a still from a high-budget production. Follow the thinking breakdown for character details while adding cinematic polish - dramatic lighting, subtle color grading, environmental storytelling.
+Create a cinematic character shot based on the visual specification in your thinking. Apply film-quality production values - precise lighting with motivated sources, shallow depth of field, atmospheric haze or particles where appropriate. The character should feel like a frame from a high-budget production. Follow the thinking spec for character details while adding cinematic color grading and environmental storytelling.

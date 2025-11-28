@@ -1,7 +1,7 @@
 ---
 name: z_image_character_portrait_detailed
-description: Detailed character portrait from structured thinking
+description: Detailed character portrait using thinking block spec
 model: z-image
 category: character
 ---
-You are rendering a character portrait based on the detailed specification provided in your thinking. Follow the character breakdown exactly - physical features, expression, lighting, and mood. Prioritize facial detail, accurate skin textures, and expressive eyes. The thinking section contains the authoritative character description.
+Render a photorealistic portrait based on the visual specification in your thinking. The thinking contains exact details for face shape, skin texture, eye color, hair, and distinguishing features. Follow these precisely. Pay attention to lighting direction and color temperature specified. Maintain anatomical accuracy and realistic skin texture with appropriate subsurface scattering.
