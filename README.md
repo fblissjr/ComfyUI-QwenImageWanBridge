@@ -40,7 +40,7 @@ Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampl
 **Nodes:**
 - `HunyuanVideoCLIPLoader` - Load Qwen2.5-VL (byT5 optional for multilingual)
 - `HunyuanVideoTextEncoder` - T2V with dual output (positive, negative)
-  - 39 built-in video templates via `template_preset` dropdown
+  - Built-in video templates via `template_preset` dropdown
   - `additional_instructions` to layer modifications on templates
   - `custom_system_prompt` for full manual control
 

@@ -27,14 +27,51 @@ except ImportError:
     logger.warning("PyYAML not available, template metadata parsing limited")
 
 
+def load_hunyuan_video_templates() -> Dict[str, str]:
+    """Load HunyuanVideo templates from nodes/templates/hunyuan_video/*.md files."""
+    templates = {}
+    templates_dir = os.path.join(os.path.dirname(__file__), "templates", "hunyuan_video")
+
+    if not os.path.exists(templates_dir):
+        return templates
+
+    for filename in os.listdir(templates_dir):
+        if filename.endswith('.md'):
+            template_name = filename[:-3]  # Remove '.md' suffix
+            template_path = os.path.join(templates_dir, filename)
+            try:
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                if content.startswith('---'):
+                    parts = content.split('---', 2)
+                    if len(parts) >= 3:
+                        templates[template_name] = parts[2].strip()
+            except Exception as e:
+                logger.warning(f"Failed to load template {filename}: {e}")
+
+    return templates
+
+
+# Global template cache
+_TEMPLATE_CACHE = None
+
+
+def get_templates() -> Dict[str, str]:
+    """Get cached templates. Called by __init__.py for API."""
+    global _TEMPLATE_CACHE
+    if _TEMPLATE_CACHE is None:
+        _TEMPLATE_CACHE = load_hunyuan_video_templates()
+    return _TEMPLATE_CACHE
+
+
 class HunyuanVideoTextEncoder:
     """
     HunyuanVideo 1.5 Text Encoder with template system.
     Outputs both positive and negative conditioning for CFG.
 
     Features:
-    - 23 video templates in nodes/templates/hunyuan_video_*.md
-    - Custom system prompt support
+    - Video templates in nodes/templates/hunyuan_video/*.md
+    - Custom system prompt support (editable after template auto-fill)
     - Dual output (positive, negative) for direct KSampler connection
     - byT5 auto-triggered by quoted text (ComfyUI handles this)
     """
@@ -43,12 +80,12 @@ class HunyuanVideoTextEncoder:
 
     def __init__(self):
         """Initialize with template loading."""
-        self.templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+        self.templates_dir = os.path.join(os.path.dirname(__file__), "templates", "hunyuan_video")
         self.available_templates = self._load_available_templates()
         logger.info(f"[HunyuanVideoTextEncoder] Loaded {len(self.available_templates)} templates")
 
     def _load_available_templates(self) -> Dict[str, Dict[str, Any]]:
-        """Load available templates from templates/ directory."""
+        """Load available templates from templates/hunyuan_video/ directory."""
         templates = {}
 
         if not os.path.exists(self.templates_dir):
@@ -56,9 +93,8 @@ class HunyuanVideoTextEncoder:
             return templates
 
         for filename in os.listdir(self.templates_dir):
-            # Only load hunyuan_video templates
-            if filename.startswith('hunyuan_video_') and filename.endswith('.md'):
-                template_name = filename[:-3]  # Remove .md extension
+            if filename.endswith('.md'):
+                template_name = filename[:-3]  # Remove .md extension (no prefix to strip)
                 template_path = os.path.join(self.templates_dir, filename)
 
                 try:

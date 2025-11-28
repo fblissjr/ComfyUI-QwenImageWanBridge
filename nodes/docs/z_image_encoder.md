@@ -73,20 +73,20 @@ Full encoder with system prompts, templates, and debug mode.
 |-------|------|----------|---------|-------------|
 | clip | CLIP | Yes | - | Z-Image CLIP model (lumina2 type) |
 | text | STRING | Yes | "" | Your prompt |
-| system_prompt_preset | ENUM | No | "none" | Preset system prompts: none, quality, photorealistic, artistic, bilingual |
-| custom_system_prompt | STRING | No | "" | Custom system prompt (overrides preset) |
-| template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image_*.md` |
-| add_think_block | BOOLEAN | No | **False** | EXPERIMENTAL: Add `<think></think>` block |
-| thinking_content | STRING | No | "" | EXPERIMENTAL: Custom reasoning inside think tags |
+| template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image/` (auto-fills system_prompt) |
+| system_prompt | STRING | No | "" | Editable system prompt (auto-filled by template via JS) |
+| raw_prompt | STRING | No | "" | RAW MODE: Bypass all formatting, use your own tokens |
+| add_think_block | BOOLEAN | No | **False** | Add `<think></think>` block (auto-enabled if thinking_content provided) |
+| thinking_content | STRING | No | "" | Content INSIDE `<think>...</think>` tags |
+| assistant_content | STRING | No | "" | Content AFTER `</think>` tags |
 | max_sequence_length | INT | No | 512 | Maximum tokens (matches diffusers) |
-| debug_mode | BOOLEAN | No | False | Show encoding details |
 
 #### Outputs
 
 | Output | Type | Description |
 |--------|------|-------------|
 | conditioning | CONDITIONING | Encoded text embeddings (2560 dimensions) |
-| debug_output | STRING | Processing details when debug_mode=True |
+| formatted_prompt | STRING | Exact prompt that was encoded (for debugging) |
 
 ### ZImageTextEncoderSimple (Drop-in Replacement)
 
@@ -98,13 +98,17 @@ Minimal encoder - drop-in replacement for CLIPTextEncode. Default behavior match
 |-------|------|----------|---------|-------------|
 | clip | CLIP | Yes | - | Z-Image CLIP model |
 | text | STRING | Yes | "" | Your prompt |
-| add_think_block | BOOLEAN | No | **False** | EXPERIMENTAL: Add `<think></think>` block |
+| raw_prompt | STRING | No | "" | RAW: Bypass formatting, use your own tokens |
+| add_think_block | BOOLEAN | No | **False** | Add `<think></think>` block (auto-enabled if thinking_content provided) |
+| thinking_content | STRING | No | "" | Content INSIDE `<think>...</think>` tags |
+| assistant_content | STRING | No | "" | Content AFTER `</think>` tags |
 
 #### Outputs
 
 | Output | Type | Description |
 |--------|------|-------------|
 | conditioning | CONDITIONING | Encoded text embeddings |
+| formatted_prompt | STRING | Exact prompt that was encoded |
 
 ## Qwen3 Model Variants
 
@@ -151,14 +155,15 @@ When `add_think_block=True`, ComfyUI tokenizes `<think>` as subwords `['<th', 'i
 
 ## Template Files
 
-Templates stored in `nodes/templates/z_image_*.md`:
+Templates stored in `nodes/templates/z_image/` subfolder:
 
 | Template | Description |
 |----------|-------------|
-| `z_image_default` | No system prompt (matches diffusers default) |
-| `z_image_photorealistic` | Photography with natural lighting |
-| `z_image_bilingual_text` | English/Chinese text rendering |
-| `z_image_artistic` | Creative compositions |
+| `default` | No system prompt (matches diffusers default) |
+| `photorealistic` | Photography with natural lighting |
+| `bilingual_text` | English/Chinese text rendering |
+| `artistic` | Creative compositions |
+| ... | Many more templates available (see folder) |
 
 ## Recommended Workflow
 
@@ -227,7 +232,9 @@ Test if adding think block helps or hurts quality.
 - **Our encoder**: `nodes/z_image_encoder.py`
 - **ComfyUI's encoder**: `comfy/text_encoders/z_image.py`
 - **Diffusers pipeline**: `diffusers/pipelines/z_image/pipeline_z_image.py`
-- **Templates**: `nodes/templates/z_image_*.md`
+- **Templates**: `nodes/templates/z_image/` (subfolder with `.md` files)
+- **JS auto-fill**: `web/js/z_image_encoder.js`
+- **API endpoint**: `/api/z_image_templates` (registered in `__init__.py`)
 
 ## Related Documentation
 
@@ -238,5 +245,5 @@ Test if adding think block helps or hurts quality.
 
 ---
 
-**Last Updated:** 2025-11-27
-**Version:** 2.0 (corrected analysis)
+**Last Updated:** 2025-11-28
+**Version:** 2.1 (template subfolder, API endpoint, updated params)

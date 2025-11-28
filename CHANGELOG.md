@@ -34,11 +34,12 @@
 - JS uses `beforeRegisterNodeDef` pattern (matches qwen_template_builder.js)
 
 ### Architecture
-- **Single source of truth**: Templates only in `nodes/templates/z_image_*.md`
+- **Organized templates**: Z-Image templates moved to `nodes/templates/z_image/`
+- **Single source of truth**: Templates only in `.md` files (no duplication)
 - **API endpoint**: `/api/z_image_templates` serves templates to JS
 - **JS fetches from API**: No hardcoded templates (was 134 duplicated in JS)
 - **Python fallback**: Encoder loads from files if JS fails
-- **Adding templates**: Just add `.md` file - no JS/Python changes needed
+- **Adding templates**: Just add `.md` file to `nodes/templates/z_image/`
 
 ---
 

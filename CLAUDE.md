@@ -411,7 +411,7 @@ ComfyUI bundles Qwen2.5-style tokenizer config without Qwen3 thinking template s
 - **ZImageTextEncoder**: Full-featured encoder with Qwen3-4B template
   - System prompt presets (none, photorealistic, artistic, bilingual, etc.)
   - Custom system prompt support (editable after template auto-fill)
-  - Template files (`nodes/templates/z_image_*.md`)
+  - Template files (`nodes/templates/z_image/`)
   - `add_think_block` - add `<think></think>` structure (auto-enabled if thinking_content provided)
   - `thinking_content` - content inside `<think>` tags
   - `assistant_content` - content after `</think>` tags
@@ -457,10 +457,12 @@ CLIPLoader → ZImageTextEncoder → KSampler
 - **Qwen3-4B specs**: 2560 hidden dim, 36 layers, `hidden_states[-2]` for embeddings
 
 ### Templates
-- `z_image_default.md` - No system prompt
-- `z_image_photorealistic.md` - Natural lighting and textures
-- `z_image_bilingual_text.md` - English/Chinese text rendering
-- `z_image_artistic.md` - Creative compositions
+Templates in `nodes/templates/z_image/` subfolder (examples):
+- `default.md` - No system prompt
+- `photorealistic.md` - Natural lighting and textures
+- `bilingual_text.md` - English/Chinese text rendering
+- `artistic.md` - Creative compositions
+- Many more available (see folder for full list)
 
 ### Documentation
 - [z_image_encoder.md](nodes/docs/z_image_encoder.md) - Full encoder documentation
