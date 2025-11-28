@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.9.2 - Z-Image Qwen3 Template Fix
+
+### Fixed
+
+**Correct Qwen3-4B Chat Template Format**
+- Format now matches `coderef/Qwen3-4B/tokenizer_config.json` exactly
+- `thinking_content` now correctly placed inside `<think>...</think>` tags
+- Added `assistant_content` field for content AFTER `</think>` tags
+
+**Template Structure:**
+```
+<|im_start|>system
+{system_prompt}<|im_end|>
+<|im_start|>user
+{text}<|im_end|>
+<|im_start|>assistant
+<think>
+{thinking_content}
+</think>
+
+{assistant_content}
+```
+
+### Changed
+- `add_think_block` now auto-enables when `thinking_content` is provided
+- Both `ZImageTextEncoder` and `ZImageTextEncoderSimple` updated with `assistant_content`
+- JS uses `beforeRegisterNodeDef` pattern (matches qwen_template_builder.js)
+
+---
+
 ## v2.9.1 - Z-Image Encoder Simplification
 
 ### Changed
@@ -17,8 +47,7 @@
 3. `template_preset` (auto-fills system_prompt via JS)
 
 ### Fixed
-- JS callback now uses `nodeCreated` hook (newer ComfyUI pattern)
-- Added `Object.defineProperty` to intercept value changes for template auto-fill
+- JS callback now uses `beforeRegisterNodeDef` hook (matches qwen_template_builder.js pattern)
 
 ---
 
