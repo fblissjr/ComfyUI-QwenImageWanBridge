@@ -19,7 +19,7 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 
 **Nodes:**
 - `ZImageTextEncoder` - Full-featured with templates, system prompts, raw mode, thinking/assistant content
-- `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode
+- `ZImageMessageChain` - Build multi-turn conversations for advanced control
 
 **Features:**
 - `template_preset` dropdown auto-fills `system_prompt` (editable via JS)
@@ -27,11 +27,10 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 - `formatted_prompt` output - see exactly what gets encoded
 - `thinking_content` - content inside `<think>...</think>` tags
 - `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
-- `add_think_block` (default False, auto-enabled if thinking_content provided)
+- Multi-turn conversation support via ZImageMessageChain
 
 **Documentation:**
-- [Z-Image Workflow Guide](nodes/docs/z_image_workflow_guide.md) - Setup and experiments
-- [Z-Image Analysis](nodes/docs/z_image_analysis.md) - ComfyUI vs Diffusers comparison
+- [Z-Image Encoder Guide](nodes/docs/z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)
 
 ### HunyuanVideo 1.5 Text-to-Video Support
 

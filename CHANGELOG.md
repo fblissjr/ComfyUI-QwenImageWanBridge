@@ -1,5 +1,67 @@
 # Changelog
 
+## v2.9.4 - Z-Image Cleanup
+
+### Fixed
+
+**Critical: Shallow Copy Bug in ZImageMessageChain**
+- `list()` creates new list but message dicts were still shared references
+- Now uses `copy.deepcopy()` to prevent conversation corruption
+
+**Medium: Empty dict handling for conversation_override**
+- Empty dict `{}` was passing `is not None` check
+- Now properly checks `conversation_override.get("messages")`
+
+### Removed
+
+**ZImageTextEncoderSimple**
+- Redundant - same functionality as ZImageTextEncoder with `template_preset="none"`
+- Use ZImageTextEncoder instead (matches diffusers by default)
+
+### Changed
+
+**Unified JS Template Auto-fill**
+- Merged `z_image_encoder.js` and `hunyuan_video_encoder.js` into `template_autofill.js`
+- Single module handles both encoder types with shared caching logic
+
+**Consolidated Z-Image Documentation**
+- Merged `z_image_nodes.md`, `z_image_workflow_guide.md` into `z_image_encoder.md`
+- Single comprehensive guide covering nodes, workflows, troubleshooting, experiments
+- Moved `z_image_analysis.md` to `internal/docs/` (private reference)
+
+---
+
+## v2.9.3 - Multi-Turn Conversation Support
+
+### Added
+
+**ZImageMessageChain Node** - Build multi-turn conversations for Z-Image encoding
+- Chain multiple messages together (system, user, assistant)
+- `enable_thinking` flag (set on first node) applies to all assistant messages
+- `thinking_content` field for custom thinking content (assistant role only)
+- Output connects to ZImageTextEncoder's `conversation_override` input
+
+**conversation_override Input** on ZImageTextEncoder
+- Optional input that accepts ZIMAGE_CONVERSATION type
+- When connected, overrides all other inputs (text, system_prompt, raw_prompt, etc.)
+- Enables iterative/conversational image generation workflows
+
+### Removed
+
+**max_sequence_length Parameter** - Removed from ZImageTextEncoder
+- ComfyUI natively handles unlimited context (`max_length=99999999`)
+- Qwen3-4B supports 40K tokens (`max_position_embeddings: 40960`)
+- The 512 limit was unnecessarily restrictive
+
+### Workflow Example
+
+```
+ZImageMessageChain (system) --> ZImageMessageChain (user) --> ZImageMessageChain (assistant) --> ZImageTextEncoder
+enable_thinking: True           previous: (connect)         thinking_content: ""                conversation_override: (connect)
+```
+
+---
+
 ## v2.9.2 - Z-Image Qwen3 Template Fix
 
 ### Fixed

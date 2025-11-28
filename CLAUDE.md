@@ -409,6 +409,7 @@ ComfyUI bundles Qwen2.5-style tokenizer config without Qwen3 thinking template s
 
 #### ZImage/Encoding
 - **ZImageTextEncoder**: Full-featured encoder with Qwen3-4B template
+  - `conversation_override` - optional input from ZImageMessageChain (overrides all other inputs)
   - System prompt presets (none, photorealistic, artistic, bilingual, etc.)
   - Custom system prompt support (editable after template auto-fill)
   - Template files (`nodes/templates/z_image/`)
@@ -416,27 +417,32 @@ ComfyUI bundles Qwen2.5-style tokenizer config without Qwen3 thinking template s
   - `thinking_content` - content inside `<think>` tags
   - `assistant_content` - content after `</think>` tags
   - `raw_prompt` - bypass all formatting, use your own tokens
-  - `max_sequence_length` (default: 512, matches diffusers)
   - `formatted_prompt` output - see exactly what gets encoded
 
-- **ZImageTextEncoderSimple**: Drop-in replacement for CLIPTextEncode
-  - Same `add_think_block`, `thinking_content`, `assistant_content` support
-  - `raw_prompt` for complete control
-  - No system prompts or templates
-  - `formatted_prompt` output for debugging
+#### ZImage/Conversation
+- **ZImageMessageChain**: Build multi-turn conversations
+  - Chain multiple nodes: system -> user -> assistant -> ...
+  - `enable_thinking` (set on first node) - applies to all assistant messages
+  - `thinking_content` - content inside `<think>` tags (assistant role only)
+  - Output connects to ZImageTextEncoder's `conversation_override` input
 
 ### Workflow
 
-**With our fix (recommended):**
+**Basic (matches diffusers):**
 ```
-CLIPLoader (qwen_3_4b, lumina2) → ZImageTextEncoderSimple → KSampler
-                                  (add_think_block=True for experiments)
+CLIPLoader (qwen_3_4b, lumina2) → ZImageTextEncoder → KSampler
 ```
 
 **With templates:**
 ```
 CLIPLoader → ZImageTextEncoder → KSampler
              (template_preset: photorealistic)
+```
+
+**Multi-turn conversation:**
+```
+ZImageMessageChain (system) → ZImageMessageChain (user) → ZImageMessageChain (assistant) → ZImageTextEncoder
+enable_thinking: True          previous: (connect)        thinking_content: ""             conversation_override: (connect)
 ```
 
 ### Key Differences from Qwen-Image-Edit
