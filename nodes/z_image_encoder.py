@@ -97,7 +97,17 @@ class ZImageTextEncoder:
                 }),
                 "add_think_block": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Add <think></think> block (experimental)"
+                    "tooltip": "Add <think></think> block (auto-enabled if thinking_content provided)"
+                }),
+                "thinking_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content inside <think>...</think> tags (auto-enables think block)"
+                }),
+                "assistant_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content AFTER </think> tags (what assistant says after thinking)"
                 }),
                 "max_sequence_length": ("INT", {
                     "default": DEFAULT_MAX_SEQUENCE_LENGTH,
@@ -123,6 +133,8 @@ class ZImageTextEncoder:
         system_prompt: str = "",
         raw_prompt: str = "",
         add_think_block: bool = False,
+        thinking_content: str = "",
+        assistant_content: str = "",
         max_sequence_length: int = DEFAULT_MAX_SEQUENCE_LENGTH,
     ) -> Tuple[Any, str]:
 
@@ -130,8 +142,10 @@ class ZImageTextEncoder:
         if raw_prompt.strip():
             formatted_text = raw_prompt
         else:
+            # Auto-enable think block if thinking_content provided
+            use_think_block = add_think_block or bool(thinking_content.strip())
             # Build formatted prompt with chat template
-            formatted_text = self._format_prompt(text, system_prompt, add_think_block)
+            formatted_text = self._format_prompt(text, system_prompt, use_think_block, thinking_content, assistant_content)
 
         # Encode
         tokens = clip.tokenize(formatted_text)
@@ -139,7 +153,22 @@ class ZImageTextEncoder:
 
         return (conditioning, formatted_text)
 
-    def _format_prompt(self, text: str, system_prompt: str = "", add_think_block: bool = False) -> str:
+    def _format_prompt(self, text: str, system_prompt: str = "", add_think_block: bool = False, thinking_content: str = "", assistant_content: str = "") -> str:
+        """
+        Format prompt following Qwen3-4B chat template from tokenizer_config.json.
+
+        Structure:
+        <|im_start|>system
+        {system_prompt}<|im_end|>
+        <|im_start|>user
+        {text}<|im_end|>
+        <|im_start|>assistant
+        <think>
+        {thinking_content}
+        </think>
+
+        {assistant_content}
+        """
         parts = []
 
         if system_prompt.strip():
@@ -147,10 +176,16 @@ class ZImageTextEncoder:
 
         parts.append(f"<|im_start|>user\n{text}<|im_end|>")
 
+        # Build assistant section - match Qwen3 template exactly
         if add_think_block:
-            parts.append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+            # Format: <|im_start|>assistant\n<think>\n{content}\n</think>\n\n{assistant}
+            think_inner = thinking_content.strip() if thinking_content.strip() else ""
+            assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
+            parts.append(f"<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n{assistant_inner}")
         else:
-            parts.append("<|im_start|>assistant\n")
+            # No think block: <|im_start|>assistant\n{content}
+            assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
+            parts.append(f"<|im_start|>assistant\n{assistant_inner}")
 
         return "\n".join(parts)
 
@@ -158,6 +193,7 @@ class ZImageTextEncoder:
 class ZImageTextEncoderSimple:
     """
     Simple Z-Image encoder with raw output visibility.
+    Follows Qwen3-4B chat template format.
     """
 
     @classmethod
@@ -179,6 +215,17 @@ class ZImageTextEncoderSimple:
                 }),
                 "add_think_block": ("BOOLEAN", {
                     "default": False,
+                    "tooltip": "Add <think></think> block (auto-enabled if thinking_content provided)"
+                }),
+                "thinking_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content inside <think>...</think> tags"
+                }),
+                "assistant_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content AFTER </think> (what assistant says after thinking)"
                 }),
             }
         }
@@ -194,15 +241,25 @@ class ZImageTextEncoderSimple:
         clip,
         text: str,
         raw_prompt: str = "",
-        add_think_block: bool = False
+        add_think_block: bool = False,
+        thinking_content: str = "",
+        assistant_content: str = ""
     ) -> Tuple[Any, str]:
 
         if raw_prompt.strip():
             formatted_text = raw_prompt
-        elif add_think_block:
-            formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
         else:
-            formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
+            # Auto-enable think block if thinking_content provided
+            use_think_block = add_think_block or bool(thinking_content.strip())
+
+            if use_think_block:
+                # Qwen3 format: <|im_start|>assistant\n<think>\n{think}\n</think>\n\n{assistant}
+                think_inner = thinking_content.strip() if thinking_content.strip() else ""
+                assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
+                formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n{assistant_inner}"
+            else:
+                assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
+                formatted_text = f"<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n{assistant_inner}"
 
         tokens = clip.tokenize(formatted_text)
         conditioning = clip.encode_from_tokens_scheduled(tokens)

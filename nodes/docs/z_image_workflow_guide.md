@@ -15,9 +15,11 @@ Z-Image is Alibaba's 6B parameter text-to-image model using:
 ### Why Our Nodes?
 
 After analysis, we found ComfyUI and diffusers produce **identical templates** by default. Our nodes provide:
-- System prompt presets for experimentation
-- Optional `add_think_block` parameter for testing
-- Debug mode for troubleshooting
+- **Template presets** with JS auto-fill (editable system prompts)
+- **Raw mode** for complete control with your own special tokens
+- **formatted_prompt output** - see exactly what gets encoded
+- **thinking_content** - insert custom text between `<think>` tags
+- Optional `add_think_block` parameter for experimentation
 
 ---
 
@@ -122,7 +124,9 @@ Default behavior matches diffusers exactly. Use `add_think_block=True` to experi
 
 **Settings:**
 - `text`: Your prompt
+- `raw_prompt`: (optional) Bypass all formatting, use your own `<|im_start|>` tokens
 - `add_think_block`: `False` (default, matches diffusers)
+- `thinking_content`: (optional) Custom text between `<think>` tags
 
 **Example prompt:**
 ```
@@ -131,8 +135,9 @@ soft morning light filtering through maple trees, highly detailed,
 photorealistic
 ```
 
-**Output:**
+**Outputs:**
 - `CONDITIONING` -> Connect to KSampler positive
+- `formatted_prompt` -> STRING showing exactly what was encoded (for debugging)
 
 #### 3. Negative Prompt (Optional)
 For negative conditioning, add another ZImageTextEncoderSimple:
@@ -224,11 +229,11 @@ CLIPLoader (lumina2)
         v
 ZImageTextEncoder
   - text: "your prompt"
-  - system_prompt_preset: "photorealistic"
+  - template_preset: "photorealistic" (auto-fills system_prompt)
+  - system_prompt: (editable after auto-fill)
   - add_think_block: False (or True for experiments)
-  - debug_mode: True
         |
-        | CONDITIONING
+        | CONDITIONING, formatted_prompt
         v
 KSampler (steps: 9, cfg: 1)
         |
@@ -237,25 +242,54 @@ KSampler (steps: 9, cfg: 1)
 VAEDecode
 ```
 
-### System Prompt Options
+### Template Presets
+
+Select a template and it auto-fills the `system_prompt` field via JavaScript. You can then edit it freely.
+
+**Common templates (auto-fill in JS):**
 
 | Preset | Best For |
 |--------|----------|
 | `none` | Default behavior, matches diffusers |
-| `quality` | General high-quality output |
+| `default` | Empty system prompt |
 | `photorealistic` | Photography, realistic scenes |
 | `artistic` | Creative, stylized images |
-| `bilingual` | Images with English/Chinese text |
+| `bilingual_text` | Images with English/Chinese text |
+| `portrait_studio` | Professional headshots |
+| `landscape_epic` | Dramatic landscapes |
+| `oil_painting_classical` | Renaissance/Baroque style |
+| `anime_modern` | Contemporary anime |
+| `high_detail` | Maximum resolution and detail |
+| `golden_hour` | Warm sunset lighting |
+| `neon_cyberpunk` | Cyberpunk neon aesthetics |
+
+**100+ templates available** - loaded from `nodes/templates/z_image_*.md` files.
+Templates not in the JS auto-fill list still work - edit `system_prompt` manually.
 
 ### Custom System Prompt
 
-Override presets with your own:
+Edit the auto-filled `system_prompt` or write your own:
 
 ```
-custom_system_prompt: "Generate a detailed architectural visualization
+system_prompt: "Generate a detailed architectural visualization
 with accurate perspective, professional lighting, and photorealistic
 materials. Focus on clean lines and modern design."
 ```
+
+### Raw Mode
+
+For complete control over the prompt format, use `raw_prompt`:
+
+```
+raw_prompt: "<|im_start|>system
+You are a helpful image generator.<|im_end|>
+<|im_start|>user
+A beautiful sunset over mountains<|im_end|>
+<|im_start|>assistant
+"
+```
+
+When `raw_prompt` is set, it bypasses all other formatting (text, system_prompt, templates).
 
 ---
 
@@ -442,17 +476,21 @@ architectural visualization, photorealistic rendering
 ### Workflow Summary
 
 1. Load CLIP with `lumina2` type
-2. Use `ZImageTextEncoderSimple` instead of `CLIPTextEncode`
+2. Use `ZImageTextEncoderSimple` (or full `ZImageTextEncoder`) instead of `CLIPTextEncode`
 3. Use default `add_think_block=False` (matches diffusers)
-4. Sample with `steps=9`, `cfg=1`, `euler` sampler
-5. Decode with Z-Image VAE
+4. Optionally use `raw_prompt` for complete token control
+5. Check `formatted_prompt` output to see exactly what gets encoded
+6. Sample with `steps=9`, `cfg=1`, `euler` sampler
+7. Decode with Z-Image VAE
 
 ### Key Settings
 
 | Component | Setting | Value |
 |-----------|---------|-------|
 | CLIPLoader | type | lumina2 |
-| Encoder | add_think_block | False |
+| Encoder | add_think_block | False (default) |
+| Encoder | template_preset | none (or photorealistic, artistic, etc.) |
+| Encoder | raw_prompt | empty (or custom tokens) |
 | KSampler | steps | 9 |
 | KSampler | cfg | 1 |
 | KSampler | sampler | euler |
@@ -538,12 +576,12 @@ Balance: large mountain balanced by cloud mass.
 
 **Setup:**
 1. Same prompt across all tests
-2. Test each `system_prompt_preset`:
+2. Test each `template_preset`:
    - `none` (diffusers default)
-   - `quality`
+   - `default` (empty system)
    - `photorealistic`
    - `artistic`
-   - `bilingual`
+   - `bilingual_text`
 
 **Document:**
 - Which preset produces best results for your use case
@@ -594,5 +632,40 @@ If you discover something interesting:
 
 ---
 
+## Node Parameters Reference
+
+### ZImageTextEncoder (Full)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| clip | CLIP | required | CLIP model from CLIPLoader |
+| text | STRING | "" | Your prompt |
+| template_preset | dropdown | "none" | Select template (auto-fills system_prompt) |
+| system_prompt | STRING | "" | Editable system prompt (auto-filled by template) |
+| raw_prompt | STRING | "" | RAW MODE: Bypass all formatting, use your own tokens |
+| add_think_block | BOOLEAN | False | Add `<think></think>` block |
+| thinking_content | STRING | "" | Content between `<think>` tags |
+| max_sequence_length | INT | 512 | Max tokens (matches diffusers) |
+
+**Outputs:**
+- `conditioning` - CONDITIONING for KSampler
+- `formatted_prompt` - STRING showing exactly what was encoded
+
+### ZImageTextEncoderSimple
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| clip | CLIP | required | CLIP model from CLIPLoader |
+| text | STRING | "" | Your prompt |
+| raw_prompt | STRING | "" | RAW: Bypass formatting, use your own tokens |
+| add_think_block | BOOLEAN | False | Add `<think></think>` block |
+| thinking_content | STRING | "" | Content between `<think>` tags |
+
+**Outputs:**
+- `conditioning` - CONDITIONING for KSampler
+- `formatted_prompt` - STRING showing exactly what was encoded
+
+---
+
 **Last Updated:** 2025-11-27
-**Version:** 1.1
+**Version:** 1.2

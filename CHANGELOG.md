@@ -1,11 +1,62 @@
 # Changelog
 
+## v2.9.2 - Z-Image Qwen3 Template Fix
+
+### Fixed
+
+**Correct Qwen3-4B Chat Template Format**
+- Format now matches `coderef/Qwen3-4B/tokenizer_config.json` exactly
+- `thinking_content` now correctly placed inside `<think>...</think>` tags
+- Added `assistant_content` field for content AFTER `</think>` tags
+
+**Template Structure:**
+```
+<|im_start|>system
+{system_prompt}<|im_end|>
+<|im_start|>user
+{text}<|im_end|>
+<|im_start|>assistant
+<think>
+{thinking_content}
+</think>
+
+{assistant_content}
+```
+
+### Changed
+- `add_think_block` now auto-enables when `thinking_content` is provided
+- Both `ZImageTextEncoder` and `ZImageTextEncoderSimple` updated with `assistant_content`
+- JS uses `beforeRegisterNodeDef` pattern (matches qwen_template_builder.js)
+
+---
+
+## v2.9.1 - Z-Image Encoder Simplification
+
+### Changed
+
+**Simplified Z-Image Encoder Interface**
+- Removed redundant `system_prompt_preset` (templates do the same thing)
+- Renamed `custom_system_prompt` to `system_prompt` (clearer)
+- Added `raw_prompt` input - bypass all formatting, write your own `<|im_start|>` tokens
+- Added `formatted_prompt` output - see exactly what gets encoded (connect to ShowText)
+- JS auto-fills `system_prompt` when `template_preset` changes (editable)
+
+**New Input Priority:**
+1. `raw_prompt` (if set, bypasses everything)
+2. `system_prompt` (custom or auto-filled from template)
+3. `template_preset` (auto-fills system_prompt via JS)
+
+### Fixed
+- JS callback now uses `beforeRegisterNodeDef` hook (matches qwen_template_builder.js pattern)
+
+---
+
 ## v2.9.0 - Z-Image Text Encoder with Experimental Options
 
 ### Added
 
 **Z-Image Text Encoder Nodes** - Experimental encoding options for Z-Image
-- `ZImageTextEncoder` - Full-featured encoder with system prompts, templates, debug mode
+- `ZImageTextEncoder` - Full-featured encoder with templates, raw mode, thinking content
 - `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode
 
 **Key Finding (Corrected Analysis):**
@@ -17,12 +68,13 @@ After testing actual tokenizers, we found:
 - So ComfyUI is NOT missing anything - both produce the same output
 
 **Features:**
+- `template_preset` dropdown with JS auto-fill to `system_prompt`
+- `raw_prompt` input for complete control with your own special tokens
+- `formatted_prompt` output - see exactly what gets encoded
 - `add_think_block` parameter (default: False, matches diffusers)
-- `thinking_content` parameter - provide your own reasoning text inside `<think>` tags (experimental)
+- `thinking_content` parameter - insert text between `<think>` tags (experimental)
 - `max_sequence_length` parameter (default: 512, matches diffusers)
-- System prompt presets (none, quality, photorealistic, artistic, bilingual)
 - Template files in `nodes/templates/z_image_*.md`
-- Debug mode showing formatted prompt and sequence length
 
 **Use case:** Experimentation with think blocks and system prompts to see if they improve output.
 
@@ -34,7 +86,7 @@ After testing actual tokenizers, we found:
 
 ### Documentation
 - `nodes/docs/z_image_analysis.md` - Corrected ComfyUI vs Diffusers comparison
-- `nodes/docs/z_image_nodes.md` - Node reference
+- `nodes/docs/z_image_encoder.md` - Main encoder documentation
 - `nodes/docs/z_image_workflow_guide.md` - Setup and experiments
 
 ---

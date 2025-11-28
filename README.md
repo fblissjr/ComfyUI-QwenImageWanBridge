@@ -15,21 +15,23 @@ Custom nodes for :
 
 ### Z-Image Text Encoder
 
-Z-Image uses Qwen3-4B as its text encoder. After analysis, we found ComfyUI and diffusers produce **identical templates** by default. Our nodes add experimental options for testing.
+Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B chat template format from `tokenizer_config.json`.
 
 **Nodes:**
-- `ZImageTextEncoder` - Full-featured with system prompts, templates, experimental think block
+- `ZImageTextEncoder` - Full-featured with templates, system prompts, raw mode, thinking/assistant content
 - `ZImageTextEncoderSimple` - Drop-in replacement for CLIPTextEncode
 
-**Key finding:** The `enable_thinking` parameter in Qwen3's tokenizer is counterintuitive:
-- `enable_thinking=True` = NO think block (diffusers default)
-- `enable_thinking=False` = ADD think block
-
-ComfyUI matches diffusers exactly. Our nodes expose `add_think_block` (default False) for experimentation.
+**Features:**
+- `template_preset` dropdown auto-fills `system_prompt` (editable via JS)
+- `raw_prompt` input for complete control with your own `<|im_start|>` tokens
+- `formatted_prompt` output - see exactly what gets encoded
+- `thinking_content` - content inside `<think>...</think>` tags
+- `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
+- `add_think_block` (default False, auto-enabled if thinking_content provided)
 
 **Documentation:**
 - [Z-Image Workflow Guide](nodes/docs/z_image_workflow_guide.md) - Setup and experiments
-- [Z-Image Analysis](nodes/docs/z_image_analysis.md) - ComfyUI vs Diffusers comparison (corrected)
+- [Z-Image Analysis](nodes/docs/z_image_analysis.md) - ComfyUI vs Diffusers comparison
 
 ### HunyuanVideo 1.5 Text-to-Video Support
 
