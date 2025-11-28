@@ -35,8 +35,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.9.5):**
-- **Z-Image UX redesign** - Renamed `text` to `user_prompt`, replaced ZImageMessageChain with ZImageTurnBuilder - [docs](nodes/docs/z_image_encoder.md)
+**Key Features (v2.9.6):**
+- **Z-Image debug fixes** - HTML escaping for think tags, assistant_content closing tag, console logging - [docs](nodes/docs/z_image_encoder.md)
 - **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (23 video templates)
 - **File-based template system** - Templates in `nodes/templates/*.md` files (single source of truth)
 - **Template Builder → Encoder** - Single `template_output` connection handles everything
@@ -330,7 +330,7 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 - `nodes/docs/hunyuanvideo_prompting_experiments.md` - Prompting experiments guide
 - `example_workflows/hunyuanvideo_15_t2v_example.json` - Working T2V workflow
 
-## Z-Image Support (v2.9.5)
+## Z-Image Support (v2.9.6)
 
 ### Overview
 Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes implement the correct Qwen3-4B chat template format.
@@ -356,6 +356,10 @@ Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text
 - `thinking_content` - content INSIDE `<think>...</think>` tags
 - `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
 - `add_think_block` - auto-enabled when `thinking_content` is provided
+
+**Closing tag behavior (v2.9.6):**
+- Empty `assistant_content`: No closing `<|im_end|>` (matches diffusers, model is "generating")
+- With `assistant_content`: Closes with `<|im_end|>` (complete message)
 
 ### Nodes
 
@@ -505,3 +509,8 @@ Multi:  Picture 1: <|vision_start|><|image_pad|><|vision_end|>Picture 2: ...
 - `debug_mode=True` in encoder: UI output with token/dimension details
 - `verbose_log=True`: Console tracing of model forward passes
 - QwenDebugController: Centralized debug interface
+
+### Z-Image Debug Output (v2.9.6)
+- Debug output escapes HTML (`<` -> `&lt;`) so think tags display correctly in Preview nodes
+- Explicit "Think Tag Check" shows `Contains '<think>': True/False`
+- Formatted prompt logged to server console: `[Z-Image] Formatted prompt:`

@@ -1,5 +1,38 @@
 # Changelog
 
+## v2.9.6 - Z-Image Debug and JS Cleanup
+
+### Fixed
+
+**Debug Output HTML Escaping**
+- Think tags (`<think>`, `</think>`) were being hidden by HTML rendering in Preview nodes
+- Debug output now escapes angle brackets so all tags display correctly
+- Added explicit "Think Tag Check" showing `Contains '<think>': True/False`
+
+**Assistant Content Closing Tag**
+- When `assistant_content` is provided, message now properly closes with `<|im_end|>`
+- Empty `assistant_content` leaves message open (matches diffusers default)
+
+### Added
+
+**Console Logging**
+- Formatted prompt now logged to server console: `[Z-Image] Formatted prompt:`
+- Useful for debugging without Preview node HTML issues
+
+### Changed
+
+**Deprecated JS Files Archived**
+- Moved experimental JS files to `web/js/archive/`:
+  - `qwen_spatial_interface.js`
+  - `qwen_spatial_mask_interface.js`
+  - `qwen_testing_interface.js`
+  - `qwen_token_analyzer.js`
+  - `qwen_token_visualizer.js`
+- Eliminates deprecation warnings from ComfyUI
+- Core JS files (`template_autofill.js`, `qwen_template_builder.js`) unchanged
+
+---
+
 ## v2.9.5 - Z-Image UX Redesign
 
 ### Breaking Changes

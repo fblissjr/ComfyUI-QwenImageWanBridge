@@ -367,7 +367,11 @@ See the folder for additional templates.
 
 ### Formatted Prompt Examples
 
-This section shows the exact output of `formatted_prompt` for every scenario. The prompt always ends WITHOUT `<|im_end|>` because the model is still "generating" (for embedding extraction).
+This section shows the exact output of `formatted_prompt` for every scenario.
+
+**Closing tag behavior:**
+- Empty `assistant_content`: No closing `<|im_end|>` (matches diffusers, model is "generating")
+- With `assistant_content`: Closes with `<|im_end|>` (complete message)
 
 ---
 
@@ -447,8 +451,10 @@ A cat sleeping<|im_end|>
 Soft lighting, peaceful mood.
 </think>
 
-Creating a cozy scene...
+Creating a cozy scene...<|im_end|>
 ```
+
+Note: `<|im_end|>` is added because `assistant_content` is provided.
 
 ---
 
@@ -470,8 +476,10 @@ A cat sleeping on a windowsill<|im_end|>
 Golden hour light, shallow depth of field.
 </think>
 
-Capturing the peaceful moment...
+Capturing the peaceful moment...<|im_end|>
 ```
+
+Note: `<|im_end|>` is added because `assistant_content` is provided.
 
 ---
 
@@ -539,8 +547,10 @@ Make it sleeping<|im_end|>
 Curled up, peaceful.
 </think>
 
-Adjusting...
+Adjusting...<|im_end|>
 ```
+
+Note: Both assistant messages have `<|im_end|>` because `assistant_content` is provided.
 
 ---
 
@@ -560,7 +570,6 @@ Draw a house<|im_end|>
 
 </think>
 
-<|im_end|>
 <|im_start|>user
 Add a garden<|im_end|>
 <|im_start|>assistant
@@ -577,6 +586,8 @@ Warm colors.
 </think>
 
 ```
+
+Note: First encoder has empty `assistant_content` so no `<|im_end|>`. TurnBuilder 1 has `assistant_content` so gets `<|im_end|>`. TurnBuilder 2 is final with empty `assistant_content` so stays open.
 
 ---
 
@@ -615,8 +626,10 @@ Now make it sleeping<|im_end|>
 Curled up, eyes closed.
 </think>
 
-Adjusting the pose...
+Adjusting the pose...<|im_end|>
 ```
+
+Note: Both assistant messages have `<|im_end|>` because `assistant_content` is provided.
 
 ---
 
@@ -725,4 +738,4 @@ Style: [artistic direction]"
 ---
 
 **Last Updated:** 2025-11-28
-**Version:** 4.0 (UX redesign: renamed text->user_prompt, ZImageMessageChain->ZImageTurnBuilder)
+**Version:** 4.1 (v2.9.6: assistant_content closing tag, debug HTML escaping)
