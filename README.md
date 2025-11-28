@@ -31,8 +31,7 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 
 **Documentation:**
 - [Z-Image Workflow Guide](nodes/docs/z_image_workflow_guide.md) - Setup and experiments
-- [Z-Image Analysis](nodes/docs/z_image_analysis.md) - ComfyUI vs Diffusers comparison
-
+- 
 ### HunyuanVideo 1.5 Text-to-Video Support
 
 Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampler/VAE.
