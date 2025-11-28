@@ -35,8 +35,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.9.0):**
-- **Z-Image encoder fix** - Adds missing thinking tokens for proper Qwen3 embeddings - [docs](nodes/docs/z_image_encoder.md)
+**Key Features (v2.9.2):**
+- **Z-Image encoder fix** - Correct Qwen3-4B template format with thinking tokens - [docs](nodes/docs/z_image_encoder.md)
 - **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (23 video templates)
 - **File-based template system** - Templates in `nodes/templates/*.md` files (single source of truth)
 - **Template Builder → Encoder** - Single `template_output` connection handles everything
@@ -330,10 +330,31 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 - `nodes/docs/hunyuanvideo_prompting_experiments.md` - Prompting experiments guide
 - `example_workflows/hunyuanvideo_15_t2v_example.json` - Working T2V workflow
 
-## Z-Image Support (v2.9.0)
+## Z-Image Support (v2.9.2)
 
 ### Overview
-Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes fix critical issues in ComfyUI's implementation.
+Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes implement the correct Qwen3-4B chat template format.
+
+### Qwen3-4B Template Format
+
+**Correct format (from `tokenizer_config.json`):**
+```
+<|im_start|>system
+{system_prompt}<|im_end|>
+<|im_start|>user
+{text}<|im_end|>
+<|im_start|>assistant
+<think>
+{thinking_content}
+</think>
+
+{assistant_content}
+```
+
+**Our implementation:**
+- `thinking_content` - content INSIDE `<think>...</think>` tags
+- `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
+- `add_think_block` - auto-enabled when `thinking_content` is provided
 
 ### ComfyUI vs Diffusers Gap Analysis
 
@@ -356,7 +377,7 @@ Diffusers uses `apply_chat_template(enable_thinking=True)`:
 
 ```
 
-**Our fix**: ZImageTextEncoder adds thinking tokens to match diffusers.
+**Our fix**: ZImageTextEncoder adds thinking tokens with proper structure.
 
 #### Gap 2: Sequence Length (FIXED)
 - ComfyUI: `max_length=99999999` (unlimited)
@@ -387,32 +408,35 @@ ComfyUI bundles Qwen2.5-style tokenizer config without Qwen3 thinking template s
 ### Nodes
 
 #### ZImage/Encoding
-- **ZImageTextEncoder**: Full-featured encoder with thinking tokens
-  - System prompt presets (none, quality, photorealistic, artistic, bilingual)
-  - Custom system prompt support
+- **ZImageTextEncoder**: Full-featured encoder with Qwen3-4B template
+  - System prompt presets (none, photorealistic, artistic, bilingual, etc.)
+  - Custom system prompt support (editable after template auto-fill)
   - Template files (`nodes/templates/z_image_*.md`)
-  - `enable_thinking` toggle (default: True, recommended)
-  - `thinking_content` - provide your own reasoning inside `<think>` tags (experimental)
+  - `add_think_block` - add `<think></think>` structure (auto-enabled if thinking_content provided)
+  - `thinking_content` - content inside `<think>` tags
+  - `assistant_content` - content after `</think>` tags
+  - `raw_prompt` - bypass all formatting, use your own tokens
   - `max_sequence_length` (default: 512, matches diffusers)
-  - Debug output showing formatted prompt
+  - `formatted_prompt` output - see exactly what gets encoded
 
 - **ZImageTextEncoderSimple**: Drop-in replacement for CLIPTextEncode
-  - Just adds the missing thinking tokens
+  - Same `add_think_block`, `thinking_content`, `assistant_content` support
+  - `raw_prompt` for complete control
   - No system prompts or templates
-  - Minimal overhead
+  - `formatted_prompt` output for debugging
 
 ### Workflow
 
 **With our fix (recommended):**
 ```
 CLIPLoader (qwen_3_4b, lumina2) → ZImageTextEncoderSimple → KSampler
-                                  (enable_thinking=True)
+                                  (add_think_block=True for experiments)
 ```
 
 **With templates:**
 ```
 CLIPLoader → ZImageTextEncoder → KSampler
-             (system_prompt_preset: photorealistic)
+             (template_preset: photorealistic)
 ```
 
 ### Key Differences from Qwen-Image-Edit

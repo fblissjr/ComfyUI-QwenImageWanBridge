@@ -18,8 +18,9 @@ After analysis, we found ComfyUI and diffusers produce **identical templates** b
 - **Template presets** with JS auto-fill (editable system prompts)
 - **Raw mode** for complete control with your own special tokens
 - **formatted_prompt output** - see exactly what gets encoded
-- **thinking_content** - insert custom text between `<think>` tags
-- Optional `add_think_block` parameter for experimentation
+- **thinking_content** - content INSIDE `<think>...</think>` tags
+- **assistant_content** - content AFTER `</think>` tags (what assistant says after thinking)
+- Optional `add_think_block` parameter (auto-enabled if thinking_content provided)
 
 ---
 
@@ -125,8 +126,9 @@ Default behavior matches diffusers exactly. Use `add_think_block=True` to experi
 **Settings:**
 - `text`: Your prompt
 - `raw_prompt`: (optional) Bypass all formatting, use your own `<|im_start|>` tokens
-- `add_think_block`: `False` (default, matches diffusers)
-- `thinking_content`: (optional) Custom text between `<think>` tags
+- `add_think_block`: `False` (default, auto-enabled if thinking_content provided)
+- `thinking_content`: (optional) Content inside `<think>...</think>` tags
+- `assistant_content`: (optional) Content after `</think>` tags
 
 **Example prompt:**
 ```
@@ -231,7 +233,9 @@ ZImageTextEncoder
   - text: "your prompt"
   - template_preset: "photorealistic" (auto-fills system_prompt)
   - system_prompt: (editable after auto-fill)
-  - add_think_block: False (or True for experiments)
+  - add_think_block: False (auto-enabled if thinking_content provided)
+  - thinking_content: (optional) reasoning inside think tags
+  - assistant_content: (optional) response after think block
         |
         | CONDITIONING, formatted_prompt
         v
@@ -488,7 +492,9 @@ architectural visualization, photorealistic rendering
 | Component | Setting | Value |
 |-----------|---------|-------|
 | CLIPLoader | type | lumina2 |
-| Encoder | add_think_block | False (default) |
+| Encoder | add_think_block | False (auto-enabled if thinking_content provided) |
+| Encoder | thinking_content | empty (or reasoning text) |
+| Encoder | assistant_content | empty (or assistant response text) |
 | Encoder | template_preset | none (or photorealistic, artistic, etc.) |
 | Encoder | raw_prompt | empty (or custom tokens) |
 | KSampler | steps | 9 |
@@ -530,9 +536,9 @@ These experiments help determine if our fixes actually improve output quality.
 **Goal:** Does providing reasoning inside `<think>` tags affect output?
 
 **Setup:**
-1. Use `ZImageTextEncoder` with `add_think_block=True`
+1. Use `ZImageTextEncoder` (think block auto-enables when thinking_content provided)
 2. Run A: Leave `thinking_content` empty
-3. Run B: Provide structured reasoning:
+3. Run B: Provide structured reasoning in `thinking_content`:
 
 ```
 thinking_content: "Key elements: [list main subjects]
@@ -541,33 +547,36 @@ Lighting: [specify lighting style]
 Style: [artistic direction]"
 ```
 
-4. Compare outputs
+4. Optionally, also provide `assistant_content` for explicit guidance:
+```
+assistant_content: "I will create a detailed image focusing on..."
+```
+
+5. Compare outputs
 
 **Example thinking content patterns:**
 
 **Analytical:**
 ```
-Subject is a mountain landscape at sunset.
+thinking_content: "Subject is a mountain landscape at sunset.
 Primary colors: orange, purple, deep blue.
 Focal point: snow-capped peak catching last light.
 Depth: foreground rocks, midground trees, background peaks.
-Mood: serene, majestic, contemplative.
+Mood: serene, majestic, contemplative."
 ```
 
 **Technical:**
 ```
-Camera: wide angle lens, f/11 for deep DOF.
+thinking_content: "Camera: wide angle lens, f/11 for deep DOF.
 Lighting: golden hour, sun 15 degrees above horizon.
 Exposure: HDR blend for highlight/shadow detail.
-Post: warm color grade, slight vignette.
+Post: warm color grade, slight vignette."
 ```
 
-**Compositional:**
+**With assistant response:**
 ```
-Rule of thirds: horizon on lower third.
-Leading lines: river guides eye to mountain.
-Framing: trees on left create natural frame.
-Balance: large mountain balanced by cloud mass.
+thinking_content: "The scene requires warm sunset tones and dramatic composition."
+assistant_content: "Creating an epic mountain landscape with golden hour lighting."
 ```
 
 ### Experiment 3: System Prompts
@@ -643,8 +652,9 @@ If you discover something interesting:
 | template_preset | dropdown | "none" | Select template (auto-fills system_prompt) |
 | system_prompt | STRING | "" | Editable system prompt (auto-filled by template) |
 | raw_prompt | STRING | "" | RAW MODE: Bypass all formatting, use your own tokens |
-| add_think_block | BOOLEAN | False | Add `<think></think>` block |
-| thinking_content | STRING | "" | Content between `<think>` tags |
+| add_think_block | BOOLEAN | False | Add `<think></think>` block (auto-enabled if thinking_content provided) |
+| thinking_content | STRING | "" | Content INSIDE `<think>...</think>` tags |
+| assistant_content | STRING | "" | Content AFTER `</think>` tags (what assistant says after thinking) |
 | max_sequence_length | INT | 512 | Max tokens (matches diffusers) |
 
 **Outputs:**
@@ -658,8 +668,9 @@ If you discover something interesting:
 | clip | CLIP | required | CLIP model from CLIPLoader |
 | text | STRING | "" | Your prompt |
 | raw_prompt | STRING | "" | RAW: Bypass formatting, use your own tokens |
-| add_think_block | BOOLEAN | False | Add `<think></think>` block |
-| thinking_content | STRING | "" | Content between `<think>` tags |
+| add_think_block | BOOLEAN | False | Add `<think></think>` block (auto-enabled if thinking_content provided) |
+| thinking_content | STRING | "" | Content INSIDE `<think>...</think>` tags |
+| assistant_content | STRING | "" | Content AFTER `</think>` tags (what assistant says after thinking) |
 
 **Outputs:**
 - `conditioning` - CONDITIONING for KSampler
@@ -668,4 +679,4 @@ If you discover something interesting:
 ---
 
 **Last Updated:** 2025-11-27
-**Version:** 1.2
+**Version:** 1.3
