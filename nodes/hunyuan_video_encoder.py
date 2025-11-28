@@ -124,11 +124,11 @@ class HunyuanVideoTextEncoder:
 
     @classmethod
     def INPUT_TYPES(cls):
-        # Get available templates
-        instance = cls()
-        template_names = sorted([k for k in instance.available_templates.keys()])
+        # Get available templates from cache
+        templates = get_templates()
+        template_names = sorted(templates.keys())
         if not template_names:
-            template_names = ["hunyuan_video_t2v"]
+            template_names = ["t2v"]
 
         return {
             "required": {
@@ -150,12 +150,12 @@ class HunyuanVideoTextEncoder:
                 }),
                 "template_preset": (["none"] + template_names, {
                     "default": "none",
-                    "tooltip": "Video template from nodes/templates/ (ignored if template_input connected)"
+                    "tooltip": "Video template - auto-fills custom_system_prompt (editable)"
                 }),
                 "custom_system_prompt": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "tooltip": "Override system prompt (leave empty for default or preset)"
+                    "tooltip": "System prompt - auto-filled by template, edit freely"
                 }),
                 "additional_instructions": ("STRING", {
                     "multiline": True,
@@ -267,19 +267,24 @@ class HunyuanVideoTextEncoder:
             if not negative_prompt:
                 negative_prompt = self.DEFAULT_NEGATIVE
 
-            # Determine system prompt from dropdown or custom
+            # Determine system prompt: use provided, or fallback to template file
             system_prompt = ""
             uses_custom_template = False
 
-            if custom_system_prompt:
-                system_prompt = custom_system_prompt
+            if custom_system_prompt.strip():
+                # User has provided/edited system prompt - use it directly
+                system_prompt = custom_system_prompt.strip()
                 uses_custom_template = True
-                debug_output.append(f"Custom system prompt ({len(custom_system_prompt)} chars)")
-            elif template_preset != "none" and template_preset in self.available_templates:
-                template_data = self.available_templates[template_preset]
-                system_prompt = self._adapt_template_for_video(template_data['system_prompt'])
-                uses_custom_template = True
-                debug_output.append(f"Template: {template_preset}")
+                debug_output.append(f"Custom system prompt ({len(system_prompt)} chars)")
+            elif template_preset != "none":
+                # JS didn't fill system_prompt - load from template file as fallback
+                templates = get_templates()
+                if template_preset in templates:
+                    system_prompt = self._adapt_template_for_video(templates[template_preset])
+                    uses_custom_template = True
+                    debug_output.append(f"Template: {template_preset} (fallback)")
+                else:
+                    debug_output.append(f"Template '{template_preset}' not found")
             else:
                 debug_output.append("Using ComfyUI default template")
 

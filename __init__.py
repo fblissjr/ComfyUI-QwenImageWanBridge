@@ -251,13 +251,27 @@ except Exception as e:
 
 # Text encoder with template system
 try:
-    from .nodes.hunyuan_video_encoder import HunyuanVideoTextEncoder
+    from .nodes.hunyuan_video_encoder import HunyuanVideoTextEncoder, get_templates as get_hunyuan_video_templates
 
     NODE_CLASS_MAPPINGS["HunyuanVideoTextEncoder"] = HunyuanVideoTextEncoder
     NODE_DISPLAY_NAME_MAPPINGS["HunyuanVideoTextEncoder"] = "HunyuanVideo Text Encoder"
 
-    print("[QwenImageWanBridge] Loaded HunyuanVideo text encoder")
-    print("[QwenImageWanBridge] FEATURE: 23 video templates, dual pos/neg output")
+    # Register API endpoint for templates (single source of truth)
+    try:
+        from aiohttp import web
+        from server import PromptServer
+
+        @PromptServer.instance.routes.get("/api/hunyuan_video_templates")
+        async def get_hunyuan_video_templates_api(request):
+            """API endpoint for HunyuanVideo templates - JS fetches from here."""
+            templates = get_hunyuan_video_templates()
+            return web.json_response(templates)
+
+        print("[QwenImageWanBridge] Loaded HunyuanVideo text encoder")
+        print("[QwenImageWanBridge] API: /api/hunyuan_video_templates endpoint registered")
+    except Exception as api_err:
+        print(f"[QwenImageWanBridge] Loaded HunyuanVideo encoder (API endpoint failed: {api_err})")
+
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load HunyuanVideo encoder: {e}")
 
