@@ -482,15 +482,24 @@ class ZImageTextEncoder:
         parts.append(f"<|im_start|>user\n{user_prompt}<|im_end|>")
 
         # Build assistant section - match Qwen3 template exactly
+        # If assistant_content provided, close with <|im_end|>. Otherwise leave open (diffusers default).
         if add_think_block:
-            # Format: <|im_start|>assistant\n<think>\n{content}\n</think>\n\n{assistant}
             think_inner = thinking_content.strip() if thinking_content.strip() else ""
             assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
-            parts.append(f"<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n{assistant_inner}")
+            if assistant_inner:
+                # User provided assistant content - close the message
+                parts.append(f"<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n{assistant_inner}<|im_end|>")
+            else:
+                # No assistant content - leave open (matches diffusers)
+                parts.append(f"<|im_start|>assistant\n<think>\n{think_inner}\n</think>\n\n")
         else:
-            # No think block: <|im_start|>assistant\n{content}
             assistant_inner = assistant_content.strip() if assistant_content.strip() else ""
-            parts.append(f"<|im_start|>assistant\n{assistant_inner}")
+            if assistant_inner:
+                # User provided assistant content - close the message
+                parts.append(f"<|im_start|>assistant\n{assistant_inner}<|im_end|>")
+            else:
+                # No assistant content - leave open (matches diffusers)
+                parts.append(f"<|im_start|>assistant\n")
 
         return "\n".join(parts)
 
