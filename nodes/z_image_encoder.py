@@ -142,10 +142,19 @@ class ZImageTextEncoder:
         if raw_prompt.strip():
             formatted_text = raw_prompt
         else:
+            # Determine system prompt: use provided, or fallback to template file
+            effective_system = system_prompt.strip()
+            if not effective_system and template_preset and template_preset != "none":
+                # JS didn't fill system_prompt - load from template file as fallback
+                templates = get_templates()
+                if template_preset in templates:
+                    effective_system = templates[template_preset]
+                    logger.debug(f"Loaded template '{template_preset}' from file (JS fallback)")
+
             # Auto-enable think block if thinking_content provided
             use_think_block = add_think_block or bool(thinking_content.strip())
             # Build formatted prompt with chat template
-            formatted_text = self._format_prompt(text, system_prompt, use_think_block, thinking_content, assistant_content)
+            formatted_text = self._format_prompt(text, effective_system, use_think_block, thinking_content, assistant_content)
 
         # Encode
         tokens = clip.tokenize(formatted_text)
