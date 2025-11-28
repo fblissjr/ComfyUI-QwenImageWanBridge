@@ -292,13 +292,13 @@ except Exception as e:
 # ============================================================================
 
 try:
-    from .nodes.z_image_encoder import ZImageTextEncoder, ZImageMessageChain, get_templates
+    from .nodes.z_image_encoder import ZImageTextEncoder, ZImageTurnBuilder, get_templates
 
     NODE_CLASS_MAPPINGS["ZImageTextEncoder"] = ZImageTextEncoder
     NODE_DISPLAY_NAME_MAPPINGS["ZImageTextEncoder"] = "Z-Image Text Encoder"
 
-    NODE_CLASS_MAPPINGS["ZImageMessageChain"] = ZImageMessageChain
-    NODE_DISPLAY_NAME_MAPPINGS["ZImageMessageChain"] = "Z-Image Message Chain"
+    NODE_CLASS_MAPPINGS["ZImageTurnBuilder"] = ZImageTurnBuilder
+    NODE_DISPLAY_NAME_MAPPINGS["ZImageTurnBuilder"] = "Z-Image Turn Builder"
 
     # Register API endpoint for templates (single source of truth)
     try:

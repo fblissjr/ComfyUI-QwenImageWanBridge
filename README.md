@@ -19,15 +19,16 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 
 **Nodes:**
 - `ZImageTextEncoder` - Full-featured with templates, system prompts, raw mode, thinking/assistant content
-- `ZImageMessageChain` - Build multi-turn conversations for advanced control
+- `ZImageTurnBuilder` - Add conversation turns for multi-turn workflows
 
 **Features:**
+- `user_prompt` - your generation request (renamed from `text`)
 - `template_preset` dropdown auto-fills `system_prompt` (editable via JS)
 - `raw_prompt` input for complete control with your own `<|im_start|>` tokens
 - `formatted_prompt` output - see exactly what gets encoded
-- `thinking_content` - content inside `<think>...</think>` tags
-- `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
-- Multi-turn conversation support via ZImageMessageChain
+- `debug_output` - detailed breakdown (mode, char counts, token estimate)
+- `conversation` output - chain to ZImageTurnBuilder for multi-turn
+- `thinking_content` / `assistant_content` - content for assistant response
 
 **Documentation:**
 - [Z-Image Encoder Guide](nodes/docs/z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)

@@ -7,8 +7,8 @@ Comprehensive documentation for all ComfyUI Qwen nodes.
 Text encoding for Z-Image with Qwen3-4B. Matches diffusers by default, with optional experimental parameters.
 
 ### Nodes
-- [ZImageTextEncoder](z_image_encoder.md#zimagetextencoder-full-featured) - Full encoder with templates, system prompts, multi-turn support
-- [ZImageMessageChain](z_image_encoder.md#zimagemessagechain-multi-turn-conversations) - Build multi-turn conversations
+- [ZImageTextEncoder](z_image_encoder.md#zimagetextencoder-full-featured) - Full encoder with templates, system prompts, debug output, conversation output
+- [ZImageTurnBuilder](z_image_encoder.md#zimageturnbuilder-multi-turn-conversations) - Add conversation turns for multi-turn workflows
 
 ### Documentation
 - [Z-Image Encoder Guide](z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)

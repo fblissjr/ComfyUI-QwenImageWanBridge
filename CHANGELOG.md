@@ -1,5 +1,65 @@
 # Changelog
 
+## v2.9.5 - Z-Image UX Redesign
+
+### Breaking Changes
+
+**ZImageTextEncoder Input Renamed**
+- `text` input renamed to `user_prompt` for clarity
+- Existing workflows need to reconnect the prompt input
+
+**ZImageMessageChain Removed**
+- Replaced by `ZImageTurnBuilder` with different design
+- Old workflows using ZImageMessageChain will break
+
+### Added
+
+**ZImageTurnBuilder Node** - Higher-level abstraction for multi-turn conversations
+- Each node represents a complete turn (user message + optional assistant response)
+- `previous` input required (connects from encoder or another TurnBuilder)
+- `user_prompt` - the user's message for this turn
+- `thinking_content` / `assistant_content` - optional assistant response
+- `is_final` flag controls whether last message gets `<|im_end|>` (default: True)
+- `debug_output` shows turn details and formatted messages
+
+**New Outputs on ZImageTextEncoder**
+- `debug_output` - detailed breakdown (mode, char counts, token estimate)
+- `conversation` - chain to ZImageTurnBuilder for multi-turn workflows
+
+### Changed
+
+**ZImageTextEncoder Field Order** (top to bottom)
+1. `clip` (required)
+2. `user_prompt` (renamed from `text`)
+3. `conversation_override` (optional)
+4. `template_preset`
+5. `system_prompt`
+6. `add_think_block`
+7. `thinking_content`
+8. `assistant_content`
+9. `raw_prompt` (at bottom for advanced use)
+
+**format_conversation() Enhanced**
+- Now respects `is_final` flag in conversation dict
+- If `is_final=True` (default): last message has no `<|im_end|>`
+- If `is_final=False`: all messages get `<|im_end|>` (more turns expected)
+
+### Workflow Changes
+
+**Before (3+ nodes for system+user+assistant):**
+```
+ZImageMessageChain (system) -> ZImageMessageChain (user) -> ZImageMessageChain (assistant) -> ZImageTextEncoder
+```
+
+**After (single encoder handles first turn):**
+```
+ZImageTextEncoder (system+user+assistant) -> ZImageTurnBuilder (additional turn) -> ZImageTextEncoder
+```
+
+Most users only need ZImageTextEncoder - it handles a complete first turn.
+
+---
+
 ## v2.9.4 - Z-Image Cleanup
 
 ### Fixed

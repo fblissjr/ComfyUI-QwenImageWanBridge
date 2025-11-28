@@ -35,8 +35,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.9.2):**
-- **Z-Image encoder fix** - Correct Qwen3-4B template format with thinking tokens - [docs](nodes/docs/z_image_encoder.md)
+**Key Features (v2.9.5):**
+- **Z-Image UX redesign** - Renamed `text` to `user_prompt`, replaced ZImageMessageChain with ZImageTurnBuilder - [docs](nodes/docs/z_image_encoder.md)
 - **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (23 video templates)
 - **File-based template system** - Templates in `nodes/templates/*.md` files (single source of truth)
 - **Template Builder → Encoder** - Single `template_output` connection handles everything
@@ -330,7 +330,7 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 - `nodes/docs/hunyuanvideo_prompting_experiments.md` - Prompting experiments guide
 - `example_workflows/hunyuanvideo_15_t2v_example.json` - Working T2V workflow
 
-## Z-Image Support (v2.9.2)
+## Z-Image Support (v2.9.5)
 
 ### Overview
 Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes implement the correct Qwen3-4B chat template format.
@@ -342,7 +342,7 @@ Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text
 <|im_start|>system
 {system_prompt}<|im_end|>
 <|im_start|>user
-{text}<|im_end|>
+{user_prompt}<|im_end|>
 <|im_start|>assistant
 <think>
 {thinking_content}
@@ -352,97 +352,53 @@ Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text
 ```
 
 **Our implementation:**
+- `user_prompt` - the user's generation request
 - `thinking_content` - content INSIDE `<think>...</think>` tags
 - `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
 - `add_think_block` - auto-enabled when `thinking_content` is provided
-
-### ComfyUI vs Diffusers Gap Analysis
-
-#### Gap 1: Missing Thinking Tokens (FIXED)
-ComfyUI hardcodes template without thinking tokens:
-```
-<|im_start|>user
-{prompt}<|im_end|>
-<|im_start|>assistant
-```
-
-Diffusers uses `apply_chat_template(enable_thinking=True)`:
-```
-<|im_start|>user
-{prompt}<|im_end|>
-<|im_start|>assistant
-<think>
-
-</think>
-
-```
-
-**Our fix**: ZImageTextEncoder adds thinking tokens with proper structure.
-
-#### Gap 2: Sequence Length (FIXED)
-- ComfyUI: `max_length=99999999` (unlimited)
-- Diffusers: `max_length=512` with truncation
-
-**Our fix**: `max_sequence_length` parameter (default 512) with truncation warning.
-
-#### Gap 3: Embedding Extraction (CANNOT FIX)
-- Diffusers: Returns variable-length embeddings (filters out padding via attention mask)
-- ComfyUI: Returns full padded tensor including padding embeddings
-
-This is a ComfyUI architecture limitation - would require core changes to fix.
-
-#### Gap 4: Bundled Tokenizer (CANNOT FIX)
-ComfyUI bundles Qwen2.5-style tokenizer config without Qwen3 thinking template support.
-
-### Qwen3 Model Variants
-
-| Variant | Thinking Mode | Notes |
-|---------|---------------|-------|
-| **Qwen3-4B** (no suffix) | Hybrid (switchable) | Z-Image uses this - it's the INSTRUCT model |
-| Qwen3-4B-Base | None | Base model (NOT what Z-Image uses) |
-| Qwen3-Instruct-2507 | Never | Newer variant, no thinking |
-| Qwen3-Thinking-2507 | Always | Newer variant, always thinks |
-
-**Important**: Qwen3 naming is opposite of convention - no suffix = instruct, not base.
 
 ### Nodes
 
 #### ZImage/Encoding
 - **ZImageTextEncoder**: Full-featured encoder with Qwen3-4B template
-  - `conversation_override` - optional input from ZImageMessageChain (overrides all other inputs)
-  - System prompt presets (none, photorealistic, artistic, bilingual, etc.)
-  - Custom system prompt support (editable after template auto-fill)
-  - Template files (`nodes/templates/z_image/`)
-  - `add_think_block` - add `<think></think>` structure (auto-enabled if thinking_content provided)
-  - `thinking_content` - content inside `<think>` tags
-  - `assistant_content` - content after `</think>` tags
+  - Handles complete first turn (system + user + assistant)
+  - `user_prompt` - your generation request
+  - `conversation_override` - optional input from ZImageTurnBuilder (overrides all other inputs)
+  - `template_preset` - auto-fills system_prompt from templates
+  - `system_prompt` - editable after template auto-fill
+  - `add_think_block` - add `<think></think>` structure
+  - `thinking_content` / `assistant_content` - content for assistant response
   - `raw_prompt` - bypass all formatting, use your own tokens
-  - `formatted_prompt` output - see exactly what gets encoded
+  - **Outputs**: conditioning, formatted_prompt, debug_output, conversation
 
 #### ZImage/Conversation
-- **ZImageMessageChain**: Build multi-turn conversations
-  - Chain multiple nodes: system -> user -> assistant -> ...
-  - `enable_thinking` (set on first node) - applies to all assistant messages
-  - `thinking_content` - content inside `<think>` tags (assistant role only)
-  - Output connects to ZImageTextEncoder's `conversation_override` input
+- **ZImageTurnBuilder**: Add conversation turns for multi-turn workflows
+  - Each node = one turn (user message + assistant response)
+  - `previous` (required) - from encoder or another TurnBuilder
+  - `user_prompt` - user's message for this turn
+  - `thinking_content` / `assistant_content` - optional assistant response
+  - `is_final` - if True (default), last message has no `<|im_end|>`
+  - **Outputs**: conversation, debug_output
 
 ### Workflow
 
 **Basic (matches diffusers):**
 ```
 CLIPLoader (qwen_3_4b, lumina2) → ZImageTextEncoder → KSampler
+                                  user_prompt: "A cat sleeping"
 ```
 
 **With templates:**
 ```
 CLIPLoader → ZImageTextEncoder → KSampler
-             (template_preset: photorealistic)
+             template_preset: photorealistic
+             user_prompt: "A cat sleeping"
 ```
 
 **Multi-turn conversation:**
 ```
-ZImageMessageChain (system) → ZImageMessageChain (user) → ZImageMessageChain (assistant) → ZImageTextEncoder
-enable_thinking: True          previous: (connect)        thinking_content: ""             conversation_override: (connect)
+ZImageTextEncoder → ZImageTurnBuilder → ZImageTextEncoder
+(first turn)        (additional turn)    conversation_override: (connect)
 ```
 
 ### Key Differences from Qwen-Image-Edit

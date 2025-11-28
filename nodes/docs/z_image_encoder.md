@@ -9,8 +9,8 @@ Custom encoder nodes for Z-Image that expose experimental parameters for testing
 **Key Finding:** After analysis, we found ComfyUI and diffusers produce **identical templates** by default. Our nodes match diffusers exactly, with optional experimental parameters.
 
 **Nodes:**
-- **ZImageTextEncoder** - Full-featured with templates, system prompts, multi-turn support
-- **ZImageMessageChain** - Build multi-turn conversations
+- **ZImageTextEncoder** - Full-featured with templates, system prompts, multi-turn support (outputs conversation for chaining)
+- **ZImageTurnBuilder** - Add conversation turns for multi-turn workflows (user+assistant per turn)
 
 ---
 
@@ -118,21 +118,21 @@ This difference **cannot be fixed** without modifying ComfyUI core.
 
 ### ZImageTextEncoder (Full-Featured)
 
-Full encoder with system prompts, templates, and multi-turn conversation support.
+Full encoder with system prompts, templates, and multi-turn conversation support. Handles a complete first turn (system + user + assistant) and outputs conversation for chaining.
 
-#### Inputs
+#### Inputs (in order)
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | clip | CLIP | Yes | - | Z-Image CLIP model (lumina2 type) |
-| text | STRING | Yes | "" | Your prompt (ignored if conversation_override connected) |
-| conversation_override | ZIMAGE_CONVERSATION | No | - | Connect ZImageMessageChain output (overrides all below) |
+| user_prompt | STRING | Yes | "" | Your prompt - what you want the model to generate |
+| conversation_override | ZIMAGE_CONVERSATION | No | - | Connect from ZImageTurnBuilder (uses this instead of building one) |
 | template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image/` (auto-fills system_prompt) |
 | system_prompt | STRING | No | "" | Editable system prompt (auto-filled by template via JS) |
-| raw_prompt | STRING | No | "" | RAW MODE: Bypass all formatting, use your own tokens |
 | add_think_block | BOOLEAN | No | **False** | Add `<think></think>` block (auto-enabled if thinking_content provided) |
 | thinking_content | STRING | No | "" | Content INSIDE `<think>...</think>` tags |
 | assistant_content | STRING | No | "" | Content AFTER `</think>` tags |
+| raw_prompt | STRING | No | "" | RAW MODE: Bypass ALL formatting, use your own tokens |
 
 #### Outputs
 
@@ -140,44 +140,48 @@ Full encoder with system prompts, templates, and multi-turn conversation support
 |--------|------|-------------|
 | conditioning | CONDITIONING | Encoded text embeddings (2560 dimensions) |
 | formatted_prompt | STRING | Exact prompt that was encoded (for debugging) |
+| debug_output | STRING | Detailed breakdown: mode, char counts, token estimate |
+| conversation | ZIMAGE_CONVERSATION | Chain to ZImageTurnBuilder for multi-turn |
 
-### ZImageMessageChain (Multi-Turn Conversations)
+### ZImageTurnBuilder (Multi-Turn Conversations)
 
-Build multi-turn conversations by chaining messages together. Connect the final output to ZImageTextEncoder's `conversation_override` input.
+Add conversation turns for multi-turn workflows. Each node represents one complete turn (user message + optional assistant response). Connect the final output to ZImageTextEncoder's `conversation_override` input.
 
 #### Inputs
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| role | ENUM | Yes | "user" | Message role: system, user, or assistant |
-| content | STRING | Yes | "" | Message content |
-| previous | ZIMAGE_CONVERSATION | No | - | Previous conversation chain |
-| thinking_content | STRING | No | "" | Thinking content (assistant role only, requires enable_thinking) |
-| enable_thinking | BOOLEAN | No | False | Enable thinking mode (only when starting new conversation) |
+| previous | ZIMAGE_CONVERSATION | Yes | - | Previous conversation (from encoder or another TurnBuilder) |
+| user_prompt | STRING | Yes | "" | User's message for this turn |
+| thinking_content | STRING | No | "" | Assistant's thinking (only if conversation has enable_thinking=True) |
+| assistant_content | STRING | No | "" | Assistant's response after thinking |
+| is_final | BOOLEAN | No | True | Is this the last turn? If True, last message has no `<|im_end|>` |
 
 #### Outputs
 
 | Output | Type | Description |
 |--------|------|-------------|
-| conversation | ZIMAGE_CONVERSATION | Conversation chain to pass to next node or encoder |
+| conversation | ZIMAGE_CONVERSATION | Updated conversation to pass to next node or encoder |
+| debug_output | STRING | Turn details, char counts, and this turn's formatted messages |
 
 #### Usage
 
-Chain multiple ZImageMessageChain nodes:
+Chain turns after an encoder:
 
 ```
-[ZImageMessageChain]          [ZImageMessageChain]          [ZImageMessageChain]
-role: system          -->     role: user            -->     role: assistant
-content: "You are..."         content: "Draw a cat"         content: ""
-enable_thinking: True         previous: (connect)           thinking_content: "Thinking..."
-                                                            previous: (connect)
-                                                                    |
-                                                                    v
-                                                        [ZImageTextEncoder]
-                                                        conversation_override: (connect)
+[ZImageTextEncoder]              [ZImageTurnBuilder]              [ZImageTextEncoder]
+user_prompt: "Paint a cat"  -->  user_prompt: "Make it sleep"  -->  conversation_override: (connect)
+add_think_block: True            thinking_content: "Curled up"       clip: (from CLIPLoader)
+(outputs conversation)           assistant_content: "Done"
+                                 is_final: True
+                                 previous: (connect from encoder)
 ```
 
-When `enable_thinking=True` (set on the first node), all assistant messages will include `<think></think>` tags. Empty `thinking_content` produces empty tags.
+**Key behaviors:**
+- Each turn adds user + optional assistant messages
+- `enable_thinking` is inherited from the encoder's `add_think_block` setting
+- If `is_final=True` (default), the last message has no `<|im_end|>` (model continues)
+- If `is_final=False`, all messages get `<|im_end|>` (more turns expected)
 
 ---
 
@@ -188,6 +192,7 @@ When `enable_thinking=True` (set on the first node), all assistant messages will
 ```
 CLIPLoader (lumina2) --> ZImageTextEncoder --> KSampler
                               |
+                         user_prompt: "A cat sleeping"
                          add_think_block=False (default)
 ```
 
@@ -196,6 +201,7 @@ CLIPLoader (lumina2) --> ZImageTextEncoder --> KSampler
 ```
 CLIPLoader (lumina2) --> ZImageTextEncoder --> KSampler
                               |
+                         user_prompt: "A cat sleeping"
                          template_preset="photorealistic"
                          add_think_block=False
 ```
@@ -218,14 +224,15 @@ When `raw_prompt` is set, it bypasses all other formatting.
 ### Multi-Turn Conversation
 
 ```
-[ZImageMessageChain]     [ZImageMessageChain]     [ZImageMessageChain]
-role: system       -->   role: user         -->   role: assistant   --> ZImageTextEncoder
-content: "..."           content: "prompt"        content: ""           conversation_override: (connect)
-enable_thinking: True    previous: (connect)      thinking_content: ""  clip: (from CLIPLoader)
-                                                  previous: (connect)
+[ZImageTextEncoder]              [ZImageTurnBuilder]              [ZImageTextEncoder]
+user_prompt: "Paint a cat"  -->  user_prompt: "Make it sleep"  -->  conversation_override: (connect)
+system_prompt: "You are..."      thinking_content: "Curled up"       clip: (from CLIPLoader)
+add_think_block: True            assistant_content: "Adjusting"
+(outputs conversation)           previous: (from encoder)
+                                 is_final: True
 ```
 
-Build iterative conversations with context. Each ZImageMessageChain adds one message to the chain.
+The first encoder creates the initial conversation (system + user + assistant). Turn builders add subsequent exchanges. Final encoder consumes the complete conversation.
 
 ---
 
@@ -368,7 +375,7 @@ This section shows the exact output of `formatted_prompt` for every scenario. Th
 
 **1. Minimal (matches diffusers default)**
 
-Settings: `text="A cat sleeping"`, everything else default
+Settings: `user_prompt="A cat sleeping"`, everything else default
 
 ```
 <|im_start|>user
@@ -381,7 +388,7 @@ A cat sleeping<|im_end|>
 
 **2. With System Prompt**
 
-Settings: `text="A cat sleeping"`, `system_prompt="Generate a photorealistic image."`
+Settings: `user_prompt="A cat sleeping"`, `system_prompt="Generate a photorealistic image."`
 
 ```
 <|im_start|>system
@@ -396,7 +403,7 @@ A cat sleeping<|im_end|>
 
 **3. With Think Block (empty)**
 
-Settings: `text="A cat sleeping"`, `add_think_block=True`
+Settings: `user_prompt="A cat sleeping"`, `add_think_block=True`
 
 ```
 <|im_start|>user
@@ -412,7 +419,7 @@ A cat sleeping<|im_end|>
 
 **4. With Think Block + Thinking Content**
 
-Settings: `text="A cat sleeping"`, `thinking_content="Soft lighting, peaceful mood, curled up position."`
+Settings: `user_prompt="A cat sleeping"`, `thinking_content="Soft lighting, peaceful mood, curled up position."`
 
 (Note: `add_think_block` auto-enables when `thinking_content` is provided)
 
@@ -430,7 +437,7 @@ Soft lighting, peaceful mood, curled up position.
 
 **5. With Think Block + Thinking + Assistant Content**
 
-Settings: `text="A cat sleeping"`, `thinking_content="Soft lighting, peaceful mood."`, `assistant_content="Creating a cozy scene..."`
+Settings: `user_prompt="A cat sleeping"`, `thinking_content="Soft lighting, peaceful mood."`, `assistant_content="Creating a cozy scene..."`
 
 ```
 <|im_start|>user
@@ -448,7 +455,7 @@ Creating a cozy scene...
 **6. Full Example (System + Think + Assistant)**
 
 Settings:
-- `text="A cat sleeping on a windowsill"`
+- `user_prompt="A cat sleeping on a windowsill"`
 - `system_prompt="You are an expert photographer."`
 - `thinking_content="Golden hour light, shallow depth of field."`
 - `assistant_content="Capturing the peaceful moment..."`
@@ -483,163 +490,133 @@ My custom prompt<|im_end|>
 
 ---
 
-#### ZImageMessageChain Variations
+#### ZImageTurnBuilder Variations
 
-The message chain builds conversations by connecting nodes. Each node adds one message.
+The turn builder extends conversations created by the encoder. Each turn adds a user message and optional assistant response.
 
-**8. Simple User Message (no chain)**
+**8. Single Turn (user only, ends on user)**
 
-Single ZImageMessageChain: `role="user"`, `content="A sunset over mountains"`
+Flow: `ZImageTextEncoder -> ZImageTurnBuilder -> ZImageTextEncoder`
 
-```
-<|im_start|>user
-A sunset over mountains
-```
-
-(Note: Last message has NO `<|im_end|>` - still being "generated")
-
----
-
-**9. System + User Chain**
-
-Chain: `[system] -> [user]`
-
-Node 1: `role="system"`, `content="Generate detailed landscapes."`, `enable_thinking=False`
-Node 2: `role="user"`, `content="A sunset over mountains"`, `previous=(connect)`
+Encoder: `user_prompt="Paint a cat"`, `add_think_block=True`, `thinking_content="Orange fur."`, `assistant_content="Here's a cat."`
+TurnBuilder: `user_prompt="Make it sleeping"`, `is_final=True` (no assistant content)
 
 ```
-<|im_start|>system
-Generate detailed landscapes.<|im_end|>
-<|im_start|>user
-A sunset over mountains
-```
-
----
-
-**10. System + User + Assistant Chain (no thinking)**
-
-Chain: `[system] -> [user] -> [assistant]`
-
-Node 1: `role="system"`, `content="You are an artist."`, `enable_thinking=False`
-Node 2: `role="user"`, `content="Paint a sunset"`, `previous=(connect)`
-Node 3: `role="assistant"`, `content="I will create a vibrant scene."`, `previous=(connect)`
-
-```
-<|im_start|>system
-You are an artist.<|im_end|>
-<|im_start|>user
-Paint a sunset<|im_end|>
-<|im_start|>assistant
-I will create a vibrant scene.
-```
-
----
-
-**11. System + User + Assistant Chain (with thinking enabled, empty)**
-
-Chain: `[system] -> [user] -> [assistant]`
-
-Node 1: `role="system"`, `content="You are an artist."`, `enable_thinking=True`
-Node 2: `role="user"`, `content="Paint a sunset"`, `previous=(connect)`
-Node 3: `role="assistant"`, `content=""`, `thinking_content=""`, `previous=(connect)`
-
-```
-<|im_start|>system
-You are an artist.<|im_end|>
-<|im_start|>user
-Paint a sunset<|im_end|>
-<|im_start|>assistant
-<think>
-
-</think>
-
-```
-
----
-
-**12. System + User + Assistant Chain (with thinking content)**
-
-Chain: `[system] -> [user] -> [assistant]`
-
-Node 1: `role="system"`, `content="You are an artist."`, `enable_thinking=True`
-Node 2: `role="user"`, `content="Paint a sunset"`, `previous=(connect)`
-Node 3: `role="assistant"`, `content="Beginning the painting..."`, `thinking_content="Warm oranges, purples, silhouetted mountains."`, `previous=(connect)`
-
-```
-<|im_start|>system
-You are an artist.<|im_end|>
-<|im_start|>user
-Paint a sunset<|im_end|>
-<|im_start|>assistant
-<think>
-Warm oranges, purples, silhouetted mountains.
-</think>
-
-Beginning the painting...
-```
-
----
-
-**13. Multi-Turn Conversation (ending on user)**
-
-Chain: `[system] -> [user] -> [assistant] -> [user]`
-
-Node 1: `role="system"`, `content="You are a painter."`, `enable_thinking=True`
-Node 2: `role="user"`, `content="Paint a cat"`, `previous=(connect)`
-Node 3: `role="assistant"`, `content="Here is a tabby cat."`, `thinking_content="Orange fur, green eyes."`, `previous=(connect)`
-Node 4: `role="user"`, `content="Now make it sleeping"`, `previous=(connect)`
-
-```
-<|im_start|>system
-You are a painter.<|im_end|>
 <|im_start|>user
 Paint a cat<|im_end|>
 <|im_start|>assistant
 <think>
-Orange fur, green eyes.
+Orange fur.
 </think>
 
-Here is a tabby cat.<|im_end|>
+Here's a cat.<|im_end|>
 <|im_start|>user
-Now make it sleeping
+Make it sleeping
 ```
-
-This is the most common pattern - the conversation provides context, and the final user message is the actual generation request.
 
 ---
 
-**14. Multi-Turn with Assistant Continuation**
+**9. Single Turn with Assistant Response**
 
-Chain: `[system] -> [user] -> [assistant] -> [user] -> [assistant]`
+Flow: `ZImageTextEncoder -> ZImageTurnBuilder -> ZImageTextEncoder`
 
-Node 1: `role="system"`, `content="You are a painter."`, `enable_thinking=True`
-Node 2: `role="user"`, `content="Paint a cat"`, `previous=(connect)`
-Node 3: `role="assistant"`, `content="Here is a tabby cat."`, `thinking_content="Orange fur, green eyes."`, `previous=(connect)`
-Node 4: `role="user"`, `content="Make it sleeping"`, `previous=(connect)`
-Node 5: `role="assistant"`, `content="Adjusting the pose..."`, `thinking_content="Curled up, eyes closed, peaceful breathing."`, `previous=(connect)`
+Encoder: `user_prompt="Paint a cat"`, `add_think_block=True`, `thinking_content="Orange fur."`, `assistant_content="Here's a cat."`
+TurnBuilder: `user_prompt="Make it sleeping"`, `thinking_content="Curled up, peaceful."`, `assistant_content="Adjusting..."`, `is_final=True`
 
 ```
-<|im_start|>system
-You are a painter.<|im_end|>
 <|im_start|>user
 Paint a cat<|im_end|>
 <|im_start|>assistant
 <think>
-Orange fur, green eyes.
+Orange fur.
 </think>
 
-Here is a tabby cat.<|im_end|>
+Here's a cat.<|im_end|>
 <|im_start|>user
 Make it sleeping<|im_end|>
 <|im_start|>assistant
 <think>
-Curled up, eyes closed, peaceful breathing.
+Curled up, peaceful.
+</think>
+
+Adjusting...
+```
+
+---
+
+**10. Two-Turn Chain**
+
+Flow: `ZImageTextEncoder -> ZImageTurnBuilder -> ZImageTurnBuilder -> ZImageTextEncoder`
+
+Encoder: `user_prompt="Draw a house"`, `add_think_block=True`
+TurnBuilder 1: `user_prompt="Add a garden"`, `assistant_content="Adding flowers."`, `is_final=False`
+TurnBuilder 2: `user_prompt="Make it sunset"`, `thinking_content="Warm colors."`, `is_final=True`
+
+```
+<|im_start|>user
+Draw a house<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+
+<|im_end|>
+<|im_start|>user
+Add a garden<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+
+Adding flowers.<|im_end|>
+<|im_start|>user
+Make it sunset<|im_end|>
+<|im_start|>assistant
+<think>
+Warm colors.
+</think>
+
+```
+
+---
+
+**11. With System Prompt (Full Example)**
+
+Flow: `ZImageTextEncoder -> ZImageTurnBuilder -> ZImageTextEncoder`
+
+Encoder:
+- `system_prompt="You are a painter."`
+- `user_prompt="Paint a cat"`
+- `add_think_block=True`
+- `thinking_content="Orange fur, green eyes."`
+- `assistant_content="Here is a tabby cat."`
+
+TurnBuilder:
+- `user_prompt="Now make it sleeping"`
+- `thinking_content="Curled up, eyes closed."`
+- `assistant_content="Adjusting the pose..."`
+- `is_final=True`
+
+```
+<|im_start|>system
+You are a painter.<|im_end|>
+<|im_start|>user
+Paint a cat<|im_end|>
+<|im_start|>assistant
+<think>
+Orange fur, green eyes.
+</think>
+
+Here is a tabby cat.<|im_end|>
+<|im_start|>user
+Now make it sleeping<|im_end|>
+<|im_start|>assistant
+<think>
+Curled up, eyes closed.
 </think>
 
 Adjusting the pose...
 ```
-
-Here the assistant starts responding - the model continues from "Adjusting the pose..."
 
 ---
 
@@ -654,25 +631,23 @@ Here the assistant starts responding - the model continues from "Adjusting the p
 | 5. Full encoder | - | Auto | Yes | Yes | assistant |
 | 6. Complete | Yes | Auto | Yes | Yes | assistant |
 | 7. Raw | N/A | N/A | N/A | N/A | user choice |
-| 8. Simple chain | - | - | - | - | user |
-| 9. Sys+user | Yes | - | - | - | user |
-| 10. No thinking | Yes | - | - | Yes | assistant |
-| 11. Empty think | Yes | Yes | - | - | assistant |
-| 12. With thinking | Yes | Yes | Yes | Yes | assistant |
-| 13. Multi-turn | Yes | Yes | Yes | Yes | user |
-| 14. Continuation | Yes | Yes | Yes | Yes | assistant |
+| 8. Turn (user only) | - | Yes | Yes | Yes | user |
+| 9. Turn (with asst) | - | Yes | Yes | Yes | assistant |
+| 10. Two turns | - | Yes | Yes | Yes | assistant |
+| 11. Full multi-turn | Yes | Yes | Yes | Yes | assistant |
 
 **Key Rules:**
-- Last message never gets `<|im_end|>` (model is "generating")
-- `add_think_block` auto-enables when `thinking_content` is provided
-- Empty `thinking_content` with `add_think_block=True` produces empty `<think></think>` tags
-- `enable_thinking` on first ZImageMessageChain applies to ALL assistant messages in chain
-- Chain messages inherit `enable_thinking` from the conversation start
+- Last message never gets `<|im_end|>` when `is_final=True` (model is "generating")
+- When `is_final=False`, all messages get `<|im_end|>` (more turns expected)
+- `add_think_block` on encoder enables thinking for ALL assistant messages
+- Turn builders inherit `enable_thinking` from the encoder
+- Each turn builder adds 1 user message + 0-1 assistant messages
 
-**Where to End the Chain:**
-- **End on user** (examples 8, 9, 13): Most natural - conversation provides context, user makes final request
-- **End on assistant** (examples 10-12, 14): Provide a starting point or guide the generation direction
-- For image generation, ending on user is typically preferred - the final user message is the generation prompt
+**Design Notes:**
+- Most users only need the encoder (handles system + user + assistant in one node)
+- Turn builders are for iterative refinement workflows
+- Ending on user (no assistant content) is natural for "do this next" instructions
+- Ending on assistant guides the generation direction
 
 ---
 
@@ -687,39 +662,6 @@ As of the 2507 release, there are three Qwen3 model types:
 | Qwen3-Thinking-2507 | Always | Always thinks |
 
 **Z-Image uses the 2504 hybrid model** (Qwen3-4B without suffix).
-
----
-
-## Known Gaps vs Diffusers
-
-### Gap 1: Embedding Extraction (Cannot Fix)
-
-**Diffusers** extracts only valid (non-padded) tokens:
-```python
-for i in range(len(prompt_embeds)):
-    embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
-```
-
-**ComfyUI** returns the full padded sequence. The attention mask is passed to the model and used during context refinement, but the sequence length differs.
-
-**Why we can't fix this**: ComfyUI's CLIP architecture expects fixed-shape tensors. Changing this would require modifying ComfyUI core.
-
-**Impact**: RoPE position IDs for image patches differ (they start after caption length). May affect quality subtly.
-
-### Gap 2: Sequence Length (Intentional)
-
-**Diffusers** uses `max_sequence_length=512` with truncation.
-
-**ComfyUI** uses effectively unlimited length (`max_length=99999999`).
-
-**Our decision**: We follow ComfyUI's unlimited approach. Qwen3-4B supports 40K tokens (`max_position_embeddings: 40960`), so truncating to 512 is unnecessarily restrictive for complex prompts.
-
-### Gap 3: Tokenizer Special Tokens (Minor)
-
-ComfyUI bundles a Qwen2.5-VL tokenizer where token 151667 = `<|meta|>`.
-Qwen3-4B tokenizer has token 151667 = `<think>`.
-
-When `add_think_block=True`, ComfyUI tokenizes `<think>` as subwords `['<th', 'ink', '>']` instead of a single special token.
 
 ---
 
@@ -783,4 +725,4 @@ Style: [artistic direction]"
 ---
 
 **Last Updated:** 2025-11-28
-**Version:** 3.1 (added comprehensive formatted prompt examples)
+**Version:** 4.0 (UX redesign: renamed text->user_prompt, ZImageMessageChain->ZImageTurnBuilder)
