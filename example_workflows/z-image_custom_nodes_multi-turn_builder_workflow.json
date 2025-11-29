@@ -1,8 +1,8 @@
 {
   "id": "f6bdedf3-8511-4449-ac71-4a39d8bcbb5c",
   "revision": 0,
-  "last_node_id": 72,
-  "last_link_id": 141,
+  "last_node_id": 73,
+  "last_link_id": 148,
   "nodes": [
     {
       "id": 31,
@@ -55,7 +55,7 @@
         58
       ],
       "flags": {},
-      "order": 8,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -138,7 +138,7 @@
         1092.0882313826196
       ],
       "flags": {},
-      "order": 16,
+      "order": 17,
       "mode": 0,
       "inputs": [
         {
@@ -161,72 +161,6 @@
       "widgets_values": []
     },
     {
-      "id": 3,
-      "type": "KSampler",
-      "pos": [
-        1033.7695539010178,
-        155.86980445678878
-      ],
-      "size": [
-        447.9636118545495,
-        688.0815951067775
-      ],
-      "flags": {},
-      "order": 13,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 47
-        },
-        {
-          "name": "positive",
-          "type": "CONDITIONING",
-          "link": 139
-        },
-        {
-          "name": "negative",
-          "type": "CONDITIONING",
-          "link": 140
-        },
-        {
-          "name": "latent_image",
-          "type": "LATENT",
-          "link": 17
-        }
-      ],
-      "outputs": [
-        {
-          "name": "LATENT",
-          "type": "LATENT",
-          "slot_index": 0,
-          "links": [
-            51
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "KSampler",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        6741,
-        "fixed",
-        9,
-        1,
-        "euler",
-        "simple",
-        1
-      ]
-    },
-    {
       "id": 67,
       "type": "PreviewAny",
       "pos": [
@@ -238,7 +172,7 @@
         529.8918474306722
       ],
       "flags": {},
-      "order": 11,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -274,7 +208,7 @@
         46
       ],
       "flags": {},
-      "order": 15,
+      "order": 16,
       "mode": 0,
       "inputs": [
         {
@@ -369,35 +303,6 @@
       "bgcolor": "#653"
     },
     {
-      "id": 72,
-      "type": "MarkdownNote",
-      "pos": [
-        2029.1843716646151,
-        205.2281674497488
-      ],
-      "size": [
-        342.87365258902173,
-        104.60988724674507
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "# Final Output Sent to LLM\n\n## Special tokens and tokenization + your prompts and turn(s)"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
-    },
-    {
       "id": 71,
       "type": "PreviewAny",
       "pos": [
@@ -409,13 +314,13 @@
         342.6430126320192
       ],
       "flags": {},
-      "order": 12,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
           "name": "source",
           "type": "*",
-          "link": 138
+          "link": 148
         }
       ],
       "outputs": [],
@@ -445,13 +350,13 @@
         564.3043389431746
       ],
       "flags": {},
-      "order": 5,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
           "name": "source",
           "type": "*",
-          "link": null
+          "link": 147
         }
       ],
       "outputs": [],
@@ -481,7 +386,7 @@
         106
       ],
       "flags": {},
-      "order": 6,
+      "order": 4,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -511,6 +416,116 @@
       ]
     },
     {
+      "id": 64,
+      "type": "PreviewAny",
+      "pos": [
+        -721.4687963969766,
+        1550.2092920819823
+      ],
+      "size": [
+        500.34393188318063,
+        458.565393477239
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 141
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": [],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 56,
+      "type": "ZImageTextEncoder",
+      "pos": [
+        10.307885800640342,
+        266.15575221470806
+      ],
+      "size": [
+        828.0184031219394,
+        858.8933479546289
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 116
+        },
+        {
+          "name": "conversation_override",
+          "shape": 7,
+          "type": "ZIMAGE_CONVERSATION",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "links": []
+        },
+        {
+          "name": "formatted_prompt",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "debug_output",
+          "type": "STRING",
+          "links": [
+            135
+          ]
+        },
+        {
+          "name": "conversation",
+          "type": "ZIMAGE_CONVERSATION",
+          "links": [
+            142
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZImageTextEncoder",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": [
+        "# Character Profile\n\n## Core Identity\n- **Name:** Walter Finch\n- **Gender:** Male\n- **Age:** 72\n- **Ethnicity:** Caucasian (British descent)\n- **Skin Tone:** Fair, with a warm, sun-kissed glow on his cheeks and nose.\n- **Body Type:** Ectomorph (tall, lean, with a slight stoop)\n\n## Head & Face\n- \"Face Shape\": Oval, with a slightly prominent jawline and a receding hairline.\n- **Eye Color:** Ice-blue with subtle gold flecks around the iris.\n- **Eye Shape:** Almond-shaped, slightly hooded due to age.\n- **Hair Color:** Pure white, thinning on top, with some graying at the temples.\n- **Hair Style:** Neatly combed side-parted, with a full white beard and mustache.\n- **Hair Texture:** Straight and fine.\n- **Facial Hair:** Full beard and mustache, well-groomed.\n- **Facial Scars:** A faint, thin scar above his left eyebrow, a remnant of a childhood fall.\n- **Facial Accessories:** Thin, gold-rimmed reading glasses, worn on his nose.\n- **Makeup Style:** None.\n- **Expression Default:** Warm, gentle smile with a twinkle in his eye.\n\n## Body & Physics\n- **Height:** 178 cm (5'10)\n- **Muscle Definition:** Lean and wiry; not muscular but fit from years of activity.\n- **Chest Size:** Small, with a slight stoop due to age.\n- **Distinctive Markings:** A few scattered age spots on his hands and face.\n- **Body Modifications:** None.\n\n## Attire (Top to Bottom)\n- **Clothing Style:** Casual, intellectual, slightly outdated (e.g., 1990s classic).\n\n- **Upper Body:**\n  - **Base Layer:** Long-sleeve, light gray and blue checkered button-down shirt.\n  - **Outer Layer:** None.\n  - **Details:** Soft cotton fabric, slightly wrinkled, with a loose fit. Collar is always buttoned.\n\n- **Lower Body:**\n  - **Type:** Dark grey trousers.\n  - **Fit:** Tailored and slightly loose.\n  - **Material:** Wool blend.\n  - **Belt:** None, or a simple brown leather belt.",
+        "none",
+        "",
+        true,
+        "Hmm lets make his beard a little red and keep everything else the same.",
+        "Sure, here's a photo of Walter with his red and white beard.",
+        "",
+        true
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
       "id": 18,
       "type": "CLIPLoader",
       "pos": [
@@ -522,7 +537,7 @@
         106
       ],
       "flags": {},
-      "order": 7,
+      "order": 5,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -531,7 +546,8 @@
           "type": "CLIP",
           "links": [
             116,
-            131
+            131,
+            143
           ]
         }
       ],
@@ -552,6 +568,173 @@
       ]
     },
     {
+      "id": 3,
+      "type": "KSampler",
+      "pos": [
+        1491.6899624362131,
+        -19.9171328711104
+      ],
+      "size": [
+        447.9636118545495,
+        688.0815951067775
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 47
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 145
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 140
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            51
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "KSampler",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        6741,
+        "fixed",
+        9,
+        1,
+        "euler",
+        "simple",
+        1
+      ]
+    },
+    {
+      "id": 72,
+      "type": "MarkdownNote",
+      "pos": [
+        2014.44046890032,
+        191.34620045978286
+      ],
+      "size": [
+        342.87365258902173,
+        104.60988724674507
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "# Final Output Sent to LLM\n\n## Special tokens and tokenization + your prompts and turn(s)"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 73,
+      "type": "ZImageTurnBuilder",
+      "pos": [
+        915.8569571970802,
+        338.5421515013487
+      ],
+      "size": [
+        532.2402841347696,
+        776.3023167906165
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "previous",
+          "type": "ZIMAGE_CONVERSATION",
+          "link": 142
+        },
+        {
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 143
+        }
+      ],
+      "outputs": [
+        {
+          "name": "conversation",
+          "type": "ZIMAGE_CONVERSATION",
+          "links": [
+            148
+          ]
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "links": [
+            145
+          ]
+        },
+        {
+          "name": "formatted_prompt",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "debug_output",
+          "type": "STRING",
+          "links": [
+            147
+          ]
+        }
+      ],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        },
+        "Node name for S&R": "ZImageTurnBuilder"
+      },
+      "widgets_values": [
+        "Let's put a cute baby flying sloth above him too.",
+        "Hmm, let's make it a black sloth, flying above the man's head.",
+        "",
+        true,
+        true
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
       "id": 63,
       "type": "ZImageTextEncoderSimple",
       "pos": [
@@ -563,7 +746,7 @@
         338
       ],
       "flags": {},
-      "order": 10,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -612,118 +795,6 @@
       ],
       "color": "#322",
       "bgcolor": "#533"
-    },
-    {
-      "id": 64,
-      "type": "PreviewAny",
-      "pos": [
-        -721.4687963969766,
-        1550.2092920819823
-      ],
-      "size": [
-        500.34393188318063,
-        458.565393477239
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "source",
-          "type": "*",
-          "link": 141
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "PreviewAny",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": [],
-      "color": "#222",
-      "bgcolor": "#000"
-    },
-    {
-      "id": 56,
-      "type": "ZImageTextEncoder",
-      "pos": [
-        10.307885800640342,
-        266.15575221470806
-      ],
-      "size": [
-        828.0184031219394,
-        858.8933479546289
-      ],
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": 116
-        },
-        {
-          "name": "conversation_override",
-          "shape": 7,
-          "type": "ZIMAGE_CONVERSATION",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "links": [
-            139
-          ]
-        },
-        {
-          "name": "formatted_prompt",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "name": "debug_output",
-          "type": "STRING",
-          "links": [
-            135
-          ]
-        },
-        {
-          "name": "conversation",
-          "type": "ZIMAGE_CONVERSATION",
-          "links": [
-            138
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ZImageTextEncoder",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": [
-        "# Character Profile\n\n## Core Identity\n- **Name:** Walter Finch\n- **Gender:** Male\n- **Age:** 72\n- **Ethnicity:** Caucasian (British descent)\n- **Skin Tone:** Fair, with a warm, sun-kissed glow on his cheeks and nose.\n- **Body Type:** Ectomorph (tall, lean, with a slight stoop)\n\n## Head & Face\n- \"Face Shape\": Oval, with a slightly prominent jawline and a receding hairline.\n- **Eye Color:** Ice-blue with subtle gold flecks around the iris.\n- **Eye Shape:** Almond-shaped, slightly hooded due to age.\n- **Hair Color:** Pure white, thinning on top, with some graying at the temples.\n- **Hair Style:** Neatly combed side-parted, with a full white beard and mustache.\n- **Hair Texture:** Straight and fine.\n- **Facial Hair:** Full beard and mustache, well-groomed.\n- **Facial Scars:** A faint, thin scar above his left eyebrow, a remnant of a childhood fall.\n- **Facial Accessories:** Thin, gold-rimmed reading glasses, worn on his nose.\n- **Makeup Style:** None.\n- **Expression Default:** Warm, gentle smile with a twinkle in his eye.\n\n## Body & Physics\n- **Height:** 178 cm (5'10)\n- **Muscle Definition:** Lean and wiry; not muscular but fit from years of activity.\n- **Chest Size:** Small, with a slight stoop due to age.\n- **Distinctive Markings:** A few scattered age spots on his hands and face.\n- **Body Modifications:** None.\n\n## Attire (Top to Bottom)\n- **Clothing Style:** Casual, intellectual, slightly outdated (e.g., 1990s classic).\n\n- **Upper Body:**\n  - **Base Layer:** Long-sleeve, light gray and blue checkered button-down shirt.\n  - **Outer Layer:** None.\n  - **Details:** Soft cotton fabric, slightly wrinkled, with a loose fit. Collar is always buttoned.\n\n- **Lower Body:**\n  - **Type:** Dark grey trousers.\n  - **Fit:** Tailored and slightly loose.\n  - **Material:** Wool blend.\n  - **Belt:** None, or a simple brown leather belt.",
-        "none",
-        "",
-        true,
-        "Hmm lets make his beard a little red and keep everything else the same.",
-        "Sure, here's a photo of Walter with his red and white beard.",
-        "",
-        true
-      ],
-      "color": "#223",
-      "bgcolor": "#335"
     }
   ],
   "links": [
@@ -800,22 +871,6 @@
       "*"
     ],
     [
-      138,
-      56,
-      3,
-      71,
-      0,
-      "*"
-    ],
-    [
-      139,
-      56,
-      0,
-      3,
-      1,
-      "CONDITIONING"
-    ],
-    [
       140,
       63,
       0,
@@ -830,6 +885,46 @@
       64,
       0,
       "*"
+    ],
+    [
+      142,
+      56,
+      3,
+      73,
+      0,
+      "ZIMAGE_CONVERSATION"
+    ],
+    [
+      143,
+      18,
+      0,
+      73,
+      1,
+      "CLIP"
+    ],
+    [
+      145,
+      73,
+      1,
+      3,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      147,
+      73,
+      3,
+      68,
+      0,
+      "*"
+    ],
+    [
+      148,
+      73,
+      0,
+      71,
+      0,
+      "*"
     ]
   ],
   "groups": [],
@@ -838,8 +933,8 @@
     "ds": {
       "scale": 0.92295998177067,
       "offset": [
-        386.5779919411045,
-        310.45135112880706
+        775.053847383037,
+        -417.78610723456455
       ]
     },
     "frontendVersion": "1.32.9",

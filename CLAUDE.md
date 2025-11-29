@@ -35,7 +35,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.9.8):**
+**Key Features (v2.9.10):**
+- **Extended template format** - Templates can include `add_think_block`, `thinking_content`, `assistant_content` in YAML frontmatter
+- **Structured prompt templates** - `json_structured`, `yaml_structured`, `markdown_structured` with pre-configured thinking
 - **JSON key quote filtering** - `strip_key_quotes` toggle on Z-Image nodes prevents JSON keys appearing as text in images - [docs](nodes/docs/z_image_encoder.md)
 - **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (23 video templates)
 - **File-based template system** - Templates in `nodes/templates/*.md` files (single source of truth)

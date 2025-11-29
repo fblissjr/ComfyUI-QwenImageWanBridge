@@ -1,5 +1,47 @@
 # Changelog
 
+## v2.9.10 - Extended Template Format with Thinking Support
+
+### Added
+
+**Extended Template Format**
+- Templates can now include `add_think_block`, `thinking_content`, and `assistant_content` in YAML frontmatter
+- JS auto-fill populates all fields when selecting a template
+- User can edit any pre-filled values before generation
+- Backward compatible: existing templates work unchanged
+
+**Structured Prompt Templates**
+- `json_structured` - Parse JSON-formatted image descriptions
+- `yaml_structured` - Parse YAML hierarchical descriptions
+- `markdown_structured` - Parse Markdown-formatted descriptions
+- All include pre-configured thinking blocks for structured parsing
+
+**ZImageTextEncoderSimple Auto-fill**
+- Simple encoder now also supports template auto-fill via JS
+- Same template selection behavior as full encoder
+
+### Template Format Example
+
+```yaml
+---
+name: z_image_json_structured
+description: Parse JSON-structured image descriptions
+model: z-image
+category: structured
+add_think_block: true
+thinking_content: |
+  Parsing the JSON structure to identify:
+  - Subject and scene elements
+  - Style and artistic direction
+---
+System prompt body text here...
+```
+
+When selected, JS fills: system_prompt, add_think_block, thinking_content, assistant_content.
+User can edit any field before generation.
+
+---
+
 ## v2.9.9 - Simple Encoder, Debug Output, and Double-Wrap Fix
 
 ### Added
