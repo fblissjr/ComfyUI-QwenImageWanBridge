@@ -250,9 +250,11 @@ class ZImageTurnBuilder:
         formatted_text = format_conversation(conversation)
 
         # Encode if clip provided
+        # Pass llama_template="{}" to bypass ComfyUI's automatic chat template wrapping
+        # since we've already formatted the conversation ourselves
         conditioning = None
         if clip is not None:
-            tokens = clip.tokenize(formatted_text)
+            tokens = clip.tokenize(formatted_text, llama_template="{}")
             conditioning = clip.encode_from_tokens_scheduled(tokens)
             # Log formatted prompt to console (same as encoder)
             print(f"\n[Z-Image TurnBuilder] Formatted prompt:\n{formatted_text}\n")
@@ -502,7 +504,9 @@ class ZImageTextEncoder:
         print(f"\n[Z-Image] Formatted prompt:\n{formatted_text}\n")
 
         # Encode
-        tokens = clip.tokenize(formatted_text)
+        # Pass llama_template="{}" to bypass ComfyUI's automatic chat template wrapping
+        # since we've already formatted the conversation ourselves
+        tokens = clip.tokenize(formatted_text, llama_template="{}")
         conditioning = clip.encode_from_tokens_scheduled(tokens)
 
         return (conditioning, formatted_text, debug_output, conversation_out)
@@ -559,6 +563,137 @@ def get_z_image_template_systems() -> Dict[str, str]:
     return get_templates()
 
 
+class ZImageTextEncoderSimple:
+    """
+    Simplified Z-Image encoder for quick encoding - good for negative prompts.
+
+    Same template/thinking support as the full encoder, but without conversation
+    chaining. Use this when you just need conditioning output.
+
+    For multi-turn conversations, use ZImageTextEncoder + ZImageTurnBuilder.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        templates = get_templates()
+        template_choices = ["none"] + sorted(templates.keys())
+
+        return {
+            "required": {
+                "clip": ("CLIP", {"tooltip": "Z-Image CLIP model (lumina2 type)"}),
+                "user_prompt": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Your prompt - what you want (or don't want) the model to generate"
+                }),
+            },
+            "optional": {
+                "template_preset": (template_choices, {
+                    "default": "none",
+                    "tooltip": "Select a template to auto-fill system_prompt (editable after selection)"
+                }),
+                "system_prompt": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "System instructions (auto-filled by template, then editable)"
+                }),
+                "add_think_block": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Add <think></think> block structure"
+                }),
+                "thinking_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content inside <think>...</think> tags"
+                }),
+                "assistant_content": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content after </think> tags"
+                }),
+            }
+        }
+
+    RETURN_TYPES = ("CONDITIONING", "STRING")
+    RETURN_NAMES = ("conditioning", "formatted_prompt")
+    FUNCTION = "encode"
+    CATEGORY = "ZImage/Encoding"
+    TITLE = "Z-Image Text Encoder (Simple)"
+
+    DESCRIPTION = "Simplified encoder for quick use - good for negative prompts. Same template/thinking support, no conversation chaining."
+
+    def encode(
+        self,
+        clip,
+        user_prompt: str,
+        template_preset: str = "none",
+        system_prompt: str = "",
+        add_think_block: bool = False,
+        thinking_content: str = "",
+        assistant_content: str = "",
+    ):
+        # Get system prompt from template if selected
+        if template_preset != "none" and not system_prompt.strip():
+            templates = get_templates()
+            system_prompt = templates.get(template_preset, "")
+
+        # Auto-enable think block if thinking_content provided
+        if thinking_content.strip():
+            add_think_block = True
+
+        # Build formatted prompt
+        formatted_text = self._format_prompt(
+            user_prompt=user_prompt.strip(),
+            system_prompt=system_prompt.strip(),
+            add_think_block=add_think_block,
+            thinking_content=thinking_content.strip(),
+            assistant_content=assistant_content.strip(),
+        )
+
+        # Log to console
+        print(f"\n[Z-Image Simple] Formatted prompt:\n{formatted_text}\n")
+
+        # Encode - bypass ComfyUI's automatic template wrapping
+        tokens = clip.tokenize(formatted_text, llama_template="{}")
+        conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+        return (conditioning, formatted_text)
+
+    def _format_prompt(
+        self,
+        user_prompt: str,
+        system_prompt: str = "",
+        add_think_block: bool = False,
+        thinking_content: str = "",
+        assistant_content: str = "",
+    ) -> str:
+        """Format prompt following Qwen3-4B chat template."""
+        parts = []
+
+        # System message (optional)
+        if system_prompt:
+            parts.append(f"<|im_start|>system\n{system_prompt}<|im_end|>")
+
+        # User message
+        parts.append(f"<|im_start|>user\n{user_prompt}<|im_end|>")
+
+        # Assistant message
+        parts.append("<|im_start|>assistant")
+
+        if add_think_block:
+            parts.append("<think>")
+            if thinking_content:
+                parts.append(thinking_content)
+            parts.append("</think>")
+            parts.append("")  # Newline after think block
+
+        if assistant_content:
+            parts.append(assistant_content)
+            parts.append("<|im_end|>")
+
+        return "\n".join(parts)
+
+
 class PromptKeyFilter:
     """
     Filter double quotes from JSON-style keys in prompts.
@@ -613,12 +748,14 @@ class PromptKeyFilter:
 
 NODE_CLASS_MAPPINGS = {
     "ZImageTextEncoder": ZImageTextEncoder,
+    "ZImageTextEncoderSimple": ZImageTextEncoderSimple,
     "ZImageTurnBuilder": ZImageTurnBuilder,
     "PromptKeyFilter": PromptKeyFilter,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ZImageTextEncoder": "Z-Image Text Encoder",
+    "ZImageTextEncoderSimple": "Z-Image Text Encoder (Simple)",
     "ZImageTurnBuilder": "Z-Image Turn Builder",
     "PromptKeyFilter": "Prompt Key Filter",
 }

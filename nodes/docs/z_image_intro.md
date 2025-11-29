@@ -171,6 +171,21 @@ ZImageTextEncoder -> TurnBuilder (clip connected) -> conditioning -> KSampler
 ZImageTextEncoder -> TurnBuilder -> ZImageTextEncoder (conversation_override)
 ```
 
+### ZImageTextEncoderSimple
+
+Simplified encoder for quick use - ideal for **negative prompts**.
+
+Same template/thinking support as the full encoder, but no conversation chaining. Just conditioning + formatted_prompt outputs.
+
+**Usage:**
+```
+Positive: ZImageTextEncoder -> KSampler (positive)
+Negative: ZImageTextEncoderSimple -> KSampler (negative)
+         user_prompt: "bad anatomy, blurry, watermark, text"
+```
+
+Both use the same Qwen3-4B chat template format for consistency.
+
 ---
 
 ## Progressive Examples
@@ -457,6 +472,7 @@ Yes. Any LLM works, but **Qwen3 family models** have a technical advantage: they
 | Guide interpretation | Add thinking_content |
 | Iterative edits | ZImageTurnBuilder chain |
 | Character consistency | Structured prompt + multi-turn |
+| **Negative prompts** | ZImageTextEncoderSimple |
 | Full control | raw_prompt mode |
 
 The nodes are just building an LLM message chain. The magic is in how you structure that chain.

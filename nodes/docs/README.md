@@ -10,7 +10,8 @@ Text encoding for Z-Image with Qwen3-4B. Matches diffusers by default, with opti
 - **[Z-Image Intro Guide](z_image_intro.md)** - "WTF is this?" - Quick overview, should you use it, progressive examples
 
 ### Nodes
-- [ZImageTextEncoder](z_image_encoder.md#zimagetextencoder-full-featured) - Full encoder with templates, system prompts, debug output, conversation output
+- [ZImageTextEncoder](z_image_encoder.md#zimagetextencoder-full-featured) - Full encoder with templates, system prompts, conversation output
+- [ZImageTextEncoderSimple](z_image_encoder.md#zimagetextencodersimple-quick-encoding) - Simplified encoder for quick use / negative prompts
 - [ZImageTurnBuilder](z_image_encoder.md#zimageturnbuilder-multi-turn-conversations) - Add conversation turns for multi-turn workflows
 - PromptKeyFilter - Strip quotes from JSON keys (prevents text appearing in images)
 

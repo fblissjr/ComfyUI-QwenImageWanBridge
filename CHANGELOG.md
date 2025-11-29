@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.9.9 - Simple Encoder and Double-Wrap Fix
+
+### Added
+
+**ZImageTextEncoderSimple Node**
+- Simplified encoder for quick use - ideal for negative prompts
+- Same template/thinking support as full encoder
+- No conversation chaining (just conditioning + formatted_prompt outputs)
+- Lighter weight for simple encoding tasks
+
+### Fixed
+
+**Double-Wrapping Bug**
+- All Z-Image encoders were double-wrapping prompts with the chat template
+- Our nodes format the prompt, then ComfyUI's tokenizer wrapped it again
+- Now pass `llama_template="{}"` to bypass automatic wrapping
+- Affects: ZImageTextEncoder, ZImageTextEncoderSimple, ZImageTurnBuilder
+
+### Workflow
+
+**Recommended for negative prompts:**
+```
+Positive: ZImageTextEncoder (full) -> KSampler positive
+Negative: ZImageTextEncoderSimple -> KSampler negative
+```
+
+Both use the same Qwen3-4B chat template format for consistency.
+
+---
+
 ## v2.9.8 - JSON Key Quote Filtering
 
 ### Added

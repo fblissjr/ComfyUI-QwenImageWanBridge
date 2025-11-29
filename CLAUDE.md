@@ -336,7 +336,7 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 - `nodes/docs/hunyuanvideo_prompting_experiments.md` - Prompting experiments guide
 - `example_workflows/hunyuanvideo_15_t2v_example.json` - Working T2V workflow
 
-## Z-Image Support (v2.9.8)
+## Z-Image Support (v2.9.9)
 
 ### Overview
 Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes implement the correct Qwen3-4B chat template format.
@@ -381,6 +381,9 @@ Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text
   - `raw_prompt` - bypass all formatting, use your own tokens
   - `strip_key_quotes` - remove quotes from JSON keys to prevent them appearing as text
   - **Outputs**: conditioning, formatted_prompt, debug_output, conversation
+- **ZImageTextEncoderSimple**: Simplified encoder for quick use / negative prompts
+  - Same template/thinking support, no conversation chaining
+  - **Outputs**: conditioning, formatted_prompt
 
 #### ZImage/Conversation
 - **ZImageTurnBuilder**: Add conversation turns for multi-turn workflows
