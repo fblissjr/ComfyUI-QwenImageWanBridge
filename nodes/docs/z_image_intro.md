@@ -382,8 +382,9 @@ This is experimental - we're essentially using the LLM's conversation understand
 
 ## Templates
 
-We include 100+ templates in `nodes/templates/z_image/`. Some highlights:
+We include 140+ templates in `nodes/templates/z_image/`. Some highlights:
 
+**Style Templates:**
 | Template | Description |
 |----------|-------------|
 | `photorealistic` | Natural lighting and realistic details |
@@ -394,7 +395,24 @@ We include 100+ templates in `nodes/templates/z_image/`. Some highlights:
 | `pixel_art` | Retro 8/16-bit aesthetic |
 | `character_design` | Turnaround sheets, model references |
 
-Templates auto-fill the `system_prompt` field. You can edit it after selection.
+**Structured Prompt Templates (v2.9.10+):**
+| Template | Description |
+|----------|-------------|
+| `json_structured` | Parse JSON-formatted prompts from LLMs |
+| `yaml_structured` | Parse YAML hierarchical prompts |
+| `markdown_structured` | Parse Markdown-formatted prompts |
+
+These structured templates include pre-configured thinking content to help the model parse different prompt formats.
+
+### Extended Template Format
+
+Templates can now pre-fill multiple fields (not just system prompt):
+- `system_prompt` - always filled from template body
+- `add_think_block` - auto-enable the thinking checkbox
+- `thinking_content` - pre-fill thinking content
+- `assistant_content` - pre-fill assistant content
+
+When you select a template, all configured fields get filled. You can edit any field before generation.
 
 ---
 

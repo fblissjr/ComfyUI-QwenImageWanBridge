@@ -22,14 +22,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Documentation
 
+### User Docs
 - `nodes/docs/README.md` - Documentation index
+- `nodes/docs/z_image_intro.md` - Z-Image intro guide ("WTF is this?")
+- `nodes/docs/z_image_encoder.md` - Z-Image encoder reference (extended template format)
+- `nodes/docs/z_image_character_generation.md` - Character consistency guide
 - `nodes/docs/QwenImageBatch.md` - Batch node documentation
 - `nodes/docs/QwenVLTextEncoder.md` - Standard encoder documentation
 - `nodes/docs/QwenTemplateBuilder.md` - Template builder documentation
 - `nodes/docs/resolution_tradeoffs.md` - Comprehensive resolution and scaling guide
-- `nodes/docs/wan21_vae_upscale2x_guide.md` - Wan2.1-VAE-upscale2x integration and optimization guide
-- `nodes/docs/qwen_wan_bridge_guide.md` - Qwen-to-Wan Video bridge for image-to-video workflows
-- `nodes/docs/z_image_encoder.md` - Z-Image encoder documentation (thinking token fix)
+- `nodes/docs/wan21_vae_upscale2x_guide.md` - Wan2.1-VAE-upscale2x integration guide
+- `nodes/docs/qwen_wan_bridge_guide.md` - Qwen-to-Wan Video bridge guide
+
+### Developer Docs
+- `internal/COMFYUI_JAVASCRIPT_PYTHON_DEVELOPER_GUIDE.md` - JS/Python integration patterns
+- `internal/comfyui_js_python_integration.md` - Original integration research
 
 ## Project Overview
 
@@ -204,6 +211,21 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
 
 ### Refinement (QwenImage/Refinement)
 - QwenLowresFixNode - Two-stage upscale refinement
+
+### Pico Dataset (ZImage/Pico)
+- PicoPromptSampler - Sample prompts from Pico-Banana-400K dataset
+  - 35 edit categories, 257K+ prompts
+  - Connect `prompt` output to encoder's `user_prompt` input
+  - `seed=-1` for random, or set seed for reproducible sampling
+  - [Full guide](nodes/docs/pico_prompt_sampler.md)
+- PicoPromptBatch - Sample multiple prompts as JSON for batch experiments
+- PicoCategoryInfo - Display category statistics
+
+**Basic workflow:**
+```
+PicoPromptSampler → prompt → ZImageTextEncoder → KSampler
+                            (user_prompt)
+```
 
 ## Workflow Examples
 

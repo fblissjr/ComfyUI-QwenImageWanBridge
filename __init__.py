@@ -341,6 +341,47 @@ except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Template Influence Analyzer: {e}")
 
 # ============================================================================
+# PICO DATASET INTEGRATION - Sample prompts from Pico-Banana-400K
+# ============================================================================
+
+try:
+    from .nodes.pico_prompt_sampler import (
+        PicoPromptSampler,
+        PicoPromptBatch,
+        PicoCategoryInfo,
+        get_pico_categories_for_api,
+    )
+
+    NODE_CLASS_MAPPINGS["PicoPromptSampler"] = PicoPromptSampler
+    NODE_DISPLAY_NAME_MAPPINGS["PicoPromptSampler"] = "Pico Prompt Sampler"
+
+    NODE_CLASS_MAPPINGS["PicoPromptBatch"] = PicoPromptBatch
+    NODE_DISPLAY_NAME_MAPPINGS["PicoPromptBatch"] = "Pico Prompt Batch"
+
+    NODE_CLASS_MAPPINGS["PicoCategoryInfo"] = PicoCategoryInfo
+    NODE_DISPLAY_NAME_MAPPINGS["PicoCategoryInfo"] = "Pico Category Info"
+
+    # Register API endpoint for Pico data
+    try:
+        from aiohttp import web
+        from server import PromptServer
+
+        @PromptServer.instance.routes.get("/api/pico_categories")
+        async def get_pico_categories_api(request):
+            """API endpoint for Pico categories - JS fetches from here."""
+            data = get_pico_categories_for_api()
+            return web.json_response(data)
+
+        print("[QwenImageWanBridge] Loaded Pico Prompt Sampler nodes (3 nodes)")
+        print("[QwenImageWanBridge] API: /api/pico_categories endpoint registered")
+        print("[QwenImageWanBridge] FEATURE: Sample from 257K+ Pico-Banana prompts")
+    except Exception as api_err:
+        print(f"[QwenImageWanBridge] Loaded Pico nodes (API endpoint failed: {api_err})")
+
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Pico Prompt Sampler: {e}")
+
+# ============================================================================
 # DEBUG TRACING - Opt-in via environment variable
 # ============================================================================
 

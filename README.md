@@ -31,7 +31,9 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 - `PromptKeyFilter` - Strip quotes from JSON keys to prevent them appearing as text
 
 **Key Features:**
-- System prompts via 100+ templates or custom text
+- System prompts via 140+ templates or custom text
+- **Extended template format** - templates can pre-fill thinking content and assistant content
+- **Structured prompt templates** - `json_structured`, `yaml_structured`, `markdown_structured` for LLM-generated prompts
 - Thinking blocks (`<think>`) to guide model interpretation
 - Multi-turn conversations for iterative character edits
 - `raw_prompt` for complete control with your own special tokens

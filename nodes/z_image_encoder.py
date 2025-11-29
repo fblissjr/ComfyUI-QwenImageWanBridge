@@ -26,8 +26,19 @@ except ImportError:
     YAML_AVAILABLE = False
 
 
-def load_z_image_templates() -> Dict[str, str]:
-    """Load Z-Image templates from nodes/templates/z_image/*.md files."""
+def load_z_image_templates() -> Dict[str, Dict[str, Any]]:
+    """
+    Load Z-Image templates from nodes/templates/z_image/*.md files.
+
+    Returns dict of template_name -> {
+        "system_prompt": str,
+        "add_think_block": bool,
+        "thinking_content": str,
+        "assistant_content": str,
+        "description": str,
+        "category": str,
+    }
+    """
     templates = {}
     templates_dir = os.path.join(os.path.dirname(__file__), "templates", "z_image")
 
@@ -44,7 +55,22 @@ def load_z_image_templates() -> Dict[str, str]:
                 if content.startswith('---'):
                     parts = content.split('---', 2)
                     if len(parts) >= 3:
-                        templates[template_name] = parts[2].strip()
+                        # Parse YAML frontmatter if available
+                        meta = {}
+                        if YAML_AVAILABLE:
+                            try:
+                                meta = yaml.safe_load(parts[1]) or {}
+                            except Exception:
+                                pass
+
+                        templates[template_name] = {
+                            "system_prompt": parts[2].strip(),
+                            "add_think_block": meta.get("add_think_block", False),
+                            "thinking_content": meta.get("thinking_content", ""),
+                            "assistant_content": meta.get("assistant_content", ""),
+                            "description": meta.get("description", ""),
+                            "category": meta.get("category", ""),
+                        }
             except Exception as e:
                 logger.warning(f"Failed to load template {filename}: {e}")
 
@@ -54,7 +80,8 @@ def load_z_image_templates() -> Dict[str, str]:
 # Global template cache
 _TEMPLATE_CACHE = None
 
-def get_templates() -> Dict[str, str]:
+def get_templates() -> Dict[str, Dict[str, Any]]:
+    """Get cached templates. Returns dict of template_name -> template_data."""
     global _TEMPLATE_CACHE
     if _TEMPLATE_CACHE is None:
         _TEMPLATE_CACHE = load_z_image_templates()
@@ -429,7 +456,8 @@ class ZImageTextEncoder:
                 # JS didn't fill system_prompt - load from template file as fallback
                 templates = get_templates()
                 if template_preset in templates:
-                    effective_system = templates[template_preset]
+                    template_data = templates[template_preset]
+                    effective_system = template_data.get("system_prompt", "") if isinstance(template_data, dict) else template_data
                     logger.debug(f"Loaded template '{template_preset}' from file (JS fallback)")
 
             # Auto-enable think block if thinking_content provided
@@ -637,7 +665,8 @@ class ZImageTextEncoderSimple:
         effective_system = system_prompt.strip()
         if template_preset != "none" and not effective_system:
             templates = get_templates()
-            effective_system = templates.get(template_preset, "")
+            template_data = templates.get(template_preset, {})
+            effective_system = template_data.get("system_prompt", "") if isinstance(template_data, dict) else template_data
 
         # Auto-enable think block if thinking_content provided
         use_think_block = add_think_block

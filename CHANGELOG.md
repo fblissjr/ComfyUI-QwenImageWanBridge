@@ -2,6 +2,13 @@
 
 ## v2.9.10 - Extended Template Format with Thinking Support
 
+### Fixed
+
+**Workflow Load Preservation**
+- JS auto-fill now only triggers on initial load if system_prompt is empty
+- Prevents overwriting user customizations saved in workflows
+- Template selection still works normally for user interactions
+
 ### Added
 
 **Extended Template Format**

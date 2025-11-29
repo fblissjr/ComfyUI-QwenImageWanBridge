@@ -1,9 +1,15 @@
 /**
  * Unified Template Auto-fill Extension
- * Updates system prompt field when template preset changes
+ * Updates system prompt and thinking fields when template preset changes
  *
- * Supports: ZImageTextEncoder, HunyuanVideoTextEncoder
+ * Supports: ZImageTextEncoder, ZImageTextEncoderSimple, HunyuanVideoTextEncoder
  * Templates loaded from Python API - single source of truth
+ *
+ * Z-Image templates can include:
+ * - system_prompt (body text)
+ * - add_think_block (boolean)
+ * - thinking_content (string)
+ * - assistant_content (string)
  */
 
 import { app } from "../../../scripts/app.js";
@@ -15,6 +21,19 @@ const ENCODER_CONFIGS = {
     apiEndpoint: "/api/z_image_templates",
     templateWidget: "template_preset",
     systemWidget: "system_prompt",
+    // Z-Image extended fields
+    thinkBlockWidget: "add_think_block",
+    thinkContentWidget: "thinking_content",
+    assistantWidget: "assistant_content",
+  },
+  ZImageTextEncoderSimple: {
+    apiEndpoint: "/api/z_image_templates",
+    templateWidget: "template_preset",
+    systemWidget: "system_prompt",
+    // Z-Image extended fields
+    thinkBlockWidget: "add_think_block",
+    thinkContentWidget: "thinking_content",
+    assistantWidget: "assistant_content",
   },
   HunyuanVideoTextEncoder: {
     apiEndpoint: "/api/hunyuan_video_templates",
@@ -99,28 +118,66 @@ app.registerExtension({
         // Store original callback
         const originalCallback = templateWidget.callback;
 
-        // Override callback to update system prompt field
+        // Override callback to update all template-driven fields
         templateWidget.callback = function (value) {
           // Call original callback if exists
           if (originalCallback) {
             originalCallback.call(this, value);
           }
 
-          // Update system prompt based on preset
-          if (templates[value] !== undefined) {
-            systemWidget.value = templates[value] || "";
+          // Get template data
+          const template = templates[value];
+          if (template === undefined) return;
+
+          // Handle both new format (object) and legacy format (string)
+          const isObject = typeof template === "object" && template !== null;
+
+          // Update system prompt (always)
+          const systemValue = isObject
+            ? template.system_prompt || ""
+            : template || "";
+          systemWidget.value = systemValue;
+
+          // Update Z-Image extended fields (if configured and template has them)
+          if (isObject && config.thinkBlockWidget) {
+            const thinkBlockWidget = node.widgets?.find(
+              (w) => w.name === config.thinkBlockWidget
+            );
+            const thinkContentWidget = node.widgets?.find(
+              (w) => w.name === config.thinkContentWidget
+            );
+            const assistantWidget = node.widgets?.find(
+              (w) => w.name === config.assistantWidget
+            );
+
+            // Fill add_think_block if template specifies it
+            if (thinkBlockWidget && template.add_think_block !== undefined) {
+              thinkBlockWidget.value = template.add_think_block;
+            }
+
+            // Fill thinking_content if template has it
+            if (thinkContentWidget && template.thinking_content) {
+              thinkContentWidget.value = template.thinking_content;
+            }
+
+            // Fill assistant_content if template has it
+            if (assistantWidget && template.assistant_content) {
+              assistantWidget.value = template.assistant_content;
+            }
           }
 
           // Mark node as needing update
           node.setDirtyCanvas(true, true);
         };
 
-        // Trigger initial update if there's a value
+        // Trigger initial update only if system_prompt is empty
+        // (preserves user customizations from saved workflows)
         if (
           templateWidget.value &&
-          templates[templateWidget.value] !== undefined
+          templates[templateWidget.value] !== undefined &&
+          !systemWidget.value // Only fill if currently empty
         ) {
-          systemWidget.value = templates[templateWidget.value] || "";
+          templateWidget.callback(templateWidget.value);
         }
       }, 10);
 

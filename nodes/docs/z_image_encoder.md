@@ -444,8 +444,44 @@ Standalone text filter node in `QwenImage/Utilities`. Use when you need filterin
 
 ## Template Files
 
-Templates stored in `nodes/templates/z_image/` subfolder:
+Templates stored in `nodes/templates/z_image/` subfolder.
 
+### Extended Template Format (v2.9.10+)
+
+Templates can now include thinking content in YAML frontmatter:
+
+```yaml
+---
+name: z_image_json_structured
+description: Parse JSON-structured image descriptions
+model: z-image
+category: structured
+add_think_block: true
+thinking_content: |
+  Parsing the JSON structure to identify:
+  - Subject and scene elements
+  - Style and artistic direction
+assistant_content: ""
+---
+System prompt body text here...
+```
+
+**Available frontmatter fields:**
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | - | Template identifier |
+| `description` | string | - | Short description |
+| `model` | string | - | Target model (z-image) |
+| `category` | string | - | Template category |
+| `add_think_block` | boolean | false | Auto-enable thinking checkbox |
+| `thinking_content` | string | "" | Pre-fill thinking content field |
+| `assistant_content` | string | "" | Pre-fill assistant content field |
+
+When a template is selected, JS auto-fills all configured fields. User can edit any value before generation.
+
+### Template Categories
+
+**Style Templates:**
 | Template | Description |
 |----------|-------------|
 | `default` | No system prompt (matches diffusers default) |
@@ -453,7 +489,14 @@ Templates stored in `nodes/templates/z_image/` subfolder:
 | `bilingual_text` | English/Chinese text rendering |
 | `artistic` | Creative compositions |
 
-See the folder for additional templates.
+**Structured Prompt Templates:**
+| Template | Description |
+|----------|-------------|
+| `json_structured` | Parse JSON-formatted prompts (includes thinking) |
+| `yaml_structured` | Parse YAML hierarchical prompts (includes thinking) |
+| `markdown_structured` | Parse Markdown-formatted prompts (includes thinking) |
+
+See the folder for 140+ additional templates.
 
 ---
 
@@ -843,4 +886,4 @@ Style: [artistic direction]"
 ---
 
 **Last Updated:** 2025-11-29
-**Version:** 4.5 (v2.9.9: debug_output on all Z-Image nodes)
+**Version:** 4.6 (v2.9.10: extended template format with thinking support)
