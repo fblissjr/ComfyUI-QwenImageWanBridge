@@ -212,20 +212,11 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
 ### Refinement (QwenImage/Refinement)
 - QwenLowresFixNode - Two-stage upscale refinement
 
-### Pico Dataset (ZImage/Pico)
-- PicoPromptSampler - Sample prompts from Pico-Banana-400K dataset
-  - 35 edit categories, 257K+ prompts
-  - Connect `prompt` output to encoder's `user_prompt` input
-  - `seed=-1` for random, or set seed for reproducible sampling
-  - [Full guide](nodes/docs/pico_prompt_sampler.md)
-- PicoPromptBatch - Sample multiple prompts as JSON for batch experiments
-- PicoCategoryInfo - Display category statistics
-
-**Basic workflow:**
-```
-PicoPromptSampler → prompt → ZImageTextEncoder → KSampler
-                            (user_prompt)
-```
+### Pico Dataset (Experimental - not loaded by default)
+- Located in `nodes/pico_prompt_sampler.py` and `experiments/pico/`
+- Requires `PICO_DB_PATH` environment variable and `duckdb` package
+- CLI scripts available in `experiments/pico/` for querying dataset
+- [Guide](experiments/pico/NODE_DOCS.md)
 
 ## Workflow Examples
 

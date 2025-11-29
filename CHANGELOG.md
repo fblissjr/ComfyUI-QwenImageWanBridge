@@ -27,6 +27,12 @@
 - Simple encoder now also supports template auto-fill via JS
 - Same template selection behavior as full encoder
 
+**strip_key_quotes Enhanced**
+- Now removes ALL double quotes from JSON-style prompts (keys AND values)
+- Converts `"subject": "A woman..."` to `subject: A woman...`
+- Prevents both JSON keys and quoted values from appearing as text in images
+- Affects: ZImageTextEncoder, ZImageTurnBuilder, PromptKeyFilter
+
 ### Template Format Example
 
 ```yaml
@@ -94,10 +100,8 @@ Both use the same Qwen3-4B chat template format for consistency.
 
 **strip_key_quotes Parameter**
 - New toggle on `ZImageTextEncoder` and `ZImageTurnBuilder` (default: OFF)
-- Removes double quotes from JSON-style keys in prompts
-- Converts `"subject": "description"` to `subject: "description"`
-- Prevents JSON key names from appearing as visible text in generated images
-- Useful when piping structured prompts from LLMs that output JSON format
+- Originally removed quotes from keys only: `"subject": "description"` to `subject: "description"`
+- **Note**: Enhanced in v2.9.10 to remove ALL quotes (keys AND values)
 
 **PromptKeyFilter Utility Node**
 - Standalone text filter node in `QwenImage/Utilities`
@@ -107,7 +111,7 @@ Both use the same Qwen3-4B chat template format for consistency.
 
 ### Why This Exists
 
-When prompts contain JSON-style formatting like `{"subject": "a cat", "style": "photo"}`, the double-quoted key names can appear as literal text in the generated image. This filter strips quotes from keys only (before the colon) while preserving quoted values.
+When prompts contain JSON-style formatting like `{"subject": "a cat", "style": "photo"}`, the double-quoted key names can appear as literal text in the generated image. This filter strips quotes to prevent text rendering in images.
 
 ---
 

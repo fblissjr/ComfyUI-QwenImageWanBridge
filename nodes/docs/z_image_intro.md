@@ -6,7 +6,7 @@
 It replaces ComfyUI's stock text encoder for Z-Image and gives you control over how your prompt is structured before it hits the model.
 
 **Q: Why would I need this?**
-Z-Image uses Qwen3-4B as its text encoder - an LLM that understands conversations, system instructions, and "thinking" processes. Our nodes let you use those capabilities instead of ignoring them.
+Z-Image was trained on prompts formatted as Qwen3-4B chat conversations (with system/user/assistant roles and special tokens). Our nodes let you format your prompts to match that training format, instead of sending plain text.
 
 **Q: Is this a new model?**
 No. Same Z-Image model, same weights. We're just giving you access to the full prompt format the model was trained on.
@@ -58,7 +58,7 @@ When you use the stock encoder, ComfyUI adds this wrapper automatically. But tha
 
 ### What Our Nodes Add
 
-We give you the full template:
+We let you build the full template structure:
 ```
 <|im_start|>system
 Generate a photorealistic image with natural lighting.<|im_end|>
@@ -72,11 +72,13 @@ Warm afternoon light, shallow depth of field, peaceful mood.
 Here's the cozy scene you requested.
 ```
 
-Now you control:
-- **System prompt**: Set the artistic direction, style, constraints
-- **User prompt**: Your actual request
-- **Thinking content**: Guide the model's "reasoning" about how to approach the image
-- **Assistant content**: Prime the model's response direction
+**Important:** There's no LLM running here. Our nodes are text formatters - they assemble your input into the chat template format, wrap it with special tokens, and pass it to the text encoder. The "thinking" and "assistant" content is whatever text YOU provide.
+
+You control:
+- **System prompt**: Text that goes in the system role position
+- **User prompt**: Text that goes in the user role position
+- **Thinking content**: Text placed inside `<think>` tags (you write this, not an LLM)
+- **Assistant content**: Text placed after the think block
 
 ---
 
@@ -132,9 +134,9 @@ The main node. Handles a complete first turn of conversation.
 | `user_prompt` | Your generation request (required) |
 | `template_preset` | Quick style selection (100+ templates) |
 | `system_prompt` | Custom instructions (auto-filled by template) |
-| `add_think_block` | Enable `<think>` structure |
-| `thinking_content` | Content inside think tags |
-| `assistant_content` | Model's response after thinking |
+| `add_think_block` | Add `<think>` tags to the template |
+| `thinking_content` | Your text to place inside think tags |
+| `assistant_content` | Your text to place after think block |
 | `raw_prompt` | Bypass everything, write your own tokens |
 | `strip_key_quotes` | Clean JSON keys from LLM output |
 
@@ -154,9 +156,9 @@ Add conversation turns after the initial encoder. This is where it gets interest
 |-------|--------------|
 | `previous` | Connect from encoder or another TurnBuilder |
 | `clip` | Optional - connect to output conditioning directly |
-| `user_prompt` | The next user message |
-| `thinking_content` | Assistant's thinking for this turn |
-| `assistant_content` | Assistant's response |
+| `user_prompt` | Text for the next user message |
+| `thinking_content` | Your text for the think block |
+| `assistant_content` | Your text for the assistant response |
 | `is_final` | Leave last message open for generation |
 
 **Two Workflow Options:**
@@ -225,9 +227,9 @@ A red apple on a wooden table<|im_end|>
 
 ```
 
-### Level 3: With Thinking
+### Level 3: With Think Block
 
-Guide the model's interpretation.
+Add text in the think block position (you write this text, not an LLM).
 
 ```
 template_preset: photorealistic
@@ -251,7 +253,7 @@ Morning light from the left, shallow depth of field, rustic oak texture.
 
 ### Level 4: With Assistant Response
 
-Prime the model's output direction.
+Add text in the assistant response position.
 
 ```
 user_prompt: "A red apple on a wooden table"
@@ -273,9 +275,9 @@ Here's a warm, inviting still life.<|im_end|>
 
 Note: When you provide `assistant_content`, the message closes with `<|im_end|>`. When empty, it stays open (model continues generating).
 
-### Level 5: Multi-Turn Conversation
+### Level 5: Multi-Turn Format
 
-Chain turns to simulate iterative refinement.
+Chain turns to build a longer conversation structure.
 
 ```
 [ZImageTextEncoder]
@@ -368,15 +370,11 @@ thinking_content: "Hm, let's make it a black sloth, flying above the man's head.
 
 **Result:** The model maintains Wally's detailed appearance while adding the requested modifications, because the full conversation context is preserved in the encoding.
 
-### Why This Works
+### Why This Might Work
 
-The conversation format lets you:
-1. Establish a detailed "ground truth" in the first message
-2. Make surgical edits in subsequent messages
-3. Use the thinking block to guide how changes should be applied
-4. Keep the model focused on modifications rather than regenerating from scratch
+Z-Image was trained on conversation-formatted prompts. The theory is that structuring your prompt as a multi-turn conversation - where earlier turns establish details and later turns request modifications - might help the model understand what to preserve vs. change.
 
-This is experimental - we're essentially using the LLM's conversation understanding to guide image generation consistency. Results vary, but it's a powerful technique for character work.
+**To be clear:** We're not running an LLM here. We're formatting text to look like a conversation, then encoding it. Whether this actually helps consistency is experimental. The model may or may not interpret the conversation structure the way a chat LLM would. Results vary.
 
 ---
 
@@ -402,7 +400,7 @@ We include 140+ templates in `nodes/templates/z_image/`. Some highlights:
 | `yaml_structured` | Parse YAML hierarchical prompts |
 | `markdown_structured` | Parse Markdown-formatted prompts |
 
-These structured templates include pre-configured thinking content to help the model parse different prompt formats.
+These structured templates include pre-written text for the thinking block that instructs the model to extract visual concepts from structured data.
 
 ### Extended Template Format
 
@@ -458,13 +456,13 @@ When `raw_prompt` is set, all other fields are ignored. You're responsible for c
 Yes, but subtly. It's most effective for style direction and constraints. The user prompt has the strongest influence.
 
 **Q: Does the thinking content matter?**
-Experimentally, yes. It seems to guide composition and interpretation. Think of it as "art direction notes."
+Maybe. The text you put in the think block becomes part of the encoded prompt. Whether it influences the output depends on what Z-Image learned during training. Think of it as extra text in a specific position - not actual LLM reasoning.
 
 **Q: Can I use this for other models?**
 The ZImageTextEncoder is specifically for Z-Image (Qwen3-4B encoder). The PromptKeyFilter utility works with any text encoder.
 
 **Q: What's the `strip_key_quotes` for?**
-When using JSON-formatted prompts (from LLMs), the quoted keys like `"subject":` can appear as literal text in images. This filter strips the quotes from keys while preserving values.
+When using JSON-formatted prompts (from LLMs), the quoted text like `"subject": "a cat"` can appear as literal text in images. This filter strips all double quotes to prevent that.
 
 **Q: Can I use an LLM to generate prompts?**
 Yes. Any LLM works, but **Qwen3 family models** have a technical advantage: they share the same tokenizer as Z-Image's encoder (Qwen3-4B). This means tokens transfer directly without re-encoding, preserving subtle semantic nuances. See [Character Generation Guide](z_image_character_generation.md#using-llms-to-generate-prompts) for details.
@@ -487,10 +485,10 @@ Yes. Any LLM works, but **Qwen3 family models** have a technical advantage: they
 |----------|----------|
 | Quick generation | Stock encoder or basic ZImageTextEncoder |
 | Style control | ZImageTextEncoder + template_preset |
-| Guide interpretation | Add thinking_content |
+| Extra prompt text | Add thinking_content |
 | Iterative edits | ZImageTurnBuilder chain |
 | Character consistency | Structured prompt + multi-turn |
 | **Negative prompts** | ZImageTextEncoderSimple |
 | Full control | raw_prompt mode |
 
-The nodes are just building an LLM message chain. The magic is in how you structure that chain.
+These nodes are text formatters - they build a conversation-shaped string and encode it. No LLM reasoning happens here.

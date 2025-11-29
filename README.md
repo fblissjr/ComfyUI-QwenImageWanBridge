@@ -28,7 +28,7 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 - `ZImageTextEncoder` - Full-featured with templates, system prompts, thinking blocks, conversation chaining
 - `ZImageTextEncoderSimple` - Simplified encoder for quick use / **negative prompts**
 - `ZImageTurnBuilder` - Add conversation turns for multi-turn workflows (with optional direct encoding)
-- `PromptKeyFilter` - Strip quotes from JSON keys to prevent them appearing as text
+- `PromptKeyFilter` - Strip all quotes from JSON-style prompts (keys AND values)
 
 **Key Features:**
 - System prompts via 140+ templates or custom text

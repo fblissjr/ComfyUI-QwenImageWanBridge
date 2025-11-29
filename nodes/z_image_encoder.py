@@ -217,7 +217,7 @@ class ZImageTurnBuilder:
                 }),
                 "strip_key_quotes": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Remove double quotes from JSON-style keys in prompts. Converts \"subject\": to subject: to prevent key names appearing as text in image."
+                    "tooltip": "Remove all double quotes from JSON-style prompts. Keys (\"subject\":) and values (\"text\") both get quotes stripped."
                 }),
             }
         }
@@ -239,11 +239,15 @@ class ZImageTurnBuilder:
         strip_key_quotes: bool = False,
     ) -> Tuple[Dict[str, Any], Any, str, str]:
 
-        # Apply key quote filtering if enabled
+        # Apply quote filtering if enabled (for JSON-style prompts)
+        # Removes quotes from keys ("subject": -> subject:) AND values ("text" -> text)
         if strip_key_quotes:
             user_prompt = re.sub(r'"([^"]+)":', r'\1:', user_prompt)
+            user_prompt = user_prompt.replace('"', '')
             thinking_content = re.sub(r'"([^"]+)":', r'\1:', thinking_content)
+            thinking_content = thinking_content.replace('"', '')
             assistant_content = re.sub(r'"([^"]+)":', r'\1:', assistant_content)
+            assistant_content = assistant_content.replace('"', '')
 
         # Deep copy to avoid shared references
         conversation = {
@@ -398,7 +402,7 @@ class ZImageTextEncoder:
                 }),
                 "strip_key_quotes": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Remove double quotes from JSON-style keys in prompts. Converts \"subject\": to subject: to prevent key names appearing as text in image."
+                    "tooltip": "Remove all double quotes from JSON-style prompts. Keys (\"subject\":) and values (\"text\") both get quotes stripped."
                 }),
             }
         }
@@ -423,11 +427,15 @@ class ZImageTextEncoder:
         strip_key_quotes: bool = False,
     ) -> Tuple[Any, str, str, Dict[str, Any]]:
 
-        # Apply key quote filtering if enabled
+        # Apply quote filtering if enabled (for JSON-style prompts)
+        # Removes quotes from keys ("subject": -> subject:) AND values ("text" -> text)
         if strip_key_quotes:
             user_prompt = re.sub(r'"([^"]+)":', r'\1:', user_prompt)
+            user_prompt = user_prompt.replace('"', '')
             thinking_content = re.sub(r'"([^"]+)":', r'\1:', thinking_content)
+            thinking_content = thinking_content.replace('"', '')
             assistant_content = re.sub(r'"([^"]+)":', r'\1:', assistant_content)
+            assistant_content = assistant_content.replace('"', '')
 
         # Track mode for debug output
         mode = "direct"
@@ -767,7 +775,7 @@ class PromptKeyFilter:
         return {
             "required": {
                 "text": ("STRING", {"multiline": True, "default": "", "tooltip": "Paste or type text here. If text_input is connected, this is ignored."}),
-                "strip_key_quotes": ("BOOLEAN", {"default": True, "tooltip": "Remove double quotes from JSON-style keys (e.g., \"subject\": becomes subject:). Prevents key names appearing as text in image."}),
+                "strip_key_quotes": ("BOOLEAN", {"default": True, "tooltip": "Remove all double quotes from JSON-style prompts. Keys and values both get quotes stripped."}),
             },
             "optional": {
                 "text_input": ("STRING", {"forceInput": True, "tooltip": "Connect text from another node. Takes priority over the text field."}),
@@ -779,7 +787,7 @@ class PromptKeyFilter:
     FUNCTION = "filter_text"
     CATEGORY = "QwenImage/Utilities"
 
-    DESCRIPTION = "Filter JSON-style key quotes from prompts. Converts \"key\": to key: to prevent label text appearing in generated images. Paste directly or connect from another node."
+    DESCRIPTION = "Filter quotes from JSON-style prompts. Removes quotes from keys (\"key\": -> key:) AND values (\"text\" -> text) to prevent text appearing in generated images."
 
     def filter_text(self, text: str, strip_key_quotes: bool = True, text_input: Optional[str] = None) -> Tuple[str]:
         # Use connected input if provided, otherwise use the text field
@@ -788,9 +796,9 @@ class PromptKeyFilter:
         if not strip_key_quotes:
             return (source_text,)
 
-        # Match "key": pattern - double quote, non-quote chars, double quote, colon
-        # Replace with just the key name and colon (no quotes)
+        # Remove quotes from keys ("key": -> key:) then remove all remaining quotes
         filtered = re.sub(r'"([^"]+)":', r'\1:', source_text)
+        filtered = filtered.replace('"', '')
 
         return (filtered,)
 
