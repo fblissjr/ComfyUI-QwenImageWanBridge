@@ -1,14 +1,19 @@
 # Changelog
 
-## v2.9.9 - Simple Encoder and Double-Wrap Fix
+## v2.9.9 - Simple Encoder, Debug Output, and Double-Wrap Fix
 
 ### Added
 
 **ZImageTextEncoderSimple Node**
 - Simplified encoder for quick use - ideal for negative prompts
 - Same template/thinking support as full encoder
-- No conversation chaining (just conditioning + formatted_prompt outputs)
+- No conversation chaining (conditioning + formatted_prompt + debug_output)
 - Lighter weight for simple encoding tasks
+
+**Debug Output on All Z-Image Nodes**
+- All Z-Image encoders now output debug_output with code block formatting
+- Formatted prompts wrapped in ``` blocks to prevent markdown rendering in Preview nodes
+- Shows mode, character counts, think tag presence, and exact encoded text
 
 ### Fixed
 
@@ -17,6 +22,10 @@
 - Our nodes format the prompt, then ComfyUI's tokenizer wrapped it again
 - Now pass `llama_template="{}"` to bypass automatic wrapping
 - Affects: ZImageTextEncoder, ZImageTextEncoderSimple, ZImageTurnBuilder
+
+**Debug Output Display**
+- Fixed formatted prompts rendering as markdown (bold, headers) in Preview nodes
+- Code block wrapper ensures special tokens and formatting display as raw text
 
 ### Workflow
 

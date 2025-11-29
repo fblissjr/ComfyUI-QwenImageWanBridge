@@ -12,6 +12,7 @@ Custom encoder nodes for Z-Image that expose experimental parameters for testing
 
 **Nodes:**
 - **ZImageTextEncoder** - Full-featured with templates, system prompts, multi-turn support (outputs conversation for chaining)
+- **ZImageTextEncoderSimple** - Simplified encoder for quick use / negative prompts (no conversation chaining)
 - **ZImageTurnBuilder** - Add conversation turns for multi-turn workflows (user+assistant per turn)
 - **PromptKeyFilter** - Strip quotes from JSON keys to prevent them appearing as text
 
@@ -146,6 +147,41 @@ Full encoder with system prompts, templates, and multi-turn conversation support
 | formatted_prompt | STRING | Exact prompt that was encoded (for debugging) |
 | debug_output | STRING | Detailed breakdown: mode, char counts, token estimate |
 | conversation | ZIMAGE_CONVERSATION | Chain to ZImageTurnBuilder for multi-turn |
+
+### ZImageTextEncoderSimple (Quick Encoding)
+
+Simplified encoder for quick use - ideal for **negative prompts**. Same template/thinking support as the full encoder, but without conversation chaining.
+
+#### Inputs
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| clip | CLIP | Yes | - | Z-Image CLIP model (lumina2 type) |
+| user_prompt | STRING | Yes | "" | Your prompt (what you want or don't want) |
+| template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image/` |
+| system_prompt | STRING | No | "" | System instructions |
+| add_think_block | BOOLEAN | No | **False** | Add `<think></think>` block |
+| thinking_content | STRING | No | "" | Content inside think tags |
+| assistant_content | STRING | No | "" | Content after think tags |
+
+#### Outputs
+
+| Output | Type | Description |
+|--------|------|-------------|
+| conditioning | CONDITIONING | Encoded text embeddings |
+| formatted_prompt | STRING | Exact prompt that was encoded |
+| debug_output | STRING | Mode, char counts, formatted prompt (code block) |
+
+#### Usage
+
+**For negative prompts:**
+```
+Positive: ZImageTextEncoder -> KSampler (positive)
+Negative: ZImageTextEncoderSimple -> KSampler (negative)
+         user_prompt: "bad anatomy, blurry, watermark, text"
+```
+
+Both use the same Qwen3-4B chat template format for consistency.
 
 ### ZImageTurnBuilder (Multi-Turn Conversations)
 
@@ -807,4 +843,4 @@ Style: [artistic direction]"
 ---
 
 **Last Updated:** 2025-11-29
-**Version:** 4.3 (v2.9.8: strip_key_quotes parameter, PromptKeyFilter utility node)
+**Version:** 4.5 (v2.9.9: debug_output on all Z-Image nodes)

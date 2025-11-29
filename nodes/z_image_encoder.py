@@ -278,13 +278,13 @@ class ZImageTurnBuilder:
         debug_lines.append(f"Assistant content: {len(assistant_content.strip()) if assistant_content else 0} chars")
         debug_lines.append(f"Is final: {is_final}")
 
-        # Show this turn's formatted output
+        # Show this turn's formatted output in code block
         debug_lines.append("")
         debug_lines.append("=== This Turn's Messages ===")
+        debug_lines.append("```")
         debug_lines.append("<|im_start|>user")
         debug_lines.append(user_prompt.strip())
-        debug_lines.append("<|im_end|>")  # User always gets end tag (assistant follows)
-
+        debug_lines.append("<|im_end|>")
         debug_lines.append("<|im_start|>assistant")
         if enable_thinking:
             debug_lines.append("<think>")
@@ -294,12 +294,14 @@ class ZImageTurnBuilder:
         debug_lines.append(assistant_content.strip() if assistant_content else "")
         if not is_final:
             debug_lines.append("<|im_end|>")
+        debug_lines.append("```")
 
         if clip is not None:
             debug_lines.append("")
             debug_lines.append("=== Full Formatted Prompt ===")
-            # Escape for HTML preview
-            debug_lines.append(formatted_text.replace("<", "&lt;").replace(">", "&gt;"))
+            debug_lines.append("```")
+            debug_lines.append(formatted_text)
+            debug_lines.append("```")
 
         debug_output = "\n".join(debug_lines)
 
@@ -485,12 +487,11 @@ class ZImageTextEncoder:
 
         debug_lines.append("")
         debug_lines.append("=== Formatted Prompt ===")
-        # Escape angle brackets for HTML preview to show think tags
-        debug_lines.append(formatted_text.replace("<", "&lt;").replace(">", "&gt;"))
+        debug_lines.append("```")
+        debug_lines.append(formatted_text)
+        debug_lines.append("```")
         debug_lines.append("")
-        debug_lines.append("=== Think Tag Check ===")
-        debug_lines.append(f"Contains '<think>': {'<think>' in formatted_text}")
-        debug_lines.append(f"Contains '</think>': {'</think>' in formatted_text}")
+        debug_lines.append(f"Think tags: {'YES' if '<think>' in formatted_text else 'NO'}")
 
         # Estimate tokens (rough: ~4 chars per token for English)
         debug_lines.append("")
@@ -614,8 +615,8 @@ class ZImageTextEncoderSimple:
             }
         }
 
-    RETURN_TYPES = ("CONDITIONING", "STRING")
-    RETURN_NAMES = ("conditioning", "formatted_prompt")
+    RETURN_TYPES = ("CONDITIONING", "STRING", "STRING")
+    RETURN_NAMES = ("conditioning", "formatted_prompt", "debug_output")
     FUNCTION = "encode"
     CATEGORY = "ZImage/Encoding"
     TITLE = "Z-Image Text Encoder (Simple)"
@@ -633,22 +634,41 @@ class ZImageTextEncoderSimple:
         assistant_content: str = "",
     ):
         # Get system prompt from template if selected
-        if template_preset != "none" and not system_prompt.strip():
+        effective_system = system_prompt.strip()
+        if template_preset != "none" and not effective_system:
             templates = get_templates()
-            system_prompt = templates.get(template_preset, "")
+            effective_system = templates.get(template_preset, "")
 
         # Auto-enable think block if thinking_content provided
+        use_think_block = add_think_block
         if thinking_content.strip():
-            add_think_block = True
+            use_think_block = True
 
         # Build formatted prompt
         formatted_text = self._format_prompt(
             user_prompt=user_prompt.strip(),
-            system_prompt=system_prompt.strip(),
-            add_think_block=add_think_block,
+            system_prompt=effective_system,
+            add_think_block=use_think_block,
             thinking_content=thinking_content.strip(),
             assistant_content=assistant_content.strip(),
         )
+
+        # Build debug output
+        debug_lines = [
+            "=== Z-Image Simple Encoder ===",
+            f"Template: {template_preset}",
+            f"System prompt: {len(effective_system)} chars",
+            f"User prompt: {len(user_prompt.strip())} chars",
+            f"Think block: {'enabled' if use_think_block else 'disabled'}",
+            "",
+            "=== Formatted Prompt ===",
+            "```",
+            formatted_text,
+            "```",
+            "",
+            f"Think tags: {'YES' if '<think>' in formatted_text else 'NO'}",
+        ]
+        debug_output = "\n".join(debug_lines)
 
         # Log to console
         print(f"\n[Z-Image Simple] Formatted prompt:\n{formatted_text}\n")
@@ -657,7 +677,7 @@ class ZImageTextEncoderSimple:
         tokens = clip.tokenize(formatted_text, llama_template="{}")
         conditioning = clip.encode_from_tokens_scheduled(tokens)
 
-        return (conditioning, formatted_text)
+        return (conditioning, formatted_text, debug_output)
 
     def _format_prompt(
         self,
