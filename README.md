@@ -19,6 +19,7 @@ Custom nodes for :
 Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B chat template format from `tokenizer_config.json`.
 
 - [Z-Image Node Example Workflow](example_workflows/z-image_custom_nodes_workflow.json) - We're really just replacing one node in the basic ComfyUI workflow, but here's an example workflow of something you can use it for.
+- [Z-Image Multi-Turn / Turn Builder Node Example Workflow](example_workflows/z-image_custom_nodes_turn_builder_workflow.json)
 
 **Nodes:**
 - `ZImageTextEncoder` - Full-featured with templates, system prompts, raw mode, thinking/assistant content

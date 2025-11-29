@@ -1,8 +1,8 @@
 {
-  "id": "5aae492b-d424-4723-a2a4-51518086515a",
+  "id": "4836eb83-0ab0-478a-9606-6084d1401feb",
   "revision": 0,
-  "last_node_id": 60,
-  "last_link_id": 124,
+  "last_node_id": 62,
+  "last_link_id": 127,
   "nodes": [
     {
       "id": 13,
@@ -168,45 +168,52 @@
       ]
     },
     {
-      "id": 18,
-      "type": "CLIPLoader",
+      "id": 8,
+      "type": "VAEDecode",
       "pos": [
-        -51.96740198674827,
-        306.9107698117266
+        1424.4975663205214,
+        237.06010929233975
       ],
       "size": [
-        270,
-        106
+        210,
+        46
       ],
       "flags": {},
-      "order": 3,
+      "order": 16,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 51
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 45
+        }
+      ],
       "outputs": [
         {
-          "name": "CLIP",
-          "type": "CLIP",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
           "links": [
-            95,
-            116
+            98
           ]
         }
       ],
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.3.75",
-        "Node name for S&R": "CLIPLoader",
+        "Node name for S&R": "VAEDecode",
         "ue_properties": {
           "widget_ue_connectable": {},
           "version": "7.5.1",
           "input_ue_unconnectable": {}
         }
       },
-      "widgets_values": [
-        "qwen_3_4b.safetensors",
-        "lumina2",
-        "default"
-      ]
+      "widgets_values": []
     },
     {
       "id": 35,
@@ -243,74 +250,6 @@
       "widgets_values": []
     },
     {
-      "id": 54,
-      "type": "PreviewAny",
-      "pos": [
-        833.5648821553845,
-        1000.4995862485562
-      ],
-      "size": [
-        248.2260357173849,
-        166.87113070589794
-      ],
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "source",
-          "type": "*",
-          "link": 118
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "PreviewAny",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 55,
-      "type": "PreviewAny",
-      "pos": [
-        802.7049369886812,
-        1258.1089034012803
-      ],
-      "size": [
-        277.7744604765021,
-        237.01054068782992
-      ],
-      "flags": {},
-      "order": 10,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "source",
-          "type": "*",
-          "link": 119
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "PreviewAny",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": []
-    },
-    {
       "id": 3,
       "type": "KSampler",
       "pos": [
@@ -322,7 +261,7 @@
         688.0815951067775
       ],
       "flags": {},
-      "order": 8,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
@@ -333,7 +272,7 @@
         {
           "name": "positive",
           "type": "CONDITIONING",
-          "link": 117
+          "link": 127
         },
         {
           "name": "negative",
@@ -388,7 +327,7 @@
         676.4179517726724
       ],
       "flags": {},
-      "order": 13,
+      "order": 17,
       "mode": 0,
       "inputs": [
         {
@@ -487,8 +426,8 @@
       "id": 59,
       "type": "PreviewAny",
       "pos": [
-        754.9135119170194,
-        712.5819121166372
+        1798.3655934607355,
+        709.6269682666962
       ],
       "size": [
         210,
@@ -501,7 +440,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 124
+          "link": 122
         }
       ],
       "outputs": [],
@@ -518,49 +457,213 @@
       "widgets_values": []
     },
     {
-      "id": 8,
-      "type": "VAEDecode",
+      "id": 60,
+      "type": "PreviewAny",
       "pos": [
-        371.11100376021955,
-        599.6880176295601
+        1849.875389117967,
+        914.2351935072624
       ],
       "size": [
         210,
-        46
+        88
       ],
       "flags": {},
       "order": 12,
       "mode": 0,
       "inputs": [
         {
-          "name": "samples",
-          "type": "LATENT",
-          "link": 51
-        },
-        {
-          "name": "vae",
-          "type": "VAE",
-          "link": 45
+          "name": "source",
+          "type": "*",
+          "link": 123
         }
       ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 18,
+      "type": "CLIPLoader",
+      "pos": [
+        -51.96740198674827,
+        306.9107698117266
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
       "outputs": [
         {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "slot_index": 0,
+          "name": "CLIP",
+          "type": "CLIP",
           "links": [
-            98
+            95,
+            116,
+            124
           ]
         }
       ],
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.3.75",
-        "Node name for S&R": "VAEDecode",
+        "Node name for S&R": "CLIPLoader",
         "ue_properties": {
           "widget_ue_connectable": {},
           "version": "7.5.1",
           "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "qwen_3_4b.safetensors",
+        "lumina2",
+        "default"
+      ]
+    },
+    {
+      "id": 54,
+      "type": "PreviewAny",
+      "pos": [
+        653.2955845233756,
+        1568.836784604695
+      ],
+      "size": [
+        248.2260357173849,
+        166.87113070589794
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 118
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 55,
+      "type": "PreviewAny",
+      "pos": [
+        623.2359421601816,
+        1230.7760034383093
+      ],
+      "size": [
+        277.7744604765021,
+        237.01054068782992
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 119
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 62,
+      "type": "PreviewAny",
+      "pos": [
+        751.2549471510196,
+        1039.7545296409746
+      ],
+      "size": [
+        210,
+        88
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 126
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 61,
+      "type": "PreviewAny",
+      "pos": [
+        794.9015389998925,
+        890.6503537091148
+      ],
+      "size": [
+        210,
+        88
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 125
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
         }
       },
       "widgets_values": []
@@ -569,8 +672,8 @@
       "id": 56,
       "type": "ZImageTextEncoder",
       "pos": [
-        173.34028651547982,
-        974.0512737707455
+        -75.58857045429336,
+        551.3746744263622
       ],
       "size": [
         586.0689179943179,
@@ -596,9 +699,7 @@
         {
           "name": "conditioning",
           "type": "CONDITIONING",
-          "links": [
-            117
-          ]
+          "links": []
         },
         {
           "name": "formatted_prompt",
@@ -618,7 +719,7 @@
           "name": "conversation",
           "type": "ZIMAGE_CONVERSATION",
           "links": [
-            124
+            120
           ]
         }
       ],
@@ -631,13 +732,87 @@
         }
       },
       "widgets_values": [
-        "# Character Profile: Walter Finch (Wally)\n\n## Core Identity\n- **Name:** Walter Finch (Nickname: Wally)\n- **Gender:** Male\n- **Age:** 72\n- **Ethnicity:** Caucasian (British descent)\n- **Skin Tone:** Fair, with a warm, sun-kissed glow on his cheeks and nose.\n- **Body Type:** Ectomorph (tall, lean, with a slight stoop)\n\n## Narrative\n- **Background:** A retired physics professor, Walter now spends his days managing his late wife's estate and writing a memoir about his life in academia. He's an avid lifelong learner, constantly experimenting with new technologies to stay connected.\n- **Personality:** Warm, witty, and curious, with a dry sense of humor. He's patient and empathetic, often giving sage advice to younger people in his family. Despite his advanced age, he retains a youthful sense of wonder.\n- **Motivation:** To share his knowledge with the next generation and to prove that it's never too late to learn something new. He finds deep satisfaction in teaching and mentoring.\n- **Archetype:** The Wisdom-keeper / The Reluctant Mentor\n\n## Head & Face\n- **Face Shape:** Oval, with a slightly prominent jawline and a receding hairline.\n- **Eye Color:** Ice-blue with subtle gold flecks around the iris.\n- **Eye Shape:** Almond-shaped, slightly hooded due to age.\n- **Hair Color:** Pure white, thinning on top, with some graying at the temples.\n- **Hair Style:** Neatly combed side-parted, with a full white beard and mustache.\n- **Hair Texture:** Straight and fine.\n- **Facial Hair:** Full beard and mustache, well-groomed.\n- **Facial Scars:** A faint, thin scar above his left eyebrow, a remnant of a childhood fall.\n- **Facial Accessories:** Thin, gold-rimmed reading glasses, worn on his nose.\n- **Makeup Style:** None.\n- **Expression Default:** Warm, gentle smile with a twinkle in his eye.\n\n## Body & Physics\n- **Height:** 178 cm (5'10)\n- **Muscle Definition:** Lean and wiry; not muscular but fit from years of activity.\n- **Chest Size:** Small, with a slight stoop due to age.\n- **Distinctive Markings:** A few scattered age spots on his hands and face.\n- **Body Modifications:** None.\n\n## Attire (Top to Bottom)\n- **Clothing Style:** Casual, intellectual, slightly outdated (e.g., 1990s classic).\n\n- **Upper Body:**\n  - **Base Layer:** Long-sleeve, light gray and blue checkered button-down shirt.\n  - **Outer Layer:** None.\n  - **Details:** Soft cotton fabric, slightly wrinkled, with a loose fit. Collar is always buttoned.\n\n- **Lower Body:**\n  - **Type:** Dark grey trousers.\n  - **Fit:** Tailored and slightly loose.\n  - **Material:** Wool blend.\n  - **Belt:** None, or a simple brown leather belt.\n\n- **Footwear:**\n  - **Type:** Classic brown leather loafers.\n  - **Condition:** Worn, with minor scuffing.\n\n- **Extremities:**\n  - **Hand Coverings:** None; hands are used to type and gesture.\n  - **Leg Accessories:** None.\n\n## Gear & Props (Formerly Equipment)\n- **Primary Held Item:** A large, pale lavender ceramic mug filled with coffee.\n- **Secondary Held Item:** A silver pen.\n- **Backpack/Luggage:** None.\n- **Trinkets:** A gold pocket watch chain with a small pendant, visible in his breast pocket.\n\n## Technical & Stylistic Anchors (Crucial for AI Consistency)\n- **Art Style:** High-resolution photographic realism, with a soft-focus background. Resembles a professional lifestyle photo.\n- **Lighting Preference:** Bright, natural daylight from a large window behind him, creating a soft backlight and gentle rim light on his hair and shoulders.\n- **Color Palette:** Muted blues, soft grays, and warm neutrals. Accents of lavender from his mug and gold from his glasses and watch chain.\n- **Camera Angle Bias:** Eye-level medium shot, slightly tilted upward to emphasize his warm, engaging expression and the comfortable, welcoming atmosphere.\n",
+        "# Character Profile: Walter Finch (Wally)\n\n## Core Identity\n- **Name:** Walter Finch (Nickname: Wally)\n- **Gender:** Male\n- **Age:** 72\n- **Ethnicity:** Caucasian (British descent)\n- **Skin Tone:** Fair, with a warm, sun-kissed glow on his cheeks and nose.\n- **Body Type:** Ectomorph (tall, lean, with a slight stoop)\n\n## Narrative\n- **Background:** A retired physics professor, Walter now spends his days managing his late wife's estate and writing a memoir about his life in academia. He's an avid lifelong learner, constantly experimenting with new technologies to stay connected.\n- **Personality:** Warm, witty, and curious, with a dry sense of humor. He's patient and empathetic, often giving sage advice to younger people in his family. Despite his advanced age, he retains a youthful sense of wonder.\n- **Motivation:** To share his knowledge with the next generation and to prove that it's never too late to learn something new. He finds deep satisfaction in teaching and mentoring.\n- **Archetype:** The Wisdom-keeper / The Reluctant Mentor\n\n## Head & Face\n- \"Face Shape\": Oval, with a slightly prominent jawline and a receding hairline.\n- **Eye Color:** Ice-blue with subtle gold flecks around the iris.\n- **Eye Shape:** Almond-shaped, slightly hooded due to age.\n- **Hair Color:** Pure white, thinning on top, with some graying at the temples.\n- **Hair Style:** Neatly combed side-parted, with a full white beard and mustache.\n- **Hair Texture:** Straight and fine.\n- **Facial Hair:** Full beard and mustache, well-groomed.\n- **Facial Scars:** A faint, thin scar above his left eyebrow, a remnant of a childhood fall.\n- **Facial Accessories:** Thin, gold-rimmed reading glasses, worn on his nose.\n- **Makeup Style:** None.\n- **Expression Default:** Warm, gentle smile with a twinkle in his eye.\n\n## Body & Physics\n- **Height:** 178 cm (5'10)\n- **Muscle Definition:** Lean and wiry; not muscular but fit from years of activity.\n- **Chest Size:** Small, with a slight stoop due to age.\n- **Distinctive Markings:** A few scattered age spots on his hands and face.\n- **Body Modifications:** None.\n\n## Attire (Top to Bottom)\n- **Clothing Style:** Casual, intellectual, slightly outdated (e.g., 1990s classic).\n\n- **Upper Body:**\n  - **Base Layer:** Long-sleeve, light gray and blue checkered button-down shirt.\n  - **Outer Layer:** None.\n  - **Details:** Soft cotton fabric, slightly wrinkled, with a loose fit. Collar is always buttoned.\n\n- **Lower Body:**\n  - **Type:** Dark grey trousers.\n  - **Fit:** Tailored and slightly loose.\n  - **Material:** Wool blend.\n  - **Belt:** None, or a simple brown leather belt.\n\n- **Footwear:**\n  - **Type:** Classic brown leather loafers.\n  - **Condition:** Worn, with minor scuffing.\n\n- **Extremities:**\n  - **Hand Coverings:** None; hands are used to type and gesture.\n  - **Leg Accessories:** None.\n\n## Gear & Props (Formerly Equipment)\n- **Primary Held Item:** A large, pale lavender ceramic mug filled with coffee.\n- **Secondary Held Item:** A silver pen.\n- **Backpack/Luggage:** None.\n- **Trinkets:** A gold pocket watch chain with a small pendant, visible in his breast pocket.\n\n## Technical & Stylistic Anchors (Crucial for AI Consistency)\n- **Art Style:** High-resolution photographic realism, with a soft-focus background. Resembles a professional lifestyle photo.\n- **Lighting Preference:** Bright, natural daylight from a large window behind him, creating a soft backlight and gentle rim light on his hair and shoulders.\n- **Color Palette:** Muted blues, soft grays, and warm neutrals. Accents of lavender from his mug and gold from his glasses and watch chain.\n- **Camera Angle Bias:** Eye-level medium shot, slightly tilted upward to emphasize his warm, engaging expression and the comfortable, welcoming atmosphere.\n",
         "character_portrait_detailed",
         "Render a photorealistic portrait based on the visual specification in your thinking. The thinking contains exact details for face shape, skin texture, eye color, hair, and distinguishing features. Follow these precisely. Pay attention to lighting direction and color temperature specified. Maintain anatomical accuracy and realistic skin texture with appropriate subsurface scattering.",
         true,
         "Hmm lets make his beard a little red and keep everything else the same.",
         "Sure, here's a photo of Wally with his red and white beard.",
         "",
+        true
+      ]
+    },
+    {
+      "id": 57,
+      "type": "ZImageTurnBuilder",
+      "pos": [
+        614.6546170628947,
+        368.3945814558796
+      ],
+      "size": [
+        400,
+        304
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "previous",
+          "type": "ZIMAGE_CONVERSATION",
+          "link": 120
+        },
+        {
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 124
+        }
+      ],
+      "outputs": [
+        {
+          "name": "conversation",
+          "type": "ZIMAGE_CONVERSATION",
+          "links": [
+            122
+          ]
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "links": [
+            123,
+            127
+          ]
+        },
+        {
+          "name": "formatted_prompt",
+          "type": "STRING",
+          "links": [
+            126
+          ]
+        },
+        {
+          "name": "debug_output",
+          "type": "STRING",
+          "links": [
+            125
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ZImageTurnBuilder",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": [
+        "Let's put a bird above him too",
+        "Hm, let's make it a black bird, flying above the man's head.",
+        "",
+        true,
         true
       ]
     }
@@ -724,14 +899,6 @@
       "CLIP"
     ],
     [
-      117,
-      56,
-      0,
-      3,
-      1,
-      "CONDITIONING"
-    ],
-    [
       118,
       56,
       1,
@@ -748,12 +915,60 @@
       "*"
     ],
     [
-      124,
+      120,
       56,
       3,
+      57,
+      0,
+      "ZIMAGE_CONVERSATION"
+    ],
+    [
+      122,
+      57,
+      0,
       59,
       0,
       "*"
+    ],
+    [
+      123,
+      57,
+      1,
+      60,
+      0,
+      "*"
+    ],
+    [
+      124,
+      18,
+      0,
+      57,
+      1,
+      "CLIP"
+    ],
+    [
+      125,
+      57,
+      3,
+      61,
+      0,
+      "*"
+    ],
+    [
+      126,
+      57,
+      2,
+      62,
+      0,
+      "*"
+    ],
+    [
+      127,
+      57,
+      1,
+      3,
+      1,
+      "CONDITIONING"
     ]
   ],
   "groups": [],
@@ -762,8 +977,8 @@
     "ds": {
       "scale": 0.92295998177067,
       "offset": [
-        212.65307337438978,
-        -132.66353820372288
+        315.74033407797083,
+        -113.89117352959887
       ]
     },
     "frontendVersion": "1.32.9",
