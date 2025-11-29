@@ -2,7 +2,7 @@
   "id": "f6bdedf3-8511-4449-ac71-4a39d8bcbb5c",
   "revision": 0,
   "last_node_id": 72,
-  "last_link_id": 140,
+  "last_link_id": 141,
   "nodes": [
     {
       "id": 31,
@@ -470,42 +470,6 @@
       "bgcolor": "#000"
     },
     {
-      "id": 64,
-      "type": "PreviewAny",
-      "pos": [
-        -721.4687963969766,
-        1550.2092920819823
-      ],
-      "size": [
-        242.38098414811714,
-        134.374512105652
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "source",
-          "type": "*",
-          "link": 132
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "PreviewAny",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": [],
-      "color": "#222",
-      "bgcolor": "#000"
-    },
-    {
       "id": 13,
       "type": "EmptySD3LatentImage",
       "pos": [
@@ -545,6 +509,145 @@
         1024,
         1
       ]
+    },
+    {
+      "id": 18,
+      "type": "CLIPLoader",
+      "pos": [
+        -44.70707770196658,
+        77.75828489307465
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            116,
+            131
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "CLIPLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "qwen_3_4b.safetensors",
+        "lumina2",
+        "default"
+      ]
+    },
+    {
+      "id": 63,
+      "type": "ZImageTextEncoderSimple",
+      "pos": [
+        67.14842560265974,
+        1224.156063366781
+      ],
+      "size": [
+        400,
+        338
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 131
+        }
+      ],
+      "outputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "links": [
+            140
+          ]
+        },
+        {
+          "name": "formatted_prompt",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "debug_output",
+          "type": "STRING",
+          "links": [
+            141
+          ]
+        }
+      ],
+      "title": "Z-Image Text Encoder (Negative)",
+      "properties": {
+        "Node name for S&R": "ZImageTextEncoderSimple",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": [
+        "bad anatomy, blurry, watermark, text",
+        "none",
+        "",
+        false,
+        "",
+        ""
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 64,
+      "type": "PreviewAny",
+      "pos": [
+        -721.4687963969766,
+        1550.2092920819823
+      ],
+      "size": [
+        500.34393188318063,
+        458.565393477239
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 141
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.1"
+        }
+      },
+      "widgets_values": [],
+      "color": "#222",
+      "bgcolor": "#000"
     },
     {
       "id": 56,
@@ -615,110 +718,12 @@
         "",
         true,
         "Hmm lets make his beard a little red and keep everything else the same.",
-        "Sure, here's a photo of Wally with his red and white beard.",
+        "Sure, here's a photo of Walter with his red and white beard.",
         "",
         true
       ],
       "color": "#223",
       "bgcolor": "#335"
-    },
-    {
-      "id": 63,
-      "type": "ZImageTextEncoderSimple",
-      "pos": [
-        67.14842560265974,
-        1224.156063366781
-      ],
-      "size": [
-        400,
-        318
-      ],
-      "flags": {},
-      "order": 10,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": 131
-        }
-      ],
-      "outputs": [
-        {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "links": [
-            140
-          ]
-        },
-        {
-          "name": "formatted_prompt",
-          "type": "STRING",
-          "links": [
-            132
-          ]
-        }
-      ],
-      "title": "Z-Image Text Encoder (Negative)",
-      "properties": {
-        "Node name for S&R": "ZImageTextEncoderSimple",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": [
-        "bad anatomy, blurry, watermark, text",
-        "none",
-        "",
-        false,
-        "",
-        ""
-      ],
-      "color": "#322",
-      "bgcolor": "#533"
-    },
-    {
-      "id": 18,
-      "type": "CLIPLoader",
-      "pos": [
-        -44.70707770196658,
-        77.75828489307465
-      ],
-      "size": [
-        270,
-        106
-      ],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "CLIP",
-          "type": "CLIP",
-          "links": [
-            116,
-            131
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "CLIPLoader",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "qwen_3_4b.safetensors",
-        "lumina2",
-        "default"
-      ]
     }
   ],
   "links": [
@@ -787,14 +792,6 @@
       "CLIP"
     ],
     [
-      132,
-      63,
-      1,
-      64,
-      0,
-      "*"
-    ],
-    [
       135,
       56,
       2,
@@ -825,6 +822,14 @@
       3,
       2,
       "CONDITIONING"
+    ],
+    [
+      141,
+      63,
+      2,
+      64,
+      0,
+      "*"
     ]
   ],
   "groups": [],
@@ -833,8 +838,8 @@
     "ds": {
       "scale": 0.92295998177067,
       "offset": [
-        304.2402921136755,
-        52.1074957629217
+        386.5779919411045,
+        310.45135112880706
       ]
     },
     "frontendVersion": "1.32.9",
