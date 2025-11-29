@@ -58,6 +58,8 @@ When you use the stock encoder, ComfyUI adds this wrapper automatically. But tha
 
 ### What Our Nodes Add
 
+<img src="../../assets/z_image_intro_1.jpeg" alt="How ZImageTextEncoder Formats Prompts" width="600">
+
 We let you build the full template structure:
 ```
 <|im_start|>system
@@ -276,6 +278,8 @@ Here's a warm, inviting still life.<|im_end|>
 Note: When you provide `assistant_content`, the message closes with `<|im_end|>`. When empty, it stays open (model continues generating).
 
 ### Level 5: Multi-Turn Format
+
+<img src="../../assets/z_image_intro_2.jpeg" alt="Iterative Generation with ZImageTurnBuilder" width="600">
 
 Chain turns to build a longer conversation structure.
 

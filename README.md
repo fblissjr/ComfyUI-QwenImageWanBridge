@@ -1,5 +1,11 @@
 # ComfyUI Nodes for Qwen's LLM related models
 
+<p align="center">
+  <img src="assets/repo_logo.png" alt="How do you do, fellow Qwen models?" width="400">
+  <br>
+  <em>Image credit: fearnworks</em>
+</p>
+
 First and foremost, this is a research repo and sandbox. While I've straddled between both worlds of image / video models and LLMs since the early days, I tend to be more comfortable on the LLM. With natively trained multimodal LLMs (see Gemini 3 and Nano Banana Pro) in commercial models, and open source models now using more common LLMs and vision LLMs like Qwen3 and Qwen2.5-VL, I started this repo to see if I could lend my background to the space. Despite the worlds of DiT models and LLM models converging into a single system, many people on both sides of the coin tend to not know what the other is doing (feels like a backend/frontend paradigm). The goal of this repo is to explore DiT models that leverage modern autoregressive, vision LLMs and find fun ways to use them in new (or more optimal) ways.
 
 There will be breaking changes, and this isn't meant to be a prod repo. If you find a version that works for you and is stable, I'd recommend pinning that version and not updating unless you find a good reason to. If you're more interested in tinkering and research, then by all means, join the party. This is NOT optimized for a 24/7 production environment.
