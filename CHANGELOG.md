@@ -1,5 +1,60 @@
 # Changelog
 
+## v2.9.8 - JSON Key Quote Filtering
+
+### Added
+
+**strip_key_quotes Parameter**
+- New toggle on `ZImageTextEncoder` and `ZImageTurnBuilder` (default: OFF)
+- Removes double quotes from JSON-style keys in prompts
+- Converts `"subject": "description"` to `subject: "description"`
+- Prevents JSON key names from appearing as visible text in generated images
+- Useful when piping structured prompts from LLMs that output JSON format
+
+**PromptKeyFilter Utility Node**
+- Standalone text filter node in `QwenImage/Utilities`
+- Two input options: paste directly into `text` field OR connect via `text_input`
+- Works with any text encoder (Z-Image, Qwen-Image-Edit, HunyuanVideo)
+- Toggle `strip_key_quotes` (default: ON since you're using the node intentionally)
+
+### Why This Exists
+
+When prompts contain JSON-style formatting like `{"subject": "a cat", "style": "photo"}`, the double-quoted key names can appear as literal text in the generated image. This filter strips quotes from keys only (before the colon) while preserving quoted values.
+
+---
+
+## v2.9.7 - ZImageTurnBuilder Direct Encoding
+
+### Added
+
+**ZImageTurnBuilder Conditioning Output**
+- New optional `clip` input - connect to encode directly from TurnBuilder
+- When clip connected, outputs `conditioning` and `formatted_prompt` directly
+- Eliminates need to chain back to ZImageTextEncoder for final encoding
+- Console logging added: `[Z-Image TurnBuilder] Formatted prompt:`
+
+### Changed
+
+**ZImageTurnBuilder Outputs** (4 total now)
+- `conversation` - unchanged, for chaining to more turns
+- `conditioning` - new, only populated if clip connected
+- `formatted_prompt` - new, full formatted text of conversation
+- `debug_output` - enhanced with "Clip connected" status and full prompt when encoding
+
+**Workflow Simplification**
+
+Before (3 nodes for single turn addition):
+```
+ZImageTextEncoder → ZImageTurnBuilder → ZImageTextEncoder → KSampler
+```
+
+After (2 nodes with direct encoding):
+```
+ZImageTextEncoder → ZImageTurnBuilder (clip) → KSampler
+```
+
+---
+
 ## v2.9.6 - Z-Image Debug and JS Cleanup
 
 ### Fixed

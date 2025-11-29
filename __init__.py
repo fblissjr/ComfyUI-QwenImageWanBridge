@@ -292,13 +292,16 @@ except Exception as e:
 # ============================================================================
 
 try:
-    from .nodes.z_image_encoder import ZImageTextEncoder, ZImageTurnBuilder, get_templates
+    from .nodes.z_image_encoder import ZImageTextEncoder, ZImageTurnBuilder, PromptKeyFilter, get_templates
 
     NODE_CLASS_MAPPINGS["ZImageTextEncoder"] = ZImageTextEncoder
     NODE_DISPLAY_NAME_MAPPINGS["ZImageTextEncoder"] = "Z-Image Text Encoder"
 
     NODE_CLASS_MAPPINGS["ZImageTurnBuilder"] = ZImageTurnBuilder
     NODE_DISPLAY_NAME_MAPPINGS["ZImageTurnBuilder"] = "Z-Image Turn Builder"
+
+    NODE_CLASS_MAPPINGS["PromptKeyFilter"] = PromptKeyFilter
+    NODE_DISPLAY_NAME_MAPPINGS["PromptKeyFilter"] = "Prompt Key Filter"
 
     # Register API endpoint for templates (single source of truth)
     try:
@@ -311,7 +314,7 @@ try:
             templates = get_templates()
             return web.json_response(templates)
 
-        print("[QwenImageWanBridge] Loaded Z-Image encoder nodes (2 nodes)")
+        print("[QwenImageWanBridge] Loaded Z-Image encoder nodes (3 nodes)")
         print("[QwenImageWanBridge] API: /api/z_image_templates endpoint registered")
     except Exception as api_err:
         print(f"[QwenImageWanBridge] Loaded Z-Image nodes (API endpoint failed: {api_err})")

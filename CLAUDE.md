@@ -35,8 +35,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.9.6):**
-- **Z-Image debug fixes** - HTML escaping for think tags, assistant_content closing tag, console logging - [docs](nodes/docs/z_image_encoder.md)
+**Key Features (v2.9.8):**
+- **JSON key quote filtering** - `strip_key_quotes` toggle on Z-Image nodes prevents JSON keys appearing as text in images - [docs](nodes/docs/z_image_encoder.md)
 - **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (23 video templates)
 - **File-based template system** - Templates in `nodes/templates/*.md` files (single source of truth)
 - **Template Builder → Encoder** - Single `template_output` connection handles everything
@@ -176,6 +176,12 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
   - Up to 10 image inputs
   - Compatible with both standard and advanced encoders
   - Two-stage scaling: batch normalizes, advanced encoder applies weights
+- PromptKeyFilter - Strip quotes from JSON-style keys in prompts
+  - Converts `"subject": "description"` to `subject: "description"`
+  - Prevents key names appearing as visible text in generated images
+  - Useful when piping structured prompts from LLMs
+  - Toggle on/off via `strip_key_quotes` parameter (default: on)
+  - Works with any text encoder (Z-Image, Qwen-Image-Edit, HunyuanVideo)
 
 ### Wan Video Bridge (QwenWanBridge) - EXPERIMENTAL AND LIKELY NOT USEFUL YET
 - QwenToWanFirstFrameLatent - Prepare Qwen output for Wan Video first frame
@@ -330,7 +336,7 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 - `nodes/docs/hunyuanvideo_prompting_experiments.md` - Prompting experiments guide
 - `example_workflows/hunyuanvideo_15_t2v_example.json` - Working T2V workflow
 
-## Z-Image Support (v2.9.6)
+## Z-Image Support (v2.9.8)
 
 ### Overview
 Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes implement the correct Qwen3-4B chat template format.
@@ -373,16 +379,19 @@ Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text
   - `add_think_block` - add `<think></think>` structure
   - `thinking_content` / `assistant_content` - content for assistant response
   - `raw_prompt` - bypass all formatting, use your own tokens
+  - `strip_key_quotes` - remove quotes from JSON keys to prevent them appearing as text
   - **Outputs**: conditioning, formatted_prompt, debug_output, conversation
 
 #### ZImage/Conversation
 - **ZImageTurnBuilder**: Add conversation turns for multi-turn workflows
   - Each node = one turn (user message + assistant response)
   - `previous` (required) - from encoder or another TurnBuilder
+  - `clip` (optional) - connect to output conditioning directly
   - `user_prompt` - user's message for this turn
   - `thinking_content` / `assistant_content` - optional assistant response
   - `is_final` - if True (default), last message has no `<|im_end|>`
-  - **Outputs**: conversation, debug_output
+  - `strip_key_quotes` - remove quotes from JSON keys to prevent them appearing as text
+  - **Outputs**: conversation, conditioning (if clip connected), formatted_prompt, debug_output
 
 ### Workflow
 
@@ -399,7 +408,13 @@ CLIPLoader → ZImageTextEncoder → KSampler
              user_prompt: "A cat sleeping"
 ```
 
-**Multi-turn conversation:**
+**Multi-turn conversation (with direct encoding):**
+```
+ZImageTextEncoder → ZImageTurnBuilder (clip connected) → conditioning → KSampler
+(first turn)        (additional turn, outputs conditioning directly)
+```
+
+**Multi-turn conversation (chain to encoder):**
 ```
 ZImageTextEncoder → ZImageTurnBuilder → ZImageTextEncoder
 (first turn)        (additional turn)    conversation_override: (connect)

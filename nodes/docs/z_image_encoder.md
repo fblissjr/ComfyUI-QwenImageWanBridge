@@ -133,6 +133,7 @@ Full encoder with system prompts, templates, and multi-turn conversation support
 | thinking_content | STRING | No | "" | Content INSIDE `<think>...</think>` tags |
 | assistant_content | STRING | No | "" | Content AFTER `</think>` tags |
 | raw_prompt | STRING | No | "" | RAW MODE: Bypass ALL formatting, use your own tokens |
+| strip_key_quotes | BOOLEAN | No | **False** | Remove quotes from JSON keys (e.g., `"subject":` becomes `subject:`) |
 
 #### Outputs
 
@@ -145,7 +146,11 @@ Full encoder with system prompts, templates, and multi-turn conversation support
 
 ### ZImageTurnBuilder (Multi-Turn Conversations)
 
-Add conversation turns for multi-turn workflows. Each node represents one complete turn (user message + optional assistant response). Connect the final output to ZImageTextEncoder's `conversation_override` input.
+Add conversation turns for multi-turn workflows. Each node represents one complete turn (user message + optional assistant response).
+
+**Two workflow options:**
+1. **Without clip**: Chain to more TurnBuilders or back to encoder's `conversation_override`
+2. **With clip**: Outputs conditioning directly - no need to chain back to encoder
 
 #### Inputs
 
@@ -153,28 +158,45 @@ Add conversation turns for multi-turn workflows. Each node represents one comple
 |-------|------|----------|---------|-------------|
 | previous | ZIMAGE_CONVERSATION | Yes | - | Previous conversation (from encoder or another TurnBuilder) |
 | user_prompt | STRING | Yes | "" | User's message for this turn |
+| clip | CLIP | No | - | Connect to encode directly (skip chaining back to encoder) |
 | thinking_content | STRING | No | "" | Assistant's thinking (only if conversation has enable_thinking=True) |
 | assistant_content | STRING | No | "" | Assistant's response after thinking |
 | is_final | BOOLEAN | No | True | Is this the last turn? If True, last message has no `<|im_end|>` |
+| strip_key_quotes | BOOLEAN | No | **False** | Remove quotes from JSON keys (e.g., `"subject":` becomes `subject:`) |
 
 #### Outputs
 
 | Output | Type | Description |
 |--------|------|-------------|
-| conversation | ZIMAGE_CONVERSATION | Updated conversation to pass to next node or encoder |
+| conversation | ZIMAGE_CONVERSATION | Updated conversation (for chaining to more turns) |
+| conditioning | CONDITIONING | Encoded embeddings (only populated if clip connected) |
+| formatted_prompt | STRING | Full formatted text of conversation |
 | debug_output | STRING | Turn details, char counts, and this turn's formatted messages |
 
 #### Usage
 
-Chain turns after an encoder:
+**Option 1: Direct encoding (with clip)**
+
+Connect clip to TurnBuilder for final turn - outputs conditioning directly:
+
+```
+[ZImageTextEncoder]              [ZImageTurnBuilder]              [KSampler]
+user_prompt: "Paint a cat"  -->  user_prompt: "Make it sleep"  -->  (conditioning)
+add_think_block: True            clip: (from CLIPLoader)
+(outputs conversation)           is_final: True
+                                 previous: (from encoder)
+```
+
+**Option 2: Chain back to encoder (without clip)**
+
+Traditional workflow - chain conversation back to encoder:
 
 ```
 [ZImageTextEncoder]              [ZImageTurnBuilder]              [ZImageTextEncoder]
 user_prompt: "Paint a cat"  -->  user_prompt: "Make it sleep"  -->  conversation_override: (connect)
-add_think_block: True            thinking_content: "Curled up"       clip: (from CLIPLoader)
-(outputs conversation)           assistant_content: "Done"
-                                 is_final: True
-                                 previous: (connect from encoder)
+add_think_block: True            (no clip)                           clip: (from CLIPLoader)
+(outputs conversation)           is_final: True
+                                 previous: (from encoder)
 ```
 
 **Key behaviors:**
@@ -182,6 +204,7 @@ add_think_block: True            thinking_content: "Curled up"       clip: (from
 - `enable_thinking` is inherited from the encoder's `add_think_block` setting
 - If `is_final=True` (default), the last message has no `<|im_end|>` (model continues)
 - If `is_final=False`, all messages get `<|im_end|>` (more turns expected)
+- When clip is connected, outputs conditioning directly (no need for second encoder)
 
 ---
 
@@ -223,6 +246,20 @@ When `raw_prompt` is set, it bypasses all other formatting.
 
 ### Multi-Turn Conversation
 
+**Option 1: Direct encoding (recommended for single turn addition)**
+
+```
+[ZImageTextEncoder]              [ZImageTurnBuilder]              [KSampler]
+user_prompt: "Paint a cat"  -->  user_prompt: "Make it sleep"  -->  (conditioning output)
+system_prompt: "You are..."      clip: (from CLIPLoader)
+add_think_block: True            thinking_content: "Curled up"
+(outputs conversation)           assistant_content: "Adjusting"
+                                 previous: (from encoder)
+                                 is_final: True
+```
+
+**Option 2: Chain back to encoder (for more flexibility)**
+
 ```
 [ZImageTextEncoder]              [ZImageTurnBuilder]              [ZImageTextEncoder]
 user_prompt: "Paint a cat"  -->  user_prompt: "Make it sleep"  -->  conversation_override: (connect)
@@ -232,7 +269,7 @@ add_think_block: True            assistant_content: "Adjusting"
                                  is_final: True
 ```
 
-The first encoder creates the initial conversation (system + user + assistant). Turn builders add subsequent exchanges. Final encoder consumes the complete conversation.
+The first encoder creates the initial conversation (system + user + assistant). Turn builders add subsequent exchanges. With clip connected to TurnBuilder, get conditioning directly. Without clip, chain to another encoder.
 
 ---
 
@@ -334,6 +371,35 @@ blurry, ugly, bad quality, watermark, text, logo, distorted
 1. Lower resolution (768x768 instead of 1024x1024)
 2. Enable CPU offloading in ComfyUI settings
 3. Close other applications
+
+### JSON key names appearing as text in image
+
+**Problem:** When using JSON-style prompts like `{"subject": "a cat", "style": "photo"}`, the quoted key names ("subject", "style") appear as visible text in the generated image.
+
+**Solution:** Enable `strip_key_quotes` on the encoder (or use PromptKeyFilter node).
+
+This converts `"subject": "description"` to `subject: "description"` - removing quotes from keys only while preserving quoted values.
+
+---
+
+## Utility Nodes
+
+### PromptKeyFilter
+
+Standalone text filter node in `QwenImage/Utilities`. Use when you need filtering separate from encoding, or with other encoders (Qwen-Image-Edit, HunyuanVideo).
+
+**Inputs:**
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| text | STRING | Yes | "" | Paste or type text directly |
+| strip_key_quotes | BOOLEAN | Yes | **True** | Remove quotes from JSON keys |
+| text_input | STRING | No | - | Connect from another node (takes priority over text field) |
+
+**Output:** `text` (STRING) - filtered text
+
+**Two ways to use:**
+1. Paste/type directly into the `text` field
+2. Connect from another node (LLM output, etc.) via `text_input`
 
 ---
 
@@ -737,5 +803,5 @@ Style: [artistic direction]"
 
 ---
 
-**Last Updated:** 2025-11-28
-**Version:** 4.1 (v2.9.6: assistant_content closing tag, debug HTML escaping)
+**Last Updated:** 2025-11-29
+**Version:** 4.3 (v2.9.8: strip_key_quotes parameter, PromptKeyFilter utility node)

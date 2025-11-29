@@ -9,9 +9,10 @@ Yes, I know that doesn't include Wan yet, but I think eventually it will. Qwen I
 ## So what's this repo for then?
 
 Custom nodes for :
+ - Z-Image - Experimental text encoding with system prompts, thinking blocks, assistant prompts, and turn builders, along with templates
  - Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things
  - HunyuanVideo 1.5 Text-to-Video - Custom system prompts, experiments with attention, and other random experiments
- - Z-Image - Experimental text encoding with system prompts and optional think block
+
 
 ### Z-Image Text Encoder
 
@@ -31,6 +32,7 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 - `debug_output` - detailed breakdown (mode, char counts, token estimate)
 - `conversation` output - chain to ZImageTurnBuilder for multi-turn
 - `thinking_content` / `assistant_content` - content for assistant response
+- `strip_key_quotes` - filter JSON key quotes to prevent them appearing as text in images
 
 **Documentation:**
 - [Z-Image Encoder Guide](nodes/docs/z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)

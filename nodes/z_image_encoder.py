@@ -4,10 +4,11 @@ Z-Image Text Encoder for ComfyUI
 Transparent encoder - see exactly what gets sent to the model.
 Templates auto-fill the system prompt field so you can edit them.
 Use raw_prompt for complete control with your own special tokens.
-Use ZImageMessageChain for multi-turn conversations.
+Use ZImageTurnBuilder for multi-turn conversations.
 """
 
 import os
+import re
 import copy
 import logging
 from typing import Dict, Any, Tuple, List, Optional
@@ -148,11 +149,9 @@ class ZImageTurnBuilder:
     - User message (required)
     - Assistant response (optional - with thinking if enabled in conversation)
 
-    Workflow:
-    1. ZImageTextEncoder creates first turn and outputs conversation
-    2. Connect conversation to ZImageTurnBuilder's previous input
-    3. Add user_prompt and optional assistant content
-    4. Chain more turn builders or connect back to encoder's conversation_override
+    Workflow options:
+    1. WITHOUT clip: Outputs conversation only - chain to more TurnBuilders or back to encoder
+    2. WITH clip: Outputs conditioning directly - use for final turn without extra encoder
 
     The is_final flag indicates whether this is the last turn in the chain.
     When is_final=True, the last message won't get <|im_end|> (model continues generating).
@@ -172,6 +171,9 @@ class ZImageTurnBuilder:
                 }),
             },
             "optional": {
+                "clip": ("CLIP", {
+                    "tooltip": "Connect to encode and output conditioning directly (skip chaining back to encoder)"
+                }),
                 "thinking_content": ("STRING", {
                     "multiline": True,
                     "default": "",
@@ -186,11 +188,15 @@ class ZImageTurnBuilder:
                     "default": True,
                     "tooltip": "Is this the last turn? If True, last message has no <|im_end|>"
                 }),
+                "strip_key_quotes": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Remove double quotes from JSON-style keys in prompts. Converts \"subject\": to subject: to prevent key names appearing as text in image."
+                }),
             }
         }
 
-    RETURN_TYPES = (ZIMAGE_CONVERSATION_TYPE, "STRING")
-    RETURN_NAMES = ("conversation", "debug_output")
+    RETURN_TYPES = (ZIMAGE_CONVERSATION_TYPE, "CONDITIONING", "STRING", "STRING")
+    RETURN_NAMES = ("conversation", "conditioning", "formatted_prompt", "debug_output")
     FUNCTION = "add_turn"
     CATEGORY = "ZImage/Conversation"
     TITLE = "Z-Image Turn Builder"
@@ -199,10 +205,18 @@ class ZImageTurnBuilder:
         self,
         previous: Dict[str, Any],
         user_prompt: str,
+        clip=None,
         thinking_content: str = "",
         assistant_content: str = "",
         is_final: bool = True,
-    ) -> Tuple[Dict[str, Any], str]:
+        strip_key_quotes: bool = False,
+    ) -> Tuple[Dict[str, Any], Any, str, str]:
+
+        # Apply key quote filtering if enabled
+        if strip_key_quotes:
+            user_prompt = re.sub(r'"([^"]+)":', r'\1:', user_prompt)
+            thinking_content = re.sub(r'"([^"]+)":', r'\1:', thinking_content)
+            assistant_content = re.sub(r'"([^"]+)":', r'\1:', assistant_content)
 
         # Deep copy to avoid shared references
         conversation = {
@@ -232,14 +246,30 @@ class ZImageTurnBuilder:
             assistant_msg["thinking"] = thinking_content.strip() if thinking_content else ""
         conversation["messages"].append(assistant_msg)
 
+        # Format conversation to text
+        formatted_text = format_conversation(conversation)
+
+        # Encode if clip provided
+        conditioning = None
+        if clip is not None:
+            tokens = clip.tokenize(formatted_text)
+            conditioning = clip.encode_from_tokens_scheduled(tokens)
+            # Log formatted prompt to console (same as encoder)
+            print(f"\n[Z-Image TurnBuilder] Formatted prompt:\n{formatted_text}\n")
+
         # Build debug output
         turn_num = (prev_msg_count // 2) + 1  # Rough turn number estimate
         debug_lines = [
             "=== Z-Image Turn Builder Debug ===",
+        ]
+        if strip_key_quotes:
+            debug_lines.append("Key quote filter: ON (removing quotes from JSON keys)")
+        debug_lines.extend([
             f"Turn #{turn_num} (appending to conversation with {prev_msg_count} messages)",
             f"User prompt: {len(user_prompt.strip())} chars",
             f"Enable thinking (inherited): {enable_thinking}",
-        ]
+            f"Clip connected: {clip is not None}",
+        ])
 
         if enable_thinking:
             debug_lines.append(f"Thinking content: {len(thinking_content.strip()) if thinking_content else 0} chars")
@@ -263,9 +293,15 @@ class ZImageTurnBuilder:
         if not is_final:
             debug_lines.append("<|im_end|>")
 
+        if clip is not None:
+            debug_lines.append("")
+            debug_lines.append("=== Full Formatted Prompt ===")
+            # Escape for HTML preview
+            debug_lines.append(formatted_text.replace("<", "&lt;").replace(">", "&gt;"))
+
         debug_output = "\n".join(debug_lines)
 
-        return (conversation, debug_output)
+        return (conversation, conditioning, formatted_text, debug_output)
 
 
 class ZImageTextEncoder:
@@ -329,6 +365,10 @@ class ZImageTextEncoder:
                     "default": "",
                     "tooltip": "RAW MODE: Bypass ALL formatting. Write your own <|im_start|> tokens. All other fields ignored when set."
                 }),
+                "strip_key_quotes": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Remove double quotes from JSON-style keys in prompts. Converts \"subject\": to subject: to prevent key names appearing as text in image."
+                }),
             }
         }
 
@@ -349,7 +389,14 @@ class ZImageTextEncoder:
         thinking_content: str = "",
         assistant_content: str = "",
         raw_prompt: str = "",
+        strip_key_quotes: bool = False,
     ) -> Tuple[Any, str, str, Dict[str, Any]]:
+
+        # Apply key quote filtering if enabled
+        if strip_key_quotes:
+            user_prompt = re.sub(r'"([^"]+)":', r'\1:', user_prompt)
+            thinking_content = re.sub(r'"([^"]+)":', r'\1:', thinking_content)
+            assistant_content = re.sub(r'"([^"]+)":', r'\1:', assistant_content)
 
         # Track mode for debug output
         mode = "direct"
@@ -417,6 +464,8 @@ class ZImageTextEncoder:
 
         # Build debug output
         debug_lines = ["=== Z-Image Text Encoder Debug ==="]
+        if strip_key_quotes:
+            debug_lines.append("Key quote filter: ON (removing quotes from JSON keys)")
         if mode == "conversation_override":
             msg_count = len(conversation_override.get("messages", []))
             debug_lines.append(f"Mode: Conversation Override ({msg_count} messages)")
@@ -510,12 +559,66 @@ def get_z_image_template_systems() -> Dict[str, str]:
     return get_templates()
 
 
+class PromptKeyFilter:
+    """
+    Filter double quotes from JSON-style keys in prompts.
+
+    Problem: When prompts contain "key": "value" format, the quoted key names
+    can appear as visible text in the generated image.
+
+    Solution: Strip quotes from keys only (before the colon), leaving values intact.
+
+    Before: {"subject": "a man juggling", "style": "photo"}
+    After:  {subject: "a man juggling", style: "photo"}
+
+    Two ways to use:
+    1. Connect text from another node (LLM output, etc.) to text_input
+    2. Paste/type directly into the text field
+
+    If text_input is connected, it takes priority over the text field.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "default": "", "tooltip": "Paste or type text here. If text_input is connected, this is ignored."}),
+                "strip_key_quotes": ("BOOLEAN", {"default": True, "tooltip": "Remove double quotes from JSON-style keys (e.g., \"subject\": becomes subject:). Prevents key names appearing as text in image."}),
+            },
+            "optional": {
+                "text_input": ("STRING", {"forceInput": True, "tooltip": "Connect text from another node. Takes priority over the text field."}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("text",)
+    FUNCTION = "filter_text"
+    CATEGORY = "QwenImage/Utilities"
+
+    DESCRIPTION = "Filter JSON-style key quotes from prompts. Converts \"key\": to key: to prevent label text appearing in generated images. Paste directly or connect from another node."
+
+    def filter_text(self, text: str, strip_key_quotes: bool = True, text_input: Optional[str] = None) -> Tuple[str]:
+        # Use connected input if provided, otherwise use the text field
+        source_text = text_input if text_input is not None else text
+
+        if not strip_key_quotes:
+            return (source_text,)
+
+        # Match "key": pattern - double quote, non-quote chars, double quote, colon
+        # Replace with just the key name and colon (no quotes)
+        filtered = re.sub(r'"([^"]+)":', r'\1:', source_text)
+
+        return (filtered,)
+
+
 NODE_CLASS_MAPPINGS = {
     "ZImageTextEncoder": ZImageTextEncoder,
     "ZImageTurnBuilder": ZImageTurnBuilder,
+    "PromptKeyFilter": PromptKeyFilter,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ZImageTextEncoder": "Z-Image Text Encoder",
     "ZImageTurnBuilder": "Z-Image Turn Builder",
+    "PromptKeyFilter": "Prompt Key Filter",
 }
