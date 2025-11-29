@@ -1,6 +1,204 @@
 # Z-Image Character Generation Guide
 
-Using `thinking_content` to provide structured character specifications.
+Using structured character profiles with multi-turn conversations to maintain consistency while making precise edits.
+
+**New to Z-Image nodes?** Start with [z_image_intro.md](z_image_intro.md) for the basics.
+
+---
+
+## Multi-Turn Character Editing
+
+The most powerful use of our nodes is maintaining character consistency across edits. By defining a detailed character in the first turn, then making targeted modifications in subsequent turns, you can make precise changes while preserving the rest.
+
+### Full Example: Walter Finch
+
+**ZImageTextEncoder (First Turn):**
+```
+system_prompt: "Generate an image in classic American comic book style. Bold outlines, flat colors with halftone shading."
+
+user_prompt: |
+  # Character Profile: Walter Finch (Wally)
+
+  ## Core Identity
+  - **Name:** Walter Finch (Nickname: Wally)
+  - **Gender:** Male
+  - **Age:** 72
+  - **Ethnicity:** Caucasian (British descent)
+  - **Skin Tone:** Fair, warm sun-kissed glow on cheeks and nose
+
+  ## Head & Face
+  - **Face Shape:** Oval, prominent jawline, receding hairline
+  - **Eye Color:** Ice-blue with subtle gold flecks around the iris
+  - **Hair:** Pure white, side-parted, full beard and mustache
+  - **Glasses:** Thin, gold-rimmed reading glasses
+  - **Expression:** Warm, gentle smile with a twinkle in his eye
+
+  ## Attire
+  - Light gray and blue checkered button-down shirt
+  - Dark grey wool trousers
+  - Brown leather loafers
+
+  ## Props
+  - Pale lavender ceramic mug of coffee
+  - Gold pocket watch chain visible in breast pocket
+
+add_think_block: true
+thinking_content: "Hmm lets make his beard a little red and keep everything else the same."
+assistant_content: "Sure, here's a photo of Wally with his red and white beard."
+```
+
+**ZImageTurnBuilder (Second Turn):**
+```
+previous: [from encoder's conversation output]
+clip: [from CLIPLoader - enables direct conditioning output]
+
+user_prompt: "Let's put a cute baby flying sloth above him too"
+thinking_content: "Hm, let's make it a black sloth, flying above the man's head."
+is_final: true
+```
+
+### Why This Works
+
+The full conversation is encoded together:
+```
+<|im_start|>system
+Generate an image in classic American comic book style...<|im_end|>
+<|im_start|>user
+# Character Profile: Walter Finch (Wally)
+[full character sheet]<|im_end|>
+<|im_start|>assistant
+<think>Hmm lets make his beard a little red...</think>
+Sure, here's a photo of Wally with his red and white beard.<|im_end|>
+<|im_start|>user
+Let's put a cute baby flying sloth above him too<|im_end|>
+<|im_start|>assistant
+<think>Hm, let's make it a black sloth, flying above the man's head.</think>
+
+```
+
+The model sees the original detailed definition AND all the subsequent modifications in context.
+
+### Tips for Multi-Turn Character Work
+
+1. **Be explicit about what stays**: In thinking blocks, note what should be preserved
+2. **Make one change per turn**: Don't overload modifications
+3. **Use thinking to guide changes**: "Keep the glasses and shirt, only change the beard"
+4. **Chain carefully**: Each turn builds on previous ones
+
+---
+
+## Using LLMs to Generate Prompts
+
+You can use any LLM to help generate detailed character profiles. However, there's a significant technical advantage to using **Qwen3 family models** (Qwen3-0.5B through Qwen3-235B) when generating prompts for Z-Image.
+
+### Why Qwen3 Models Are Optimal
+
+Z-Image uses Qwen3-4B as its text encoder. All models in the Qwen3 family share the **same tokenizer and vocabulary**. This creates a unique advantage.
+
+#### The Problem: Cross-Family "Translation"
+
+When you use a different model family (Llama, GPT, Claude, etc.) to generate a prompt:
+
+1. **Source Generation**: The LLM generates text using its own tokenizer
+2. **Re-tokenization**: Z-Image's encoder (Qwen3-4B) re-encodes that text into its own token IDs
+3. **Information Loss**: The subtle semantic nuances intended by the source model are lost in translation
+
+Different tokenizers break text into different subword units. The same sentence becomes different sequences of integers. The receiving model gets a "translated" version of the concept, not the original intent.
+
+#### The Solution: Direct Token Transfer
+
+When you use a Qwen3 model to generate the prompt:
+
+1. **Source Generation**: Qwen3 (any size) generates text as a sequence of **Qwen3 Token IDs**
+2. **Direct Transfer**: These exact Token IDs pass directly to Z-Image's encoder (Qwen3-4B)
+3. **High-Fidelity Priming**: The encoder interprets the incoming tokens with near-perfect fidelity
+
+Because both models share the same vocabulary, the exact integer ID representing each subword is identical. You're not transferring text - you're transferring a pre-computed semantic state.
+
+#### The Thinking Block Advantage
+
+This is especially powerful with `<think>` blocks. When a larger Qwen3 model (like Qwen3-72B or Qwen3-235B) generates thinking content:
+
+```
+<think>
+The character should have weathered skin with visible sun damage around the eyes.
+The lighting should be warm side-light from the left, suggesting late afternoon.
+Expression is contemplative but not sad - slight smile, distant gaze.
+</think>
+```
+
+These tokens prime Z-Image's encoder to a configuration that directly reflects the larger model's reasoning. The 4B encoder essentially receives "art direction" from a much more capable model, in a format it natively understands.
+
+### Practical Recommendations
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Quick prompts | Any LLM is fine |
+| Detailed character work | Prefer Qwen3 family |
+| Complex thinking blocks | Strongly prefer Qwen3-72B+ |
+| Maximum fidelity | Qwen3-235B-A22B (if available) |
+
+### Example: Using Qwen3 for Prompt Generation
+
+**System prompt for the generating LLM:**
+
+```
+You are a visual prompt engineer for a text-to-image model.
+
+Your task is to generate detailed, visually-specific character descriptions.
+Focus on concrete visual details - colors, textures, lighting, poses.
+Avoid abstract concepts like "beautiful" or "mysterious".
+
+When asked about a character:
+1. First, think through the visual elements in a <think> block
+2. Then provide a structured character profile
+
+Format your thinking to include:
+- Key distinguishing features
+- Lighting and atmosphere decisions
+- Composition notes
+- What to emphasize vs de-emphasize
+
+The output will be used directly as a prompt, so be specific and visual.
+```
+
+**User request:**
+```
+Create a character profile for a 72-year-old British gentleman named Walter,
+in American comic book style.
+```
+
+**Qwen3 output (use this directly in ZImageTextEncoder):**
+
+```
+<think>
+Key features: elderly but dignified, British character actor type.
+Face: oval with prominent jawline, weathered but kind.
+Eyes should be distinctive - ice blue with warmth, gold-rimmed glasses.
+Hair: pure white, well-groomed beard, side-parted hair.
+Attire: classic intellectual - checkered shirt, wool trousers, leather loafers.
+Props: coffee mug (lavender ceramic), pocket watch chain - these add character.
+Style: bold comic outlines, flat colors, halftone shading.
+Expression: warm smile, twinkle in eye - approachable grandfather type.
+Lighting: even comic-style, minimal shadows, clear features.
+</think>
+
+# Character Profile: Walter Finch (Wally)
+[... structured profile follows ...]
+```
+
+The entire output - including the `<think>` block - can be pasted directly into `user_prompt` with `add_think_block: true`. The thinking content goes into `thinking_content`, and the model receives the full semantic context.
+
+### Using Other LLMs
+
+Other LLMs (Claude, GPT, Llama, etc.) can absolutely generate good prompts. The structured formats in this guide work with any source. You'll just miss the token-level fidelity advantage.
+
+If using a non-Qwen LLM:
+- Focus on the visual vocabulary sections below
+- Use clear, concrete language
+- The prompt quality matters more than the source model for most use cases
+
+The Qwen3 advantage is most noticeable for complex, nuanced character work where subtle semantic details matter.
 
 ---
 

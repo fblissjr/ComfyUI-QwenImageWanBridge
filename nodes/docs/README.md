@@ -6,13 +6,32 @@ Comprehensive documentation for all ComfyUI Qwen nodes.
 
 Text encoding for Z-Image with Qwen3-4B. Matches diffusers by default, with optional experimental parameters.
 
+### Start Here
+- **[Z-Image Intro Guide](z_image_intro.md)** - "WTF is this?" - Quick overview, should you use it, progressive examples
+
 ### Nodes
 - [ZImageTextEncoder](z_image_encoder.md#zimagetextencoder-full-featured) - Full encoder with templates, system prompts, debug output, conversation output
 - [ZImageTurnBuilder](z_image_encoder.md#zimageturnbuilder-multi-turn-conversations) - Add conversation turns for multi-turn workflows
+- PromptKeyFilter - Strip quotes from JSON keys (prevents text appearing in images)
 
 ### Documentation
-- [Z-Image Encoder Guide](z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)
+- [Z-Image Encoder Reference](z_image_encoder.md) - Complete technical documentation
+- [Character Generation Guide](z_image_character_generation.md) - Multi-turn character consistency, visual vocabulary, LLM prompt generation
 - [Z-Image Turbo Workflow Analysis](z_image_turbo_workflow_analysis.md) - Official workflow breakdown
+
+### Example: Multi-Turn Character Editing
+
+Define a character in Turn 1, make precise edits in Turn 2+:
+
+```
+Turn 1: "Walter Finch, 72yo, ice-blue eyes, white beard, checkered shirt"
+        thinking: "Make his beard a little red"
+
+Turn 2: "Add a flying sloth above him"
+        thinking: "Black sloth, floating above his head"
+```
+
+Full context preserved across turns. See [Character Generation Guide](z_image_character_generation.md) for complete example.
 
 ---
 
@@ -109,8 +128,9 @@ Text encoding for Z-Image with Qwen3-4B. Matches diffusers by default, with opti
 Located in `example_workflows/`:
 
 ### Z-Image
-- `official_workflows/comfy_z_image_turbo_example_workflow.json` - Official workflow (uses CLIPTextEncode)
-- To use our encoder: Replace CLIPTextEncode with ZImageTextEncoder
+- `z-image_custom_nodes_workflow.json` - Basic ZImageTextEncoder workflow
+- `z-image_custom_nodes_turn_builder_workflow.json` - Multi-turn with TurnBuilder
+- `official_workflows/comfy_z_image_turbo_example_workflow.json` - Official (stock) workflow
 
 ### Qwen-Image-Edit
 - `qwen_edit_2509_single_image_edit.json` - Single image editing

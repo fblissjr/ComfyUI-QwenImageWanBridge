@@ -2,6 +2,8 @@
 
 **Category:** ZImage/Encoding
 
+> **New here?** Start with [z_image_intro.md](z_image_intro.md) for a quick overview of what these nodes do and why you might use them.
+
 ## Overview
 
 Custom encoder nodes for Z-Image that expose experimental parameters for testing. Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as its text encoder.
@@ -11,6 +13,7 @@ Custom encoder nodes for Z-Image that expose experimental parameters for testing
 **Nodes:**
 - **ZImageTextEncoder** - Full-featured with templates, system prompts, multi-turn support (outputs conversation for chaining)
 - **ZImageTurnBuilder** - Add conversation turns for multi-turn workflows (user+assistant per turn)
+- **PromptKeyFilter** - Strip quotes from JSON keys to prevent them appearing as text
 
 ---
 

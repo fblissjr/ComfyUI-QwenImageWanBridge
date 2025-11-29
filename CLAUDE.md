@@ -446,7 +446,9 @@ Templates in `nodes/templates/z_image/` subfolder (examples):
 - Many more available (see folder for full list)
 
 ### Documentation
-- [z_image_encoder.md](nodes/docs/z_image_encoder.md) - Full encoder documentation
+- [z_image_intro.md](nodes/docs/z_image_intro.md) - "WTF is this?" intro guide with progressive examples
+- [z_image_encoder.md](nodes/docs/z_image_encoder.md) - Full technical reference
+- [z_image_character_generation.md](nodes/docs/z_image_character_generation.md) - Multi-turn character consistency
 - [z_image_turbo_workflow_analysis.md](nodes/docs/z_image_turbo_workflow_analysis.md) - Official workflow analysis
 
 ## Technical Details

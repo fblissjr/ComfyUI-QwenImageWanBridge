@@ -18,25 +18,48 @@ Custom nodes for :
 
 Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B chat template format from `tokenizer_config.json`.
 
-- [Z-Image Node Example Workflow](example_workflows/z-image_custom_nodes_workflow.json) - We're really just replacing one node in the basic ComfyUI workflow, but here's an example workflow of something you can use it for.
-- [Z-Image Multi-Turn / Turn Builder Node Example Workflow](example_workflows/z-image_custom_nodes_turn_builder_workflow.json)
+> **"What does this actually do?"** - See [Z-Image Intro Guide](nodes/docs/z_image_intro.md) for a quick overview with examples.
+
+**Example Workflows:**
+- [Basic Encoder](example_workflows/z-image_custom_nodes_workflow.json) - Simple replacement for CLIPTextEncode
+- [Multi-Turn / Turn Builder](example_workflows/z-image_custom_nodes_turn_builder_workflow.json) - Iterative character edits
 
 **Nodes:**
-- `ZImageTextEncoder` - Full-featured with templates, system prompts, raw mode, thinking/assistant content
-- `ZImageTurnBuilder` - Add conversation turns for multi-turn workflows
+- `ZImageTextEncoder` - Full-featured with templates, system prompts, thinking blocks, conversation chaining
+- `ZImageTurnBuilder` - Add conversation turns for multi-turn workflows (with optional direct encoding)
+- `PromptKeyFilter` - Strip quotes from JSON keys to prevent them appearing as text
 
-**Features:**
-- `user_prompt` - your generation request (renamed from `text`)
-- `template_preset` dropdown auto-fills `system_prompt` (editable via JS)
-- `raw_prompt` input for complete control with your own `<|im_start|>` tokens
-- `formatted_prompt` output - see exactly what gets encoded
-- `debug_output` - detailed breakdown (mode, char counts, token estimate)
-- `conversation` output - chain to ZImageTurnBuilder for multi-turn
-- `thinking_content` / `assistant_content` - content for assistant response
-- `strip_key_quotes` - filter JSON key quotes to prevent them appearing as text in images
+**Key Features:**
+- System prompts via 100+ templates or custom text
+- Thinking blocks (`<think>`) to guide model interpretation
+- Multi-turn conversations for iterative character edits
+- `raw_prompt` for complete control with your own special tokens
+- Debug output to see exactly what gets encoded
+
+**Example: Character Consistency with Multi-Turn**
+
+Define a detailed character, then make precise edits while maintaining consistency:
+
+```
+Turn 1 (ZImageTextEncoder):
+  system_prompt: "Generate in comic book style"
+  user_prompt: "# Character: Walter Finch, 72yo British gentleman
+               - Ice-blue eyes with gold flecks
+               - White beard, gold-rimmed glasses
+               - Checkered shirt, wool trousers"
+  thinking_content: "Make his beard a little red"
+
+Turn 2 (ZImageTurnBuilder):
+  user_prompt: "Add a flying sloth above him"
+  thinking_content: "Black sloth, floating above his head"
+```
+
+The full conversation context is preserved - the model sees the original definition AND all modifications. See the [Character Generation Guide](nodes/docs/z_image_character_generation.md) for the complete Walter Finch example and visual vocabulary reference.
 
 **Documentation:**
-- [Z-Image Encoder Guide](nodes/docs/z_image_encoder.md) - Complete documentation (nodes, workflows, troubleshooting)
+- [Z-Image Intro Guide](nodes/docs/z_image_intro.md) - Quick overview, should you use it, progressive examples
+- [Z-Image Encoder Reference](nodes/docs/z_image_encoder.md) - Full technical documentation
+- [Character Generation Guide](nodes/docs/z_image_character_generation.md) - Multi-turn character consistency, LLM prompt generation
 
 ### HunyuanVideo 1.5 Text-to-Video Support
 
