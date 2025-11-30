@@ -1,7 +1,7 @@
 # ComfyUI Nodes for Qwen's LLM related models
 
 <p align="center">
-  <img src="assets/repo_logo.png" alt="How do you do, fellow Qwen models?" width="400">
+  <img src="assets/repo_logo.jpeg" alt="How do you do, fellow Qwen models?" width="400">
   <br>
   <em>derived from image created by fearnworks</em>
 </p>
