@@ -150,9 +150,10 @@ app.registerExtension({
               (w) => w.name === config.assistantWidget
             );
 
-            // Fill add_think_block if template specifies it
-            if (thinkBlockWidget && template.add_think_block !== undefined) {
-              thinkBlockWidget.value = template.add_think_block;
+            // Always enable think block when selecting a template (default: true)
+            // User can manually disable if they don't want it
+            if (thinkBlockWidget) {
+              thinkBlockWidget.value = true;
             }
 
             // Fill thinking_content if template has it
