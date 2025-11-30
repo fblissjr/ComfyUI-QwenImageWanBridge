@@ -3,7 +3,7 @@
 <p align="center">
   <img src="assets/repo_logo.png" alt="How do you do, fellow Qwen models?" width="400">
   <br>
-  <em>Image credit: fearnworks</em>
+  <em>derived from image created by fearnworks</em>
 </p>
 
 First and foremost, this is a research repo and sandbox. While I've straddled between both worlds of image / video models and LLMs since the early days, I tend to be more comfortable on the LLM. With natively trained multimodal LLMs (see Gemini 3 and Nano Banana Pro) in commercial models, and open source models now using more common LLMs and vision LLMs like Qwen3 and Qwen2.5-VL, I started this repo to see if I could lend my background to the space. Despite the worlds of DiT models and LLM models converging into a single system, many people on both sides of the coin tend to not know what the other is doing (feels like a backend/frontend paradigm). The goal of this repo is to explore DiT models that leverage modern autoregressive, vision LLMs and find fun ways to use them in new (or more optimal) ways.
