@@ -28,7 +28,7 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 
 **Example Workflows:**
 - [Basic Encoder](example_workflows/z-image_custom_nodes_workflow.json) - Simple replacement for CLIPTextEncode
-- [Multi-Turn / Turn Builder](example_workflows/z-image_custom_nodes_turn_builder_workflow.json) - Iterative character edits
+- [Multi-Turn / Turn Builder](example_workflows/z-image_custom_nodes_multi-turn_builder_workflow.json) - Iterative character edits
 
 **Nodes:**
 - `ZImageTextEncoder` - Full-featured with templates, system prompts, thinking blocks, conversation chaining
