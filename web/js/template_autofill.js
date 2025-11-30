@@ -156,14 +156,14 @@ app.registerExtension({
               thinkBlockWidget.value = true;
             }
 
-            // Fill thinking_content if template has it
-            if (thinkContentWidget && template.thinking_content) {
-              thinkContentWidget.value = template.thinking_content;
+            // Fill or clear thinking_content based on template
+            if (thinkContentWidget) {
+              thinkContentWidget.value = template.thinking_content || "";
             }
 
-            // Fill assistant_content if template has it
-            if (assistantWidget && template.assistant_content) {
-              assistantWidget.value = template.assistant_content;
+            // Fill or clear assistant_content based on template
+            if (assistantWidget) {
+              assistantWidget.value = template.assistant_content || "";
             }
           }
 

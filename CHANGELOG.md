@@ -9,6 +9,21 @@
 - Prevents overwriting user customizations saved in workflows
 - Template selection still works normally for user interactions
 
+**JS Think Block Behavior**
+- `add_think_block` now defaults to `true` for ALL template selections
+- Previously only set when template explicitly specified `add_think_block`
+- User can manually disable if they don't want thinking structure
+
+**JS Field Clearing on Template Switch**
+- `thinking_content` and `assistant_content` now clear when switching templates
+- Uses `template.thinking_content || ""` pattern to clear stale values
+- Prevents old thinking content from persisting across template changes
+
+**Structured Templates Anti-Text-Rendering**
+- `json_structured`, `yaml_structured`, `markdown_structured` templates updated
+- Added explicit "CRITICAL: Do NOT render any text, labels, keys" instructions
+- Thinking blocks explain to only extract visual concepts from structure
+
 ### Added
 
 **Extended Template Format**
@@ -27,11 +42,9 @@
 - Simple encoder now also supports template auto-fill via JS
 - Same template selection behavior as full encoder
 
-**strip_key_quotes Enhanced**
-- Now removes ALL double quotes from JSON-style prompts (keys AND values)
-- Converts `"subject": "A woman..."` to `subject: A woman...`
-- Prevents both JSON keys and quoted values from appearing as text in images
-- Affects: ZImageTextEncoder, ZImageTurnBuilder, PromptKeyFilter
+**Template Thinking Content (15 templates updated)**
+- Added thinking content to: character_design, photorealistic, cinematic_widescreen, portrait_studio, comic_american, product_shot, food_gourmet, environment_design, anime_ghibli, noir, oil_painting_classical, fantasy_epic, json_structured, yaml_structured, markdown_structured
+- Each template now pre-fills thinking with genre-specific analysis guidance
 
 ### Template Format Example
 
