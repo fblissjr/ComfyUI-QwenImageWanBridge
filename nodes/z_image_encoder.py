@@ -11,13 +11,165 @@ import os
 import re
 import copy
 import logging
+import torch
 from typing import Dict, Any, Tuple, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
+# Token counting configuration
+# Reference implementations (diffusers/DiffSynth) use max_sequence_length=512
+REFERENCE_MAX_TOKENS = 512
+
+# Lazy-loaded tokenizer for token counting
+_TOKENIZER = None
+_TOKENIZER_LOAD_ATTEMPTED = False
+
+
+def get_tokenizer():
+    """
+    Get the Qwen tokenizer for token counting.
+
+    Uses ComfyUI's bundled tokenizer files (no download needed).
+    Returns None if tokenizer cannot be loaded.
+    """
+    global _TOKENIZER, _TOKENIZER_LOAD_ATTEMPTED
+
+    if _TOKENIZER is not None:
+        return _TOKENIZER
+
+    if _TOKENIZER_LOAD_ATTEMPTED:
+        return None
+
+    _TOKENIZER_LOAD_ATTEMPTED = True
+
+    try:
+        from transformers import Qwen2Tokenizer
+
+        # ComfyUI bundles the tokenizer here
+        import comfy.text_encoders.z_image
+        tokenizer_path = os.path.join(
+            os.path.dirname(comfy.text_encoders.z_image.__file__),
+            "qwen25_tokenizer"
+        )
+
+        if os.path.exists(tokenizer_path):
+            _TOKENIZER = Qwen2Tokenizer.from_pretrained(tokenizer_path)
+            logger.debug(f"Loaded Qwen tokenizer from {tokenizer_path}")
+        else:
+            logger.warning(f"Qwen tokenizer not found at {tokenizer_path}")
+    except ImportError as e:
+        logger.warning(f"Could not import tokenizer: {e}")
+    except Exception as e:
+        logger.warning(f"Could not load tokenizer: {e}")
+
+    return _TOKENIZER
+
+
+def count_tokens(text: str) -> Tuple[int, bool]:
+    """
+    Count tokens in text using the Qwen tokenizer.
+
+    Args:
+        text: Text to count tokens for
+
+    Returns:
+        Tuple of (token_count, is_accurate)
+        - token_count: Actual token count if tokenizer available, estimate otherwise
+        - is_accurate: True if using actual tokenizer, False if using estimate
+    """
+    tokenizer = get_tokenizer()
+
+    if tokenizer is not None:
+        try:
+            tokens = tokenizer.encode(text, add_special_tokens=False)
+            return (len(tokens), True)
+        except Exception as e:
+            logger.warning(f"Token counting failed: {e}")
+
+    # Fallback: rough estimate (~3.5 chars per token for mixed content)
+    estimated = len(text) // 4 + 1
+    return (estimated, False)
+
+
 # Custom type for conversation chains
 ZIMAGE_CONVERSATION_TYPE = "ZIMAGE_CONVERSATION"
+
+
+def filter_embeddings_by_mask(conditioning: List, debug_lines: Optional[List[str]] = None) -> List:
+    """
+    Filter padding tokens from embeddings using attention mask.
+
+    DiffSynth pattern:
+        for i in range(len(prompt_embeds)):
+            embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
+
+    This removes padding tokens (where mask=0) from the embedding tensor.
+
+    Args:
+        conditioning: ComfyUI conditioning list [(embeddings, extra_dict), ...]
+        debug_lines: Optional list to append debug info
+
+    Returns:
+        New conditioning list with padding filtered out
+    """
+    if not conditioning or len(conditioning) == 0:
+        return conditioning
+
+    filtered_conditioning = []
+
+    for i, (embeddings, extra_dict) in enumerate(conditioning):
+        attention_mask = extra_dict.get("attention_mask")
+
+        if attention_mask is None:
+            # No mask available, keep as-is
+            if debug_lines is not None:
+                debug_lines.append(f"  Cond[{i}]: No attention_mask, keeping original shape {embeddings.shape}")
+            filtered_conditioning.append((embeddings, extra_dict))
+            continue
+
+        # Get mask as boolean (handle both int and bool masks)
+        mask_bool = attention_mask.bool()
+
+        original_shape = embeddings.shape
+        batch_size = embeddings.shape[0]
+
+        # Filter each batch item
+        filtered_embeds_list = []
+        for b in range(batch_size):
+            # Get valid token indices for this batch item
+            valid_mask = mask_bool[b] if mask_bool.dim() > 1 else mask_bool
+            valid_embeds = embeddings[b][valid_mask]
+            filtered_embeds_list.append(valid_embeds)
+
+        # Stack back to batch - need to handle variable lengths
+        # For now, use the first item's length (assumes consistent masking)
+        if len(filtered_embeds_list) == 1:
+            filtered_embeds = filtered_embeds_list[0].unsqueeze(0)
+        else:
+            # Pad to max length in batch (though typically masks are consistent)
+            max_len = max(e.shape[0] for e in filtered_embeds_list)
+            padded = []
+            for e in filtered_embeds_list:
+                if e.shape[0] < max_len:
+                    pad = torch.zeros(max_len - e.shape[0], e.shape[1], device=e.device, dtype=e.dtype)
+                    padded.append(torch.cat([e, pad], dim=0))
+                else:
+                    padded.append(e)
+            filtered_embeds = torch.stack(padded, dim=0)
+
+        # Create new extra dict without the mask (no longer needed)
+        new_extra = {k: v for k, v in extra_dict.items() if k != "attention_mask"}
+
+        if debug_lines is not None:
+            new_shape = filtered_embeds.shape
+            tokens_removed = original_shape[1] - new_shape[1]
+            debug_lines.append(f"  Cond[{i}]: {original_shape} -> {new_shape} (removed {tokens_removed} padding tokens)")
+
+        filtered_conditioning.append((filtered_embeds, new_extra))
+
+    return filtered_conditioning
+
 
 try:
     import yaml
@@ -219,6 +371,10 @@ class ZImageTurnBuilder:
                     "default": False,
                     "tooltip": "Remove all double quotes from JSON-style prompts. Keys (\"subject\":) and values (\"text\") both get quotes stripped."
                 }),
+                "filter_padding": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Filter padding tokens (matches diffusers/DiffSynth). Only applies when clip is connected."
+                }),
             }
         }
 
@@ -237,6 +393,7 @@ class ZImageTurnBuilder:
         assistant_content: str = "",
         is_final: bool = True,
         strip_key_quotes: bool = False,
+        filter_padding: bool = True,
     ) -> Tuple[Dict[str, Any], Any, str, str]:
 
         # Apply quote filtering if enabled (for JSON-style prompts)
@@ -284,9 +441,13 @@ class ZImageTurnBuilder:
         # Pass llama_template="{}" to bypass ComfyUI's automatic chat template wrapping
         # since we've already formatted the conversation ourselves
         conditioning = None
+        filter_debug = []
         if clip is not None:
             tokens = clip.tokenize(formatted_text, llama_template="{}")
             conditioning = clip.encode_from_tokens_scheduled(tokens)
+            # Apply attention mask filtering if enabled (DiffSynth pattern)
+            if filter_padding:
+                conditioning = filter_embeddings_by_mask(conditioning, filter_debug)
             # Log formatted prompt to console (same as encoder)
             print(f"\n[Z-Image TurnBuilder] Formatted prompt:\n{formatted_text}\n")
 
@@ -327,12 +488,27 @@ class ZImageTurnBuilder:
             debug_lines.append("<|im_end|>")
         debug_lines.append("```")
 
+        # Count tokens
+        token_count, is_accurate = count_tokens(formatted_text)
+        debug_lines.append("")
+        debug_lines.append("=== Token Count ===")
+        if is_accurate:
+            debug_lines.append(f"Tokens: {token_count} / {REFERENCE_MAX_TOKENS} reference limit")
+            if token_count > REFERENCE_MAX_TOKENS:
+                debug_lines.append(f"WARNING: Exceeds reference limit by {token_count - REFERENCE_MAX_TOKENS} tokens")
+        else:
+            debug_lines.append(f"~{token_count} tokens (estimate)")
+
         if clip is not None:
             debug_lines.append("")
             debug_lines.append("=== Full Formatted Prompt ===")
             debug_lines.append("```")
             debug_lines.append(formatted_text)
             debug_lines.append("```")
+            if filter_padding and filter_debug:
+                debug_lines.append("")
+                debug_lines.append("=== Padding Filter ===")
+                debug_lines.extend(filter_debug)
 
         debug_output = "\n".join(debug_lines)
 
@@ -382,8 +558,8 @@ class ZImageTextEncoder:
                     "tooltip": "System prompt - auto-filled by template, edit freely"
                 }),
                 "add_think_block": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Add <think></think> block (auto-enabled if thinking_content provided)"
+                    "default": True,
+                    "tooltip": "Add <think></think> block. Default True matches DiffSynth/diffusers reference implementations."
                 }),
                 "thinking_content": ("STRING", {
                     "multiline": True,
@@ -403,6 +579,10 @@ class ZImageTextEncoder:
                 "strip_key_quotes": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Remove all double quotes from JSON-style prompts. Keys (\"subject\":) and values (\"text\") both get quotes stripped."
+                }),
+                "filter_padding": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Filter padding tokens from embeddings. Matches diffusers and DiffSynth reference implementations. Disable to use stock ComfyUI behavior (padded sequence + mask)."
                 }),
             }
         }
@@ -425,6 +605,7 @@ class ZImageTextEncoder:
         assistant_content: str = "",
         raw_prompt: str = "",
         strip_key_quotes: bool = False,
+        filter_padding: bool = True,
     ) -> Tuple[Any, str, str, Dict[str, Any]]:
 
         # Apply quote filtering if enabled (for JSON-style prompts)
@@ -529,11 +710,18 @@ class ZImageTextEncoder:
         debug_lines.append("")
         debug_lines.append(f"Think tags: {'YES' if '<think>' in formatted_text else 'NO'}")
 
-        # Estimate tokens (rough: ~4 chars per token for English)
+        # Count tokens
+        token_count, is_accurate = count_tokens(formatted_text)
         debug_lines.append("")
-        debug_lines.append("=== Token Estimate ===")
-        est_tokens = len(formatted_text) // 4
-        debug_lines.append(f"~{est_tokens} tokens (estimate)")
+        debug_lines.append("=== Token Count ===")
+        if is_accurate:
+            debug_lines.append(f"Tokens: {token_count} / {REFERENCE_MAX_TOKENS} reference limit")
+            if token_count > REFERENCE_MAX_TOKENS:
+                debug_lines.append(f"WARNING: Exceeds reference limit by {token_count - REFERENCE_MAX_TOKENS} tokens")
+                debug_lines.append("  diffusers/DiffSynth truncate at 512. ComfyUI allows longer sequences.")
+                debug_lines.append("  Results may differ from reference implementations.")
+        else:
+            debug_lines.append(f"~{token_count} tokens (estimate, tokenizer unavailable)")
 
         debug_output = "\n".join(debug_lines)
 
@@ -545,6 +733,19 @@ class ZImageTextEncoder:
         # since we've already formatted the conversation ourselves
         tokens = clip.tokenize(formatted_text, llama_template="{}")
         conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+        # Apply attention mask filtering if enabled (DiffSynth pattern)
+        if filter_padding:
+            filter_debug = []
+            conditioning = filter_embeddings_by_mask(conditioning, filter_debug)
+            # Add filter debug to output
+            debug_lines = debug_output.split("\n")
+            insert_idx = next((i for i, line in enumerate(debug_lines) if "Token Estimate" in line), len(debug_lines))
+            debug_lines.insert(insert_idx, "")
+            debug_lines.insert(insert_idx + 1, "=== Padding Filter ===")
+            for line in filter_debug:
+                debug_lines.insert(insert_idx + 2, line)
+            debug_output = "\n".join(debug_lines)
 
         return (conditioning, formatted_text, debug_output, conversation_out)
 
@@ -635,8 +836,8 @@ class ZImageTextEncoderSimple:
                     "tooltip": "System instructions (auto-filled by template, then editable)"
                 }),
                 "add_think_block": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Add <think></think> block structure"
+                    "default": True,
+                    "tooltip": "Add <think></think> block. Default True matches DiffSynth/diffusers reference implementations."
                 }),
                 "thinking_content": ("STRING", {
                     "multiline": True,
@@ -647,6 +848,10 @@ class ZImageTextEncoderSimple:
                     "multiline": True,
                     "default": "",
                     "tooltip": "Content after </think> tags"
+                }),
+                "filter_padding": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Filter padding tokens (matches diffusers/DiffSynth). Disable for stock ComfyUI behavior."
                 }),
             }
         }
@@ -668,6 +873,7 @@ class ZImageTextEncoderSimple:
         add_think_block: bool = False,
         thinking_content: str = "",
         assistant_content: str = "",
+        filter_padding: bool = True,
     ):
         # Get system prompt from template if selected
         effective_system = system_prompt.strip()
@@ -690,6 +896,9 @@ class ZImageTextEncoderSimple:
             assistant_content=assistant_content.strip(),
         )
 
+        # Count tokens
+        token_count, is_accurate = count_tokens(formatted_text)
+
         # Build debug output
         debug_lines = [
             "=== Z-Image Simple Encoder ===",
@@ -704,7 +913,17 @@ class ZImageTextEncoderSimple:
             "```",
             "",
             f"Think tags: {'YES' if '<think>' in formatted_text else 'NO'}",
+            "",
+            "=== Token Count ===",
         ]
+
+        if is_accurate:
+            debug_lines.append(f"Tokens: {token_count} / {REFERENCE_MAX_TOKENS} reference limit")
+            if token_count > REFERENCE_MAX_TOKENS:
+                debug_lines.append(f"WARNING: Exceeds reference limit by {token_count - REFERENCE_MAX_TOKENS} tokens")
+        else:
+            debug_lines.append(f"~{token_count} tokens (estimate)")
+
         debug_output = "\n".join(debug_lines)
 
         # Log to console
@@ -713,6 +932,16 @@ class ZImageTextEncoderSimple:
         # Encode - bypass ComfyUI's automatic template wrapping
         tokens = clip.tokenize(formatted_text, llama_template="{}")
         conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+        # Apply attention mask filtering if enabled (DiffSynth pattern)
+        if filter_padding:
+            filter_debug = []
+            conditioning = filter_embeddings_by_mask(conditioning, filter_debug)
+            if filter_debug:
+                debug_lines.append("")
+                debug_lines.append("=== Padding Filter ===")
+                debug_lines.extend(filter_debug)
+                debug_output = "\n".join(debug_lines)
 
         return (conditioning, formatted_text, debug_output)
 

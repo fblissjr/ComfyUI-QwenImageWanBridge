@@ -1,5 +1,80 @@
 # Changelog
 
+## v2.9.12 - Token Counting
+
+### Added
+
+**Actual Token Counting**
+- Debug output now shows accurate token count vs 512 reference limit
+- Uses ComfyUI's bundled Qwen tokenizer (no download needed)
+- Warning when exceeding 512 tokens (reference implementations truncate at 512)
+- Applies to ZImageTextEncoder, ZImageTextEncoderSimple, ZImageTurnBuilder
+
+### Why This Matters
+
+Reference implementations (diffusers/DiffSynth) enforce a 512-token limit. ComfyUI allows longer sequences, but results may differ from reference implementations for prompts exceeding 512 tokens.
+
+### Debug Output Example
+
+```
+=== Token Count ===
+Tokens: 47 / 512 reference limit
+```
+
+Or with warning:
+```
+=== Token Count ===
+Tokens: 623 / 512 reference limit
+WARNING: Exceeds reference limit by 111 tokens
+  diffusers/DiffSynth truncate at 512. ComfyUI allows longer sequences.
+  Results may differ from reference implementations.
+```
+
+**ZImageEmptyLatent Node**
+- New latent node with auto-alignment to 16px (Z-Image requirement)
+- Input any dimensions, outputs nearest valid resolution
+- Example: 1211x1024 → 1216x1024
+- Returns: latent, aligned width, aligned height, resolution_info string
+
+### Documentation
+
+- Added `filter_padding` parameter documentation to CLAUDE.md
+- Added VAE compatibility warning (Flux-derived VAE, non-official VAEs experimental)
+- Confirmed 16-pixel resolution alignment (not 32) for Z-Image in all docs
+- Verified `hidden_states[-2]` extraction matches reference implementations
+- Updated z_image_encoder.md version footer
+- Added LLMOutputParser to README.md (was missing)
+
+---
+
+## v2.9.11 - Padding Filter (Matches Reference Implementations)
+
+### Added
+
+**`filter_padding` Parameter**
+- New `filter_padding` parameter on Z-Image encoders (default: `true`)
+- Matches both diffusers (HuggingFace) and DiffSynth reference implementations
+- Applied to ZImageTextEncoder, ZImageTextEncoderSimple, ZImageTurnBuilder
+
+### Why This Change
+
+We verified how different implementations handle text embeddings:
+
+| Implementation | Filters Padding? |
+|----------------|------------------|
+| diffusers (HuggingFace) | Yes |
+| DiffSynth | Yes |
+| ComfyUI (stock) | No |
+
+Both official reference implementations filter padding tokens before sending to the DiT. Our default now matches this behavior.
+
+### Technical Details
+- Filters embeddings using attention mask: `embeddings[mask.bool()]`
+- Debug output shows shape change: `[1, 512, 2560] -> [1, N, 2560]`
+- Set `filter_padding=false` for stock ComfyUI behavior (padded sequence + mask)
+
+---
+
 ## v2.9.10 - Extended Template Format with Thinking Support
 
 ### Fixed

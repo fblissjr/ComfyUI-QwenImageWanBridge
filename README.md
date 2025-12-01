@@ -1,30 +1,70 @@
 # ComfyUI Nodes for Qwen's LLM related models
 
 <p align="center">
-  <img src="assets/repo_logo.jpeg" alt="How do you do, fellow Qwen models?">
+  <a href="assets/explainer.jpeg">
+    <img src="assets/explainer.jpeg" alt="How do you do, fellow Qwen models?" width="400">
+  </a>
   <br>
-  <em>derived from image created by fearnworks</em>
+  <em>derived from image created by fearnworks (click for full size)</em>
 </p>
 
-First and foremost, this is a research repo and sandbox. While I've straddled between both worlds of image / video models and LLMs since the early days, I tend to be more comfortable on the LLM. With natively trained multimodal LLMs (see Gemini 3 and Nano Banana Pro) in commercial models, and open source models now using more common LLMs and vision LLMs like Qwen3 and Qwen2.5-VL, I started this repo to see if I could lend my background to the space. Despite the worlds of DiT models and LLM models converging into a single system, many people on both sides of the coin tend to not know what the other is doing (feels like a backend/frontend paradigm). The goal of this repo is to explore DiT models that leverage modern autoregressive, vision LLMs and find fun ways to use them in new (or more optimal) ways.
+First and foremost, **this is a research repo and sandbox.**
 
-There will be breaking changes, and this isn't meant to be a prod repo. If you find a version that works for you and is stable, I'd recommend pinning that version and not updating unless you find a good reason to. If you're more interested in tinkering and research, then by all means, join the party. This is NOT optimized for a 24/7 production environment.
+While I've straddled the "worlds" of DiT/diffusion and LLMs for a while, I'm considerably more comfortable on the LLM side. We are currently seeing a massive shift in how these models work. Previous DiT models (ie: flux1, wan) relied on bidirectional encoders like T5. The new wave of commercial models (Gemini 3, Nano Banana Pro) and open-source projects (Z-Image, Flux2) are moving toward **autoregressive LLMs** (Qwen3, Qwen2.5-VL, Mistral) as the text encoder. That's a big change (and a good one) - but it's one that requires thinking about the text encoder a bit differently. And the way to do that is to experiment and poke and prod and turn levers and knobs and see what happens and what breaks. **That's the goal of this repo**.
 
-Yes, I know that doesn't include Wan yet, but I think eventually it will. Qwen Image & Qwen Image Edit are the most built out and most useful. HunyuanVideo 1.5 was added to experiment mostly with system prompts and other things. 
+Despite these worlds converging into a single system, many people on both sides of the coin don't know what the other is doing (it feels like a backend/frontend paradigm disconnect).
+
+The goal of this repo is to lend my background and curiosity to this space (this is a hobbyist / free time project), exploring DiT models that leverage these modern autoregressive vision LLMs, and finding fun things to test and experiment with. There's many things that won't work, and there's likely to be many that are purely "interesting". But if you're curious, this type of stuff can be fun.
+
+**Disclaimer:**
+There **will** be breaking changes, and nothing in here is meant as a replacement to any native ComfyUI nodes. I see it as purely complementary. If you're here to tinker and research, join the party, let me know if you find anything fun to explore.
+
+*(Note: this repo name was made when I had an inkling that Wan and Qwen Image would collide at some point - I still think that will happen, but perhaps under a different umbrella name - but that's where the repo name came from, and I don't really want to change it)*
 
 ## So what's this repo for then?
 
 Custom nodes for :
- - Z-Image - Experimental text encoding with system prompts, thinking blocks, assistant prompts, and turn builders, along with templates
+ - Z-Image (Primary Focus right now) - Experimental text encoding with system prompts, thinking blocks, assistant prompts, and turn builders, along with templates
  - Qwen-Image-Edit with multi-image support, more flexibility around the vision transformer (qwen2.5-vl), custom system prompts, and some other experimental things
  - HunyuanVideo 1.5 Text-to-Video - Custom system prompts, experiments with attention, and other random experiments
-
 
 ### Z-Image Text Encoder
 
 Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B chat template format from `tokenizer_config.json`.
 
 > **"What does this actually do?"** - See [Z-Image Intro Guide](nodes/docs/z_image_intro.md) for a quick overview with examples.
+
+<p align="center">
+  <a href="assets/zimage_example1.png">
+    <img src="assets/zimage_example1.png" alt="Combined weights can overpower user prompt" width="250">
+  </a>
+  <br>
+  <em>system + thinking + assistant combined can overpower parts of user prompt - won dog vs cat, but lost pink vs white</em>
+</p>
+
+<p align="center">
+  <a href="assets/zimage_example2.jpeg">
+    <img src="assets/zimage_example2.jpeg" alt="System prompt guides style" width="250">
+  </a>
+  <br>
+  <em>system prompt is best for guiding style (propaganda template) - can't remove the cat without thinking/assistant to steer</em>
+</p>
+
+<p align="center">
+  <a href="assets/zimage_example3.jpeg">
+    <img src="assets/zimage_example3.jpeg" alt="Class replacement causes blending" width="250">
+  </a>
+  <br>
+  <em>replacing a class (sloth instead of cat) often results in a mix - thinking/assistant are weighted lower than user prompt</em>
+</p>
+
+<p align="center">
+  <a href="assets/zimage_example4.jpeg">
+    <img src="assets/zimage_example4.jpeg" alt="User prompt dominates generation" width="250">
+  </a>
+  <br>
+  <em>user prompt drives initial generation (cat wins), lower-weighted content leaves just a pink human outline - explore this</em>
+</p>
 
 **Example Workflows:**
 - [Basic Encoder](example_workflows/z-image_custom_nodes_workflow.json) - Simple replacement for CLIPTextEncode
@@ -34,7 +74,12 @@ Z-Image uses Qwen3-4B as its text encoder. Our nodes follow the exact Qwen3-4B c
 - `ZImageTextEncoder` - Full-featured with templates, system prompts, thinking blocks, conversation chaining
 - `ZImageTextEncoderSimple` - Simplified encoder for quick use / **negative prompts**
 - `ZImageTurnBuilder` - Add conversation turns for multi-turn workflows (with optional direct encoding)
-- `PromptKeyFilter` - Strip all quotes from JSON-style prompts (keys AND values)
+- `ZImageEmptyLatent` - 16-channel latents with auto-alignment to 16px (1211x1024 → 1216x1024)
+- `LLMOutputParser` - Parse LLM output (JSON/YAML/text) to encoder fields (works with any LLM node)
+- `PromptKeyFilter` - Strip quotes from JSON keys (prevents key names appearing as text in images)
+
+**Token Limit Note:**
+Reference implementations enforce a **512 token limit** via truncation. The DiT config (`axes_lens=[1536, 512, 512]`) suggests this may be a choice rather than an architectural limit - the 3D RoPE can theoretically handle up to 1536 text positions. We don't know if 512 matches training data or is just conservative. The low `rope_theta=256.0` means position encoding is very "sharp," so exceeding trained positions risks artifacts. Our nodes don't enforce 512 - with system prompts + thinking blocks + multi-turn, you can exceed it. Experimental territory.
 
 **Key Features:**
 - System prompts via 140+ templates or custom text
@@ -90,34 +135,8 @@ Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampl
 
 **Workflow:** `HunyuanVideoCLIPLoader` -> `HunyuanVideoTextEncoder` -> `KSampler` (or `SamplerCustomAdvanced`) -> `VAEDecode`
 
-## BREAKING CHANGE (v2.7.0+)
+### Qwen-Image-Edit
 
-**Existing workflows will break.** You must:
-1. Delete and re-add, or Right Click -> Recreate Template Builder, Encoder, and Encoder Advanced nodes from your workflow
-2. Connect: Template Builder `template_output` → Encoder `template_output` (single connection only)
-
-Old multi-connection system (mode + system_prompt) no longer works as it was getting convoluted and confusing. One connection from template builder now handles everything (prompt, mode, system_prompt).
-
----
-
-## Required Connections
-
-**When using Template Builder:**
-- Connect: Template Builder `template_output` → Encoder `template_output`
-- That's it. One connection handles everything (prompt, mode, system_prompt)
-
-**Without Template Builder:**
-- Use encoder's dropdown for mode selection
-- Type text and system_prompt manually
-
----
-
-**Documentation:**
-- [CHANGELOG.md](CHANGELOG.md) - Full changelog history
-
-## Features
-
-### Core Capabilities (Qwen-Image-Edit)
 - **Qwen-Image-Edit-2509**: Multi-image editing (1-3 optimal, up to 10 max because I had to pick something)
 - **QwenImageBatch**: Smart batching with auto-detection, aspect ratio preservation, scaling, batching strategy
 - **Resolution Control & Power User Mode**: Per-image resolution control
@@ -125,22 +144,6 @@ Old multi-connection system (mode + system_prompt) no longer works as it was get
 - **System Prompt Control**: Customizable system prompts via the template builder
 - **Automatic Double-Scaling Prevention**: Batch node and better encoder intelligence
 - **Full Debug Output**: Complete prompts, character counts, aspect ratio tracking
-
-### Still Experimental or Not Working Well (or at all)
-- Mask-Based Inpainting: Selective editing with diffusers blending, including Eligen entity control
-
-### Recent Highlights
-
-**HunyuanVideo 1.5 (v2.8.0)**
-- Video templates in `nodes/templates/hunyuan_video/`
-- `HunyuanVideoTextEncoder` with template dropdown + additional instructions
-- Dual output (positive/negative) for direct KSampler connection
-
-**QwenImageBatch** - 
-- Auto-detects up to 10 images (no inputcount parameter)
-- Skips empty inputs (no black images)
-- `max_dimensions` strategy (minimal distortion) or `first_image` (hero-driven)
-- Prevents double-scaling with metadata propagation
 
 ### Nodes
 
@@ -193,17 +196,16 @@ File-based system prompt templates (9 templates).
 - **QwenTemplateConnector**: Connects template builder to encoder (optional)
 - **QwenDebugController**: Comprehensive debugging and profiling system
 
-### Inpainting Nodes
-- **QwenMaskProcessor**: Mask preprocessing with blur, expand, feather controls
-- **QwenInpaintSampler**: Diffusers-pattern inpainting with strength control
-
 ### Experimental Nodes (Available but likely not working or deprecated)
-- **QwenSmartCrop**: Automated face
+- **ZImageWanVAEDecode**: Attempt to decode Z-Image latents with Wan VAE (scaling correction, for experimentation only)
+- **QwenSmartCrop**: Automated face detection and cropping
 - **QwenSpatialTokenGenerator**: Visual editor for spatial tokens that don't seem to do much of anything right now
 - **QwenEliGenEntityControl**: Entity-level mask control
 - **QwenEliGenMaskPainter**: Simple mask creation
 - **QwenTokenDebugger**: Debug token processing
 - **QwenTokenAnalyzer**: Analyze tokenization
+- **QwenMaskProcessor**: Mask preprocessing with blur, expand, feather controls
+- **QwenInpaintSampler**: Diffusers-pattern inpainting with strength control
 
 ## Workflows
 
@@ -232,7 +234,7 @@ QwenTemplateBuilder → QwenVLTextEncoder (system_prompt)
 
 ### Template System (HunyuanVideo)
 - Use `template_preset` dropdown directly on `HunyuanVideoTextEncoder`
-- Video templates in `nodes/templates/hunyuan_video/` (cinematic, animation, documentary, etc.)
+- 39 video templates in `nodes/templates/hunyuan_video/` (cinematic, animation, documentary, etc.)
 - Use `additional_instructions` to layer modifications on any template
 - Use `custom_system_prompt` for full manual control
 

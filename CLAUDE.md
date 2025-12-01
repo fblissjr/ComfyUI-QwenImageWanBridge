@@ -42,11 +42,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and vision-based image editing using Qwen2.5-VL 7B. Bridges DiffSynth-Studio patterns with ComfyUI's node system.
 
-**Key Features (v2.9.10):**
+**Key Features (v2.9.12):**
+- **Token counting** - Debug output shows actual token count vs 512 reference limit (uses ComfyUI's bundled Qwen tokenizer)
+- **Padding filter** - `filter_padding` parameter (default on) matches diffusers/DiffSynth reference implementations
 - **Extended template format** - Templates can include `add_think_block`, `thinking_content`, `assistant_content` in YAML frontmatter
 - **Structured prompt templates** - `json_structured`, `yaml_structured`, `markdown_structured` with pre-configured thinking
 - **JSON key quote filtering** - `strip_key_quotes` toggle on Z-Image nodes prevents JSON keys appearing as text in images - [docs](nodes/docs/z_image_encoder.md)
-- **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (23 video templates)
+- **HunyuanVideo 1.5 T2V** - Text-to-video with Qwen2.5-VL encoder (39 video templates)
 - **File-based template system** - Templates in `nodes/templates/*.md` files (single source of truth)
 - **Template Builder → Encoder** - Single `template_output` connection handles everything
 - QwenImageBatch node (auto-detection, aspect preservation, double-scaling prevention) - [docs](nodes/docs/QwenImageBatch.md)
@@ -81,6 +83,7 @@ ComfyUI nodes for Qwen-Image-Edit model, enabling text-to-image generation and v
 - RoPE position embedding fix for batch processing
 
 ### Deprecated / Experimental / Research Only
+- ZImageWanVAEDecode - Experimental node to decode Z-Image latents with Wan VAE (scaling correction, for testing only)
 - Mask-based inpainting (QwenMaskProcessor + QwenInpaintSampler) - [docs](nodes/docs/QwenMaskProcessor.md), [docs](nodes/docs/QwenInpaintSampler.md)
 - EliGen entity control (mask-based spatial editing, untested)
 - Spatial coordinate tokens (not used by DiffSynth, see `explorations/20251003_diffsynth_spatial_token_analysis.md`)
@@ -191,6 +194,15 @@ See `example_workflows/qwen_edit_2509_mask_inpainting.json`
   - Useful when piping structured prompts from LLMs
   - Toggle on/off via `strip_key_quotes` parameter (default: on)
   - Works with any text encoder (Z-Image, Qwen-Image-Edit, HunyuanVideo)
+- LLMOutputParser - Parse LLM output (JSON/YAML/text) to Z-Image encoder fields
+  - Generic bridge for any LLM node output (not tied to specific implementation)
+  - Parse modes: `auto` (try JSON/YAML), `passthrough`, `json`, `yaml`
+  - Configurable key names for extraction (supports dot notation: `result.prompt`)
+  - Outputs: `user_prompt`, `system_prompt`, `thinking_content`, `assistant_content`, `raw_text`, `parse_status`
+  - Multi-turn support: Connect `previous_conversation` from Z-Image encoder to build conversation chains
+  - Handles markdown code fences, nested structures, common LLM output patterns
+  - `fallback_to_passthrough`: If parsing fails, output raw text as user_prompt (default: true)
+  - `strip_quotes`: Remove quotes from extracted fields (default: false)
 
 ### Wan Video Bridge (QwenWanBridge) - EXPERIMENTAL AND LIKELY NOT USEFUL YET
 - QwenToWanFirstFrameLatent - Prepare Qwen output for Wan Video first frame
@@ -307,7 +319,7 @@ Text-to-video encoding using Qwen2.5-VL with ComfyUI's native HunyuanVideo sampl
 - **HunyuanVideoCLIPLoader**: Load Qwen2.5-VL + optional byT5
 
 #### Template Builder (HunyuanVideo/Templates)
-- **HunyuanVideoTemplateBuilder**: Build prompts with 23 video templates
+- **HunyuanVideoTemplateBuilder**: Build prompts with 39 video templates
   - Output: `template_output` (HUNYUAN_TEMPLATE) connects to encoder's `template_input`
   - Select preset template and customize system prompt
 
@@ -342,7 +354,7 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 
 ### Usage Notes
 - **byT5**: Quoted text (e.g., `"你好"`) triggers byT5 multilingual rendering
-- **Templates**: 23 video templates in `nodes/templates/hunyuan_video_*.md`
+- **Templates**: 39 video templates in `nodes/templates/hunyuan_video/*.md`
 - **Basic encoding**: Use CLIPTextEncode for no-frills encoding without templates
 
 ### Documentation
@@ -351,10 +363,34 @@ HunyuanVideoTextEncoder → positive → CFGGuider → GUIDER → SamplerCustomA
 - `nodes/docs/hunyuanvideo_prompting_experiments.md` - Prompting experiments guide
 - `example_workflows/hunyuanvideo_15_t2v_example.json` - Working T2V workflow
 
-## Z-Image Support (v2.9.9)
+## Z-Image Support (v2.9.12)
 
 ### Overview
 Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text encoder. Our nodes implement the correct Qwen3-4B chat template format.
+
+### Extended Template Format (v2.9.10+)
+Templates can now include thinking content via YAML frontmatter:
+```yaml
+---
+name: z_image_example
+add_think_block: true
+thinking_content: |
+  Analyzing the request to identify:
+  - Subject and composition
+  - Style and mood
+---
+System prompt body text here...
+```
+
+**JS auto-fill behavior:**
+- Selecting a template fills: `system_prompt`, `thinking_content`, `assistant_content`
+- `add_think_block` always defaults to `true` (user can disable manually)
+- Switching templates clears stale thinking content
+- Workflow load only fills empty fields (preserves user customizations)
+
+**Structured templates** (`json_structured`, `yaml_structured`, `markdown_structured`):
+- Parse structured input formats without rendering text in images
+- Include anti-text-rendering instructions in thinking block
 
 ### Qwen3-4B Template Format
 
@@ -376,7 +412,11 @@ Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text
 - `user_prompt` - the user's generation request
 - `thinking_content` - content INSIDE `<think>...</think>` tags
 - `assistant_content` - content AFTER `</think>` tags (what assistant says after thinking)
-- `add_think_block` - auto-enabled when `thinking_content` is provided
+- `add_think_block` - defaults to True (matches DiffSynth reference implementation)
+
+**Reference implementation note:** DiffSynth-Studio always uses `enable_thinking=True` which produces empty `<think></think>` tags by default. Our `add_think_block=True` default matches this behavior.
+
+**Padding filter (v2.9.11):** `filter_padding=True` (default) filters padding tokens from embeddings, matching diffusers/DiffSynth. Set to False for stock ComfyUI behavior.
 
 **Closing tag behavior (v2.9.6):**
 - Empty `assistant_content`: No closing `<|im_end|>` (matches diffusers, model is "generating")
@@ -411,6 +451,12 @@ Z-Image is Alibaba's 6B parameter text-to-image model using Qwen3-4B as the text
   - `strip_key_quotes` - remove quotes from JSON keys to prevent them appearing as text
   - **Outputs**: conversation, conditioning (if clip connected), formatted_prompt, debug_output
 
+#### ZImage/Latent
+- **ZImageEmptyLatent**: 16-channel latents with auto-alignment
+  - Auto-aligns any dimensions to 16px (Z-Image requirement)
+  - Example: 1211x1024 → 1216x1024
+  - **Outputs**: latent, width, height, resolution_info
+
 ### Workflow
 
 **Basic (matches diffusers):**
@@ -438,6 +484,24 @@ ZImageTextEncoder → ZImageTurnBuilder → ZImageTextEncoder
 (first turn)        (additional turn)    conversation_override: (connect)
 ```
 
+**With LLM Output Parser (structured JSON from any LLM):**
+```
+Any LLM Node → LLMOutputParser → user_prompt ────→ ZImageTextEncoder.user_prompt
+               (parse_mode:auto)  thinking ──────→ ZImageTextEncoder.thinking_content
+                                  system_prompt → ZImageTextEncoder.system_prompt
+```
+
+**LLM Output Parser multi-turn (chaining LLM responses):**
+```
+ZImageTextEncoder (turn 1)
+        │ conversation
+        v
+LLMOutputParser ←── LLM Response (turn 2)
+        │ conversation
+        v
+ZImageTextEncoder.conversation_override
+```
+
 ### Key Differences from Qwen-Image-Edit
 
 | Aspect | Z-Image | Qwen-Image-Edit |
@@ -451,23 +515,29 @@ ZImageTextEncoder → ZImageTurnBuilder → ZImageTextEncoder
 ### Technical Details
 - **Decoupled DMD distillation**: CFG is "baked" into the model during training
 - **Turbo variant**: 8 NFEs (Number of Function Evaluations)
-- **VAE**: Same 16-channel latent space as other Wan models
+- **VAE**: Flux-derived AutoencoderKL (16 latent channels, 8x spatial compression, scaling_factor=0.3611, shift_factor=0.1159). Note: Using non-official VAEs (like Wan2.1-upscale2x) is experimental - same tensor shape but different scaling factors may cause color shifts.
+- **Resolution alignment**: 16 pixels (height/width must be divisible by 16) - different from Qwen-Image-Edit's 32px
 - **Architecture**: S3-DiT (Single-Stream DiT) with 6B parameters
 - **Qwen3-4B specs**: 2560 hidden dim, 36 layers, `hidden_states[-2]` for embeddings
 
 ### Templates
 Templates in `nodes/templates/z_image/` subfolder (examples):
 - `default.md` - No system prompt
-- `photorealistic.md` - Natural lighting and textures
+- `photorealistic.md` - Natural lighting and textures (with thinking)
 - `bilingual_text.md` - English/Chinese text rendering
 - `artistic.md` - Creative compositions
-- Many more available (see folder for full list)
+- `json_structured.md` - Parse JSON input (with anti-text-rendering thinking)
+- `yaml_structured.md` - Parse YAML input (with anti-text-rendering thinking)
+- `markdown_structured.md` - Parse Markdown input (with anti-text-rendering thinking)
+- 144 templates total (many include pre-configured thinking content)
+- See folder for full list
 
 ### Documentation
 - [z_image_intro.md](nodes/docs/z_image_intro.md) - "WTF is this?" intro guide with progressive examples
 - [z_image_encoder.md](nodes/docs/z_image_encoder.md) - Full technical reference
 - [z_image_character_generation.md](nodes/docs/z_image_character_generation.md) - Multi-turn character consistency
 - [z_image_turbo_workflow_analysis.md](nodes/docs/z_image_turbo_workflow_analysis.md) - Official workflow analysis
+- [z_image_technical_reference.md](internal/z_image_technical_reference.md) - Consolidated architecture and training details (internal)
 
 ## Technical Details
 

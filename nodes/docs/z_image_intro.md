@@ -54,7 +54,7 @@ A cat sleeping on a windowsill<|im_end|>
 
 ```
 
-When you use the stock encoder, ComfyUI adds this wrapper automatically. But that's ALL it adds. You get no system prompt, no thinking, no conversation history.
+When you use the stock encoder, ComfyUI adds this wrapper automatically. But that's ALL it adds, and so this being an experimental thing - we need to crack open the levers to give you the system prompt, user prompt, thinking text, and the assistant prefill/content. And the ability to extend it to muilti-turn. This is all just simulated - there's no LLM running. But it does produce neat results.
 
 ### What Our Nodes Add
 
@@ -470,6 +470,15 @@ When using JSON-formatted prompts (from LLMs), the quoted text like `"subject": 
 
 **Q: Can I use an LLM to generate prompts?**
 Yes. Any LLM works, but **Qwen3 family models** have a technical advantage: they share the same tokenizer as Z-Image's encoder (Qwen3-4B). This means tokens transfer directly without re-encoding, preserving subtle semantic nuances. See [Character Generation Guide](z_image_character_generation.md#using-llms-to-generate-prompts) for details.
+
+**Q: Is there a token limit?**
+The reference implementations (DiffSynth, diffusers) enforce a **512 token limit** via truncation. However, this appears to be a **choice in those implementations, not a hard architectural limit**.
+
+The DiT uses 3D RoPE with `axes_lens=[1536, 512, 512]`. Text tokens use axis 0 (up to 1536 positions theoretically), while image patches use axes 1 and 2 for spatial positioning. So text and images don't compete for positions.
+
+Why 512 then? We don't know for certain - it may match training data, or it may just be a conservative choice. The low `rope_theta=256.0` (vs 1M in LLMs) means position encoding is very "sharp" - going beyond positions the model saw during training may cause artifacts.
+
+Our nodes don't enforce this limit - you can exceed 512 tokens with system prompts + thinking blocks + multi-turn. This is experimental territory. It might work fine, or you might see artifacts. If you have issues with very long prompts, try simplifying.
 
 ---
 

@@ -325,6 +325,29 @@ try:
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load Z-Image encoder nodes: {e}")
 
+# LLM Output Parser (generic bridge for any LLM output to Z-Image inputs)
+try:
+    from .nodes.llm_output_parser import LLMOutputParser
+
+    NODE_CLASS_MAPPINGS["LLMOutputParser"] = LLMOutputParser
+    NODE_DISPLAY_NAME_MAPPINGS["LLMOutputParser"] = "LLM Output Parser"
+
+    print("[QwenImageWanBridge] Loaded LLM Output Parser node")
+    print("[QwenImageWanBridge] FEATURE: Parse JSON/YAML/text LLM output to Z-Image encoder inputs")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load LLM Output Parser: {e}")
+
+# Z-Image Wan VAE Decode (Experimental - probably won't work well)
+try:
+    from .nodes.z_image_wan_vae_decode import ZImageWanVAEDecode
+
+    NODE_CLASS_MAPPINGS["ZImageWanVAEDecode"] = ZImageWanVAEDecode
+    NODE_DISPLAY_NAME_MAPPINGS["ZImageWanVAEDecode"] = "Z-Image Wan VAE Decode (Experimental)"
+
+    print("[QwenImageWanBridge] Loaded Z-Image Wan VAE Decode (EXPERIMENTAL - architecture mismatch)")
+except Exception as e:
+    print(f"[QwenImageWanBridge] Failed to load Z-Image Wan VAE Decode: {e}")
+
 # ============================================================================
 # EXPERIMENTAL ANALYSIS NODES
 # ============================================================================

@@ -4,6 +4,7 @@ Using structured character profiles with multi-turn conversations to maintain co
 
 **New to Z-Image nodes?** Start with [z_image_intro.md](z_image_intro.md) for the basics.
 
+**NOTE: THIS DOES NOT GENERATE ANYTHING, you must provide that - this only provides a framework for using it in a different way**
 ---
 
 ## Multi-Turn Character Editing
@@ -84,6 +85,7 @@ The model sees the original detailed definition AND all the subsequent modificat
 2. **Make one change per turn**: Don't overload modifications
 3. **Use thinking to guide changes**: "Keep the glasses and shirt, only change the beard"
 4. **Chain carefully**: Each turn builds on previous ones
+5. **Watch token length**: Detailed character sheets + multiple turns can exceed 512 tokens. Reference implementations truncate at 512, though this appears to be a choice rather than a hard limit. If you see artifacts with very long conversations, try simplifying.
 
 ---
 

@@ -45,7 +45,9 @@ Default behavior matches diffusers exactly. Use templates or multi-turn for adva
 - `z_image_turbo_bf16.safetensors` - Z-Image Turbo model
 
 **VAE (in `models/vae/`):**
-- `ae.safetensors` - Z-Image autoencoder (16-channel)
+- `ae.safetensors` - Z-Image autoencoder (Flux-derived, 16-channel)
+
+> **Note on VAE:** Z-Image uses a Flux-derived VAE, not a Wan VAE. While other 16-channel VAEs share the same tensor shape, they have different scaling factors. Using non-official VAEs (like Wan2.1-upscale2x) is experimental and may cause color shifts or quality differences.
 
 ### Model Downloads
 
@@ -98,23 +100,50 @@ The Qwen3 parameter name is counterintuitive:
 
 For text **encoding** (not generation), diffusers uses `enable_thinking=True`, which produces NO think block. ComfyUI's hardcoded template matches this exactly.
 
-### The Real Difference: Embedding Extraction
+### Reference Implementation Note
 
-| Aspect | Diffusers | ComfyUI |
-|--------|-----------|---------|
-| Template | No think block | No think block |
-| Token IDs | Identical | Identical |
-| Embedding extraction | Filters by attention mask (variable length) | Returns full padded sequence + mask |
-
-**Diffusers** filters embeddings to valid tokens only:
+**DiffSynth-Studio always uses thinking tags** with empty content by default:
 ```python
+# From DiffSynth z_image.py
+pipe.tokenizer.apply_chat_template(
+    messages,
+    enable_thinking=True,  # Always enabled
+)
+```
+
+This produces empty `<think></think>` tags in every prompt. Our `add_think_block=True` default matches this behavior. If you want to match the bare ComfyUI/diffusers behavior (no think block), set `add_think_block=False`.
+
+### Embedding Extraction: Padding Filter
+
+We verified how different implementations handle text embeddings:
+
+| Implementation | Filters Padding? |
+|----------------|------------------|
+| **diffusers** (HuggingFace) | Yes |
+| **DiffSynth** | Yes |
+| **ComfyUI** (stock) | No |
+
+Both reference implementations filter padding tokens before sending to the DiT:
+
+```python
+# From diffusers pipeline_z_image.py (lines 242-247)
+embeddings_list = []
 for i in range(len(prompt_embeds)):
     embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
 ```
 
-**ComfyUI** returns full padded sequence (512 tokens) with attention mask in `extra` dict. The Z-Image model uses this mask during context refinement, but main transformer layers receive `mask=None`.
+### `filter_padding` Parameter
 
-This difference **cannot be fixed** without modifying ComfyUI core.
+Our nodes include a `filter_padding` parameter (default: `True`) that matches the diffusers/DiffSynth behavior.
+
+| filter_padding | Behavior |
+|----------------|----------|
+| `True` (default) | Matches diffusers/DiffSynth - filters padding tokens |
+| `False` | Stock ComfyUI behavior - sends padded sequence + mask |
+
+**Why this matters:** Short prompts have high padding ratios (e.g., 50 tokens + 462 padding = 91% padding). While the DiT can handle padding via its learned `cap_pad_token`, the reference implementations chose to filter it out.
+
+**When to disable:** Set `filter_padding=False` if you want to match stock ComfyUI behavior or debug embedding-related issues.
 
 ---
 
@@ -133,11 +162,12 @@ Full encoder with system prompts, templates, and multi-turn conversation support
 | conversation_override | ZIMAGE_CONVERSATION | No | - | Connect from ZImageTurnBuilder (uses this instead of building one) |
 | template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image/` (auto-fills system_prompt) |
 | system_prompt | STRING | No | "" | Editable system prompt (auto-filled by template via JS) |
-| add_think_block | BOOLEAN | No | **False** | Add `<think></think>` block (auto-enabled if thinking_content provided) |
+| add_think_block | BOOLEAN | No | **True** | Add `<think></think>` block (matches DiffSynth/diffusers reference implementations) |
 | thinking_content | STRING | No | "" | Content INSIDE `<think>...</think>` tags |
 | assistant_content | STRING | No | "" | Content AFTER `</think>` tags |
 | raw_prompt | STRING | No | "" | RAW MODE: Bypass ALL formatting, use your own tokens |
 | strip_key_quotes | BOOLEAN | No | **False** | Remove quotes from JSON keys (e.g., `"subject":` becomes `subject:`) |
+| filter_padding | BOOLEAN | No | **True** | Filter padding tokens (matches diffusers/DiffSynth) |
 
 #### Outputs
 
@@ -160,9 +190,10 @@ Simplified encoder for quick use - ideal for **negative prompts**. Same template
 | user_prompt | STRING | Yes | "" | Your prompt (what you want or don't want) |
 | template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image/` |
 | system_prompt | STRING | No | "" | System instructions |
-| add_think_block | BOOLEAN | No | **False** | Add `<think></think>` block |
+| add_think_block | BOOLEAN | No | **True** | Add `<think></think>` block (matches reference implementations) |
 | thinking_content | STRING | No | "" | Content inside think tags |
 | assistant_content | STRING | No | "" | Content after think tags |
+| filter_padding | BOOLEAN | No | **True** | Filter padding tokens (matches diffusers/DiffSynth) |
 
 #### Outputs
 
@@ -202,6 +233,7 @@ Add conversation turns for multi-turn workflows. Each node represents one comple
 | assistant_content | STRING | No | "" | Assistant's response after thinking |
 | is_final | BOOLEAN | No | True | Is this the last turn? If True, last message has no `<|im_end|>` |
 | strip_key_quotes | BOOLEAN | No | **False** | Remove quotes from JSON keys (e.g., `"subject":` becomes `subject:`) |
+| filter_padding | BOOLEAN | No | **True** | Filter padding tokens (only when clip connected) |
 
 #### Outputs
 
@@ -249,13 +281,13 @@ add_think_block: True            (no clip)                           clip: (from
 
 ## Workflows
 
-### Basic T2I (matches diffusers)
+### Basic T2I (matches DiffSynth reference)
 
 ```
 CLIPLoader (lumina2) --> ZImageTextEncoder --> KSampler
                               |
                          user_prompt: "A cat sleeping"
-                         add_think_block=False (default)
+                         add_think_block=True (default)
 ```
 
 ### With System Prompts
@@ -265,7 +297,6 @@ CLIPLoader (lumina2) --> ZImageTextEncoder --> KSampler
                               |
                          user_prompt: "A cat sleeping"
                          template_preset="photorealistic"
-                         add_think_block=False
 ```
 
 ### With Raw Mode
@@ -324,6 +355,17 @@ The first encoder creates the initial conversation (system + user + assistant). 
 | scheduler | simple | Basic scheduling |
 | denoise | 1.0 | Full denoising for T2I |
 
+### About These Settings (Research Notes)
+
+Based on our analysis of the Decoupled-DMD paper (arXiv:2511.22677) and the official Z-Image-Turbo model files, here's what we found:
+
+- The official diffusers example uses `guidance_scale=0.0` with a comment "Guidance should be 0 for the Turbo models"
+- The paper describes a training process where CFG patterns get embedded into the model weights during distillation
+- `num_inference_steps=9` in diffusers appears to produce 8 actual DiT forwards (8 NFEs), matching the distillation target
+- The scheduler is `FlowMatchEulerDiscreteScheduler` with `shift=3.0`
+
+For more details, see `internal/z_image_paper_analysis/decoupled_dmd_training_report.md`.
+
 ### Resolution
 
 **Native resolution:** 1024x1024
@@ -334,6 +376,50 @@ The first encoder creates the initial conversation (system + user + assistant). 
 - 3:4 (768x1024)
 - 16:9 (1024x576)
 - 9:16 (576x1024)
+
+**Alignment:** 16 pixels (height and width must be divisible by 16)
+
+### Token Limits
+
+**Reference implementation limit:** 512 tokens (appears to be a choice, not a hard architectural limit)
+
+DiffSynth and diffusers enforce `max_sequence_length=512` via truncation. However, analysis of the DiT config suggests this may not be architecturally required:
+
+**DiT 3D RoPE Configuration:**
+```
+axes_lens=[1536, 512, 512]  # Max positions per axis
+```
+
+- **Axis 0 (1536)**: Sequential positions for text tokens
+- **Axis 1 (512)**: Height positions for image patches
+- **Axis 2 (512)**: Width positions for image patches
+
+Text and image patches use different axes, so they don't compete for positions. The theoretical text limit is 1536 tokens on axis 0.
+
+**Why 512 in reference implementations?**
+We don't know for certain. Possibilities:
+1. It may match what was used during training
+2. It may just be a conservative choice
+3. The low `rope_theta=256.0` (vs LLM's 1M) means position encoding is very "sharp" - going beyond positions seen during training risks artifacts
+
+**Our nodes:** We don't enforce 512 tokens. With system prompts + thinking blocks + multi-turn conversations, you can exceed this. This is experimental - it might work fine, or you might see artifacts. If you have issues with very long prompts, try simplifying.
+
+**Token counting (v2.9.12):** Debug output now shows actual token count:
+```
+=== Token Count ===
+Tokens: 47 / 512 reference limit
+```
+
+If you exceed 512 tokens, you'll see a warning:
+```
+=== Token Count ===
+Tokens: 623 / 512 reference limit
+WARNING: Exceeds reference limit by 111 tokens
+  diffusers/DiffSynth truncate at 512. ComfyUI allows longer sequences.
+  Results may differ from reference implementations.
+```
+
+**Diagnostic:** Check `debug_output` for token count. If your prompts exceed 512 tokens and you see artifacts, try simplifying.
 
 ### VRAM Estimates
 
@@ -440,6 +526,66 @@ Standalone text filter node in `QwenImage/Utilities`. Use when you need filterin
 1. Paste/type directly into the `text` field
 2. Connect from another node (LLM output, etc.) via `text_input`
 
+### ZImageEmptyLatent
+
+Creates 16-channel latents for Z-Image with **auto-alignment** to 16px. Input any dimensions - the node rounds to the nearest valid resolution.
+
+**Inputs:**
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| width | INT | Yes | 1024 | Width in pixels (auto-aligned to 16px) |
+| height | INT | Yes | 1024 | Height in pixels (auto-aligned to 16px) |
+| batch_size | INT | Yes | 1 | Number of latents to generate |
+
+**Outputs:**
+| Output | Type | Description |
+|--------|------|-------------|
+| latent | LATENT | 16-channel latent tensor |
+| width | INT | Aligned width (use for downstream nodes) |
+| height | INT | Aligned height (use for downstream nodes) |
+| resolution_info | STRING | Human-readable alignment info |
+
+**Examples:**
+| Input | Output | Info String |
+|-------|--------|-------------|
+| 1211x1024 | 1216x1024 | "1211x1024 -> 1216x1024 (auto-aligned)" |
+| 1000x1000 | 1008x1008 | "1000x1000 -> 1008x1008 (auto-aligned)" |
+| 1024x768 | 1024x768 | "1024x768 (already aligned)" |
+
+### LLMOutputParser
+
+Parses LLM output (JSON/YAML/text) and exposes fields for Z-Image encoder. Works with any LLM node.
+
+**Inputs:**
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| text_input | STRING | Yes | - | LLM output to parse (connect from any LLM node) |
+| parse_mode | ENUM | Yes | "auto" | auto, passthrough, json, yaml |
+| user_prompt_key | STRING | No | "user_prompt" | JSON/YAML key for user_prompt |
+| system_prompt_key | STRING | No | "system_prompt" | JSON/YAML key for system_prompt |
+| thinking_key | STRING | No | "thinking" | JSON/YAML key for thinking_content |
+| assistant_key | STRING | No | "assistant" | JSON/YAML key for assistant_content |
+| fallback_to_passthrough | BOOLEAN | No | True | Use raw text if parsing fails |
+| strip_quotes | BOOLEAN | No | False | Remove quotes from extracted fields |
+| previous_conversation | ZIMAGE_CONVERSATION | No | - | Build multi-turn from previous context |
+
+**Outputs:**
+| Output | Type | Description |
+|--------|------|-------------|
+| user_prompt | STRING | Extracted user prompt |
+| system_prompt | STRING | Extracted system prompt |
+| thinking_content | STRING | Extracted thinking content |
+| assistant_content | STRING | Extracted assistant content |
+| raw_text | STRING | Original input text |
+| parse_status | STRING | Status message (success/fallback/error) |
+| conversation | ZIMAGE_CONVERSATION | For multi-turn chaining |
+
+**Features:**
+- Strips markdown code fences (```json, ```yaml)
+- Unwraps nested structures (result.data, etc.)
+- Dot notation for nested keys (e.g., "result.prompt")
+- Falls back to common alternatives (prompt, text, content, message)
+
 ---
 
 ## Template Files
@@ -502,7 +648,7 @@ See the folder for 140+ additional templates.
 
 ## Technical Details
 
-### Qwen3-4B Specifications
+### Qwen3-4B Text Encoder
 
 | Parameter | Value |
 |-----------|-------|
@@ -511,7 +657,28 @@ See the folder for 140+ additional templates.
 | Vocabulary | 151,936 |
 | Max Position Embeddings | 40,960 |
 | Embedding Layer Used | `hidden_states[-2]` (second-to-last) |
+| Attention | GQA (32 heads, 8 KV heads) |
+| RoPE theta | 1,000,000 |
 | dtype | bfloat16 |
+
+### DiT (ZImageTransformer2DModel)
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| dim | 3840 | Hidden dimension |
+| n_layers | 30 | Main transformer blocks (with timestep modulation) |
+| n_refiner_layers | 2 | Context refiner (no modulation) + noise refiner |
+| n_heads / n_kv_heads | 30 / 30 | Full attention (not GQA like text encoder) |
+| cap_feat_dim | 2560 | Caption feature dim (matches Qwen3-4B) |
+| in_channels | 16 | VAE latent channels |
+| all_patch_size | [2] | Spatial patch size (2x2 in latent space) |
+| axes_dims | [32, 48, 48] | RoPE dimensions per axis (sum = 128 = head_dim) |
+| axes_lens | [1536, 512, 512] | Max positions (sequence, height, width) |
+| rope_theta | 256.0 | Much lower than text encoder's 1M |
+| t_scale | 1000.0 | Timestep scaling |
+| qk_norm | true | RMSNorm on Q/K for stability |
+
+**Why different attention?** The text encoder uses GQA (4 heads share each KV pair) for memory efficiency with long sequences (up to 40k tokens). The DiT uses full attention for maximum expressiveness on shorter, fixed-length sequences (~5k tokens max).
 
 ### Formatted Prompt Examples
 
@@ -885,5 +1052,5 @@ Style: [artistic direction]"
 
 ---
 
-**Last Updated:** 2025-11-29
-**Version:** 4.6 (v2.9.10: extended template format with thinking support)
+**Last Updated:** 2025-12-01
+**Version:** 4.9 (v2.9.12: added ZImageEmptyLatent, LLMOutputParser docs)
