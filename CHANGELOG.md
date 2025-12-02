@@ -36,6 +36,12 @@ WARNING: Exceeds reference limit by 111 tokens
 - Example: 1211x1024 → 1216x1024
 - Returns: latent, aligned width, aligned height, resolution_info string
 
+**Trigger Words Support**
+- Optional `trigger_words` parameter on Z-Image encoders
+- Prepended to user_prompt for maximum LoRA activation influence
+- Non-intrusive: defaults to empty string, no visible input unless user converts widget
+- Right-click widget to convert to input for LoRA loader connection
+
 ### Documentation
 
 - Added `filter_padding` parameter documentation to CLAUDE.md

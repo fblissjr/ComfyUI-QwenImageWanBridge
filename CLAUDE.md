@@ -428,6 +428,7 @@ System prompt body text here...
 - **ZImageTextEncoder**: Full-featured encoder with Qwen3-4B template
   - Handles complete first turn (system + user + assistant)
   - `user_prompt` - your generation request
+  - `trigger_words` - optional LoRA trigger words (prepended to user_prompt, convert widget to input for LoRA connection)
   - `conversation_override` - optional input from ZImageTurnBuilder (overrides all other inputs)
   - `template_preset` - auto-fills system_prompt from templates
   - `system_prompt` - editable after template auto-fill
@@ -438,6 +439,7 @@ System prompt body text here...
   - **Outputs**: conditioning, formatted_prompt, debug_output, conversation
 - **ZImageTextEncoderSimple**: Simplified encoder for quick use / negative prompts
   - Same template/thinking support, no conversation chaining
+  - `trigger_words` - optional LoRA trigger words (same as full encoder)
   - **Outputs**: conditioning, formatted_prompt
 
 #### ZImage/Conversation
@@ -461,9 +463,12 @@ System prompt body text here...
 
 **Basic (matches diffusers):**
 ```
-CLIPLoader (qwen_3_4b, lumina2) → ZImageTextEncoder → KSampler
+CLIPLoader (qwen_3_4b, lumina2) → ZImageTextEncoder → KSampler (CFG=1.0)
                                   user_prompt: "A cat sleeping"
+Negative: ConditioningZeroOut → KSampler (negative)
 ```
+
+**Important:** Z-Image uses Decoupled DMD - CFG is baked in during training. Use CFG=1.0 at inference (no guidance scaling). Negative prompts have no effect at CFG=1, so use `ConditioningZeroOut` instead of encoding text.
 
 **With templates:**
 ```

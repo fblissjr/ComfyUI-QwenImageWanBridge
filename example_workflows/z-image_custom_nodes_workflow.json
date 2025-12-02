@@ -1,8 +1,8 @@
 {
-  "id": "75250b05-5462-4ef0-84e1-c7e4eba33ec2",
+  "id": "504efd98-9176-45d3-a88d-95d71b18d8f6",
   "revision": 0,
-  "last_node_id": 72,
-  "last_link_id": 141,
+  "last_node_id": 76,
+  "last_link_id": 145,
   "nodes": [
     {
       "id": 31,
@@ -55,7 +55,7 @@
         58
       ],
       "flags": {},
-      "order": 8,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -127,35 +127,259 @@
       ]
     },
     {
-      "id": 50,
-      "type": "PreviewImage",
+      "id": 18,
+      "type": "CLIPLoader",
       "pos": [
-        1518.0285695458635,
-        864.3432113417146
+        -44.70707770196658,
+        77.75828489307465
       ],
       "size": [
-        955.6155547870437,
-        1092.0882313826196
+        270,
+        106
       ],
       "flags": {},
-      "order": 16,
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            116
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "CLIPLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "qwen_3_4b.safetensors",
+        "lumina2",
+        "default"
+      ]
+    },
+    {
+      "id": 74,
+      "type": "MarkdownNote",
+      "pos": [
+        1013.5729429315965,
+        -274.92699660692773
+      ],
+      "size": [
+        388.717208554418,
+        110.21574320483819
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "# Z-Image Empty Latent Note\n\n## Auto-scales to nearest 16x multiple resolution\n### If you don't want this automation, use native empty latent"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 76,
+      "type": "ConditioningZeroOut",
+      "pos": [
+        1139.8805245865117,
+        162.73573068200193
+      ],
+      "size": [
+        197.712890625,
+        26
+      ],
+      "flags": {},
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 98
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 144
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            145
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.76",
+        "Node name for S&R": "ConditioningZeroOut",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.2"
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 67,
+      "type": "PreviewAny",
+      "pos": [
+        783.4318175475282,
+        551.0461211055717
+      ],
+      "size": [
+        590.6407743496857,
+        1054.047728399252
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 135
         }
       ],
       "outputs": [],
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.3.75",
-        "Node name for S&R": "PreviewImage",
+        "Node name for S&R": "PreviewAny",
         "ue_properties": {
           "widget_ue_connectable": {},
           "input_ue_unconnectable": {},
           "version": "7.5.1"
+        }
+      },
+      "widgets_values": [],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 69,
+      "type": "MarkdownNote",
+      "pos": [
+        854.7461575865709,
+        376.1978714476665
+      ],
+      "size": [
+        388.4648799905822,
+        103.90190163987313
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "# Full Text Encoder Output\n## This is what gets encoded: Special tokens and tokenization + your prompts and turn(s)"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [
+        1646.7284685733937,
+        280.65670701466723
+      ],
+      "size": [
+        210,
+        46
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 51
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 45
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            143
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.75",
+        "Node name for S&R": "VAEDecode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 75,
+      "type": "PreviewImage",
+      "pos": [
+        1420.8429633824367,
+        773.2522595310362
+      ],
+      "size": [
+        750.1369172338996,
+        740.8297627936979
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 143
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.76",
+        "Node name for S&R": "PreviewImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.2"
         }
       },
       "widgets_values": []
@@ -164,15 +388,15 @@
       "id": 3,
       "type": "KSampler",
       "pos": [
-        1033.7695539010178,
-        155.86980445678878
+        2102.3310532425776,
+        -40.83633527561811
       ],
       "size": [
         447.9636118545495,
         688.0815951067775
       ],
       "flags": {},
-      "order": 13,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -188,12 +412,12 @@
         {
           "name": "negative",
           "type": "CONDITIONING",
-          "link": 140
+          "link": 145
         },
         {
           "name": "latent_image",
           "type": "LATENT",
-          "link": 17
+          "link": 141
         }
       ],
       "outputs": [
@@ -227,24 +451,24 @@
       ]
     },
     {
-      "id": 67,
+      "id": 64,
       "type": "PreviewAny",
       "pos": [
-        460.78384353506124,
-        1674.4543514977117
+        1654.65211618347,
+        32.577121628881066
       ],
       "size": [
-        299.97353388888496,
-        529.8918474306722
+        242.38098414811714,
+        134.374512105652
       ],
       "flags": {},
-      "order": 11,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
           "name": "source",
           "type": "*",
-          "link": 135
+          "link": 142
         }
       ],
       "outputs": [],
@@ -261,309 +485,20 @@
       "widgets_values": [],
       "color": "#222",
       "bgcolor": "#000"
-    },
-    {
-      "id": 8,
-      "type": "VAEDecode",
-      "pos": [
-        1668.7824913596216,
-        236.09821832981808
-      ],
-      "size": [
-        210,
-        46
-      ],
-      "flags": {},
-      "order": 15,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "samples",
-          "type": "LATENT",
-          "link": 51
-        },
-        {
-          "name": "vae",
-          "type": "VAE",
-          "link": 45
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "slot_index": 0,
-          "links": [
-            98
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "VAEDecode",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 69,
-      "type": "MarkdownNote",
-      "pos": [
-        540.2588319803834,
-        1524.5997346292945
-      ],
-      "size": [
-        210,
-        88
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "# Turn 1 LLM Output"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
-    },
-    {
-      "id": 70,
-      "type": "MarkdownNote",
-      "pos": [
-        1078.6275273134095,
-        1502.345536947491
-      ],
-      "size": [
-        210,
-        88
-      ],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "# Turn 2 LLM Output\n(continued conversation)"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
-    },
-    {
-      "id": 72,
-      "type": "MarkdownNote",
-      "pos": [
-        2029.1843716646151,
-        205.2281674497488
-      ],
-      "size": [
-        342.87365258902173,
-        104.60988724674507
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "# Final Output Sent to LLM\n\n## Special tokens and tokenization + your prompts and turn(s)"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
-    },
-    {
-      "id": 71,
-      "type": "PreviewAny",
-      "pos": [
-        1979.8934693806834,
-        392.4423337023149
-      ],
-      "size": [
-        409.7249256922346,
-        342.6430126320192
-      ],
-      "flags": {},
-      "order": 12,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "source",
-          "type": "*",
-          "link": 138
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "PreviewAny",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": [],
-      "color": "#222",
-      "bgcolor": "#000"
-    },
-    {
-      "id": 68,
-      "type": "PreviewAny",
-      "pos": [
-        932.9669944314516,
-        1648.1215985848382
-      ],
-      "size": [
-        539.029575877792,
-        564.3043389431746
-      ],
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "source",
-          "type": "*",
-          "link": null
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "PreviewAny",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": [],
-      "color": "#222",
-      "bgcolor": "#000"
-    },
-    {
-      "id": 13,
-      "type": "EmptySD3LatentImage",
-      "pos": [
-        381.5101993949065,
-        77.24121203046987
-      ],
-      "size": [
-        315,
-        106
-      ],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "LATENT",
-          "type": "LATENT",
-          "slot_index": 0,
-          "links": [
-            17
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "EmptySD3LatentImage",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        1024,
-        1024,
-        1
-      ]
-    },
-    {
-      "id": 18,
-      "type": "CLIPLoader",
-      "pos": [
-        -44.70707770196658,
-        77.75828489307465
-      ],
-      "size": [
-        270,
-        106
-      ],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "CLIP",
-          "type": "CLIP",
-          "links": [
-            116,
-            131
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "CLIPLoader",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.5.1",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "qwen_3_4b.safetensors",
-        "lumina2",
-        "default"
-      ]
     },
     {
       "id": 56,
       "type": "ZImageTextEncoder",
       "pos": [
-        10.307885800640342,
-        266.15575221470806
+        -64.46930799433794,
+        302.71904097919105
       ],
       "size": [
         828.0184031219394,
         858.8933479546289
       ],
       "flags": {},
-      "order": 9,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -583,7 +518,8 @@
           "name": "conditioning",
           "type": "CONDITIONING",
           "links": [
-            139
+            139,
+            144
           ]
         },
         {
@@ -601,9 +537,7 @@
         {
           "name": "conversation",
           "type": "ZIMAGE_CONVERSATION",
-          "links": [
-            138
-          ]
+          "links": []
         }
       ],
       "properties": {
@@ -616,125 +550,79 @@
       },
       "widgets_values": [
         "# Character Profile\n\n## Core Identity\n- **Name:** Walter Finch\n- **Gender:** Male\n- **Age:** 72\n- **Ethnicity:** Caucasian (British descent)\n- **Skin Tone:** Fair, with a warm, sun-kissed glow on his cheeks and nose.\n- **Body Type:** Ectomorph (tall, lean, with a slight stoop)\n\n## Head & Face\n- \"Face Shape\": Oval, with a slightly prominent jawline and a receding hairline.\n- **Eye Color:** Ice-blue with subtle gold flecks around the iris.\n- **Eye Shape:** Almond-shaped, slightly hooded due to age.\n- **Hair Color:** Pure white, thinning on top, with some graying at the temples.\n- **Hair Style:** Neatly combed side-parted, with a full white beard and mustache.\n- **Hair Texture:** Straight and fine.\n- **Facial Hair:** Full beard and mustache, well-groomed.\n- **Facial Scars:** A faint, thin scar above his left eyebrow, a remnant of a childhood fall.\n- **Facial Accessories:** Thin, gold-rimmed reading glasses, worn on his nose.\n- **Makeup Style:** None.\n- **Expression Default:** Warm, gentle smile with a twinkle in his eye.\n\n## Body & Physics\n- **Height:** 178 cm (5'10)\n- **Muscle Definition:** Lean and wiry; not muscular but fit from years of activity.\n- **Chest Size:** Small, with a slight stoop due to age.\n- **Distinctive Markings:** A few scattered age spots on his hands and face.\n- **Body Modifications:** None.\n\n## Attire (Top to Bottom)\n- **Clothing Style:** Casual, intellectual, slightly outdated (e.g., 1990s classic).\n\n- **Upper Body:**\n  - **Base Layer:** Long-sleeve, light gray and blue checkered button-down shirt.\n  - **Outer Layer:** None.\n  - **Details:** Soft cotton fabric, slightly wrinkled, with a loose fit. Collar is always buttoned.\n\n- **Lower Body:**\n  - **Type:** Dark grey trousers.\n  - **Fit:** Tailored and slightly loose.\n  - **Material:** Wool blend.\n  - **Belt:** None, or a simple brown leather belt.",
-        "none",
+        "",
+        "psychedelic",
+        "Generate an image with 1960s psychedelic art aesthetics. Melting forms, impossible colors, and patterns that seem to breathe. Paisley, fractal-like repetition, and the visual representation of expanded consciousness. Turn on, tune in, and generate art.",
+        true,
+        "Let's have him eating spaghetti",
+        "Here's Walter eating spaghetti",
         "",
         true,
-        "Hmm lets make his beard a little red and keep everything else the same.",
-        "Sure, here's a photo of Walter with his red and white beard.",
-        "",
         true
       ],
       "color": "#223",
       "bgcolor": "#335"
     },
     {
-      "id": 63,
-      "type": "ZImageTextEncoderSimple",
+      "id": 73,
+      "type": "ZImageEmptyLatent",
       "pos": [
-        67.14842560265974,
-        1224.156063366781
+        1018.4478993081507,
+        -103.21458059248059
       ],
       "size": [
-        400,
-        338
+        361.257421875,
+        170.67478148098178
       ],
       "flags": {},
-      "order": 10,
+      "order": 5,
       "mode": 0,
-      "inputs": [
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": 131
-        }
-      ],
+      "inputs": [],
       "outputs": [
         {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "links": [
-            140
-          ]
-        },
-        {
-          "name": "formatted_prompt",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "name": "debug_output",
-          "type": "STRING",
+          "name": "latent",
+          "type": "LATENT",
           "links": [
             141
           ]
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "resolution_info",
+          "type": "STRING",
+          "links": [
+            142
+          ]
         }
       ],
-      "title": "Z-Image Text Encoder (Negative)",
+      "title": "Z-Image Empty Latent (Auto-Scales to 16x Multiple)",
       "properties": {
-        "Node name for S&R": "ZImageTextEncoderSimple",
+        "Node name for S&R": "ZImageEmptyLatent",
         "ue_properties": {
           "widget_ue_connectable": {},
           "input_ue_unconnectable": {},
-          "version": "7.5.1"
+          "version": "7.5.2"
         }
       },
       "widgets_values": [
-        "bad anatomy, blurry, watermark, text",
-        "none",
-        "",
-        false,
-        "",
-        ""
+        1024,
+        1024,
+        1
       ],
-      "color": "#322",
-      "bgcolor": "#533"
-    },
-    {
-      "id": 64,
-      "type": "PreviewAny",
-      "pos": [
-        -721.4687963969766,
-        1550.2092920819823
-      ],
-      "size": [
-        484.1957628792135,
-        390.4251845003532
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "source",
-          "type": "*",
-          "link": 141
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.75",
-        "Node name for S&R": "PreviewAny",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.1"
-        }
-      },
-      "widgets_values": [],
-      "color": "#222",
-      "bgcolor": "#000"
+      "color": "#223",
+      "bgcolor": "#335"
     }
   ],
   "links": [
-    [
-      17,
-      13,
-      0,
-      3,
-      3,
-      "LATENT"
-    ],
     [
       45,
       17,
@@ -768,26 +656,10 @@
       "MODEL"
     ],
     [
-      98,
-      8,
-      0,
-      50,
-      0,
-      "IMAGE"
-    ],
-    [
       116,
       18,
       0,
       56,
-      0,
-      "CLIP"
-    ],
-    [
-      131,
-      18,
-      0,
-      63,
       0,
       "CLIP"
     ],
@@ -800,14 +672,6 @@
       "*"
     ],
     [
-      138,
-      56,
-      3,
-      71,
-      0,
-      "*"
-    ],
-    [
       139,
       56,
       0,
@@ -816,20 +680,44 @@
       "CONDITIONING"
     ],
     [
-      140,
-      63,
+      141,
+      73,
+      0,
+      3,
+      3,
+      "LATENT"
+    ],
+    [
+      142,
+      73,
+      3,
+      64,
+      0,
+      "*"
+    ],
+    [
+      143,
+      8,
+      0,
+      75,
+      0,
+      "IMAGE"
+    ],
+    [
+      144,
+      56,
+      0,
+      76,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      145,
+      76,
       0,
       3,
       2,
       "CONDITIONING"
-    ],
-    [
-      141,
-      63,
-      2,
-      64,
-      0,
-      "*"
     ]
   ],
   "groups": [],
@@ -838,11 +726,11 @@
     "ds": {
       "scale": 0.92295998177067,
       "offset": [
-        -443.3582700407759,
-        207.93720431108056
+        -259.05684029520404,
+        390.5730724565142
       ]
     },
-    "frontendVersion": "1.32.9",
+    "frontendVersion": "1.33.10",
     "workflowRendererVersion": "LG",
     "ue_links": [],
     "VHS_latentpreview": true,

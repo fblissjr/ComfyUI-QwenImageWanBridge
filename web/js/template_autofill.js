@@ -165,6 +165,9 @@ app.registerExtension({
             if (assistantWidget) {
               assistantWidget.value = template.assistant_content || "";
             }
+
+            // NOTE: We intentionally do NOT touch strip_key_quotes, filter_padding,
+            // trigger_words, or raw_prompt - those are user settings that should persist
           }
 
           // Mark node as needing update

@@ -40,7 +40,7 @@ except Exception as e:
 
 # Helper nodes
 try:
-    from .nodes.qwen_vl_helpers import QwenVLEmptyLatent, QwenVLImageToLatent
+    from .nodes.qwen_vl_helpers import QwenVLEmptyLatent, QwenVLImageToLatent, ZImageEmptyLatent
 
     NODE_CLASS_MAPPINGS["QwenVLEmptyLatent"] = QwenVLEmptyLatent
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLEmptyLatent"] = "Qwen VL Empty Latent"
@@ -48,7 +48,10 @@ try:
     NODE_CLASS_MAPPINGS["QwenVLImageToLatent"] = QwenVLImageToLatent
     NODE_DISPLAY_NAME_MAPPINGS["QwenVLImageToLatent"] = "Qwen VL Image to Latent"
 
-    print("[QwenImageWanBridge] Loaded Qwen VL helper nodes (2 nodes)")
+    NODE_CLASS_MAPPINGS["ZImageEmptyLatent"] = ZImageEmptyLatent
+    NODE_DISPLAY_NAME_MAPPINGS["ZImageEmptyLatent"] = "Z-Image Empty Latent"
+
+    print("[QwenImageWanBridge] Loaded Qwen VL helper nodes (3 nodes)")
 except Exception as e:
     print(f"[QwenImageWanBridge] Failed to load helper nodes: {e}")
 

@@ -159,6 +159,7 @@ Full encoder with system prompts, templates, and multi-turn conversation support
 |-------|------|----------|---------|-------------|
 | clip | CLIP | Yes | - | Z-Image CLIP model (lumina2 type) |
 | user_prompt | STRING | Yes | "" | Your prompt - what you want the model to generate |
+| trigger_words | STRING | No | "" | LoRA trigger words - prepended to user_prompt. Convert to input for LoRA connection. |
 | conversation_override | ZIMAGE_CONVERSATION | No | - | Connect from ZImageTurnBuilder (uses this instead of building one) |
 | template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image/` (auto-fills system_prompt) |
 | system_prompt | STRING | No | "" | Editable system prompt (auto-filled by template via JS) |
@@ -188,6 +189,7 @@ Simplified encoder for quick use - ideal for **negative prompts**. Same template
 |-------|------|----------|---------|-------------|
 | clip | CLIP | Yes | - | Z-Image CLIP model (lumina2 type) |
 | user_prompt | STRING | Yes | "" | Your prompt (what you want or don't want) |
+| trigger_words | STRING | No | "" | LoRA trigger words - prepended to user_prompt. Convert to input for LoRA connection. |
 | template_preset | ENUM | No | "none" | Template from `nodes/templates/z_image/` |
 | system_prompt | STRING | No | "" | System instructions |
 | add_think_block | BOOLEAN | No | **True** | Add `<think></think>` block (matches reference implementations) |
@@ -205,14 +207,29 @@ Simplified encoder for quick use - ideal for **negative prompts**. Same template
 
 #### Usage
 
-**For negative prompts:**
+**Important: Z-Image and Negative Prompts**
+
+Z-Image uses **Decoupled DMD distillation** - CFG is "baked into" the model during training. At inference, CFG should be **1.0** (no guidance scaling). When CFG=1:
+
+```
+output = uncond + cfg * (cond - uncond)
+       = uncond + 1 * (cond - uncond)
+       = cond  # negative prompt has no effect
+```
+
+**Recommendation:** Use `ConditioningZeroOut` (or similar empty conditioning node) for negative prompts with Z-Image. The Simple encoder is only useful if experimenting with higher CFG values (which may produce worse results since the model wasn't trained for it).
+
+```
+Positive: ZImageTextEncoder -> KSampler (positive, CFG=1.0)
+Negative: ConditioningZeroOut -> KSampler (negative)
+```
+
+**Legacy approach (wastes compute but still works):**
 ```
 Positive: ZImageTextEncoder -> KSampler (positive)
 Negative: ZImageTextEncoderSimple -> KSampler (negative)
          user_prompt: "bad anatomy, blurry, watermark, text"
 ```
-
-Both use the same Qwen3-4B chat template format for consistency.
 
 ### ZImageTurnBuilder (Multi-Turn Conversations)
 

@@ -545,6 +545,10 @@ class ZImageTextEncoder:
                 }),
             },
             "optional": {
+                "trigger_words": ("STRING", {
+                    "default": "",
+                    "tooltip": "LoRA trigger words - prepended to user_prompt. Can convert to input for LoRA loader connection."
+                }),
                 "conversation_override": (ZIMAGE_CONVERSATION_TYPE, {
                     "tooltip": "Connect from ZImageTurnBuilder - uses this conversation instead of building one"
                 }),
@@ -597,6 +601,7 @@ class ZImageTextEncoder:
         self,
         clip,
         user_prompt: str,
+        trigger_words: Optional[str] = None,
         conversation_override: Optional[Dict[str, Any]] = None,
         template_preset: str = "none",
         system_prompt: str = "",
@@ -607,6 +612,10 @@ class ZImageTextEncoder:
         strip_key_quotes: bool = False,
         filter_padding: bool = True,
     ) -> Tuple[Any, str, str, Dict[str, Any]]:
+
+        # Prepend trigger words to user_prompt (for LoRA activation)
+        if trigger_words and trigger_words.strip():
+            user_prompt = f"{trigger_words.strip()} {user_prompt}"
 
         # Apply quote filtering if enabled (for JSON-style prompts)
         # Removes quotes from keys ("subject": -> subject:) AND values ("text" -> text)
@@ -685,6 +694,8 @@ class ZImageTextEncoder:
 
         # Build debug output
         debug_lines = ["=== Z-Image Text Encoder Debug ==="]
+        if trigger_words and trigger_words.strip():
+            debug_lines.append(f"Trigger words: \"{trigger_words.strip()}\" (prepended to user_prompt)")
         if strip_key_quotes:
             debug_lines.append("Key quote filter: ON (removing quotes from JSON keys)")
         if mode == "conversation_override":
@@ -826,6 +837,10 @@ class ZImageTextEncoderSimple:
                 }),
             },
             "optional": {
+                "trigger_words": ("STRING", {
+                    "default": "",
+                    "tooltip": "LoRA trigger words - prepended to user_prompt. Can convert to input for LoRA loader connection."
+                }),
                 "template_preset": (template_choices, {
                     "default": "none",
                     "tooltip": "Select a template to auto-fill system_prompt (editable after selection)"
@@ -868,6 +883,7 @@ class ZImageTextEncoderSimple:
         self,
         clip,
         user_prompt: str,
+        trigger_words: str = "",
         template_preset: str = "none",
         system_prompt: str = "",
         add_think_block: bool = False,
@@ -875,6 +891,10 @@ class ZImageTextEncoderSimple:
         assistant_content: str = "",
         filter_padding: bool = True,
     ):
+        # Prepend trigger words to user_prompt (for LoRA activation)
+        if trigger_words and trigger_words.strip():
+            user_prompt = f"{trigger_words.strip()} {user_prompt}"
+
         # Get system prompt from template if selected
         effective_system = system_prompt.strip()
         if template_preset != "none" and not effective_system:
@@ -900,8 +920,10 @@ class ZImageTextEncoderSimple:
         token_count, is_accurate = count_tokens(formatted_text)
 
         # Build debug output
-        debug_lines = [
-            "=== Z-Image Simple Encoder ===",
+        debug_lines = ["=== Z-Image Simple Encoder ==="]
+        if trigger_words and trigger_words.strip():
+            debug_lines.append(f"Trigger words: \"{trigger_words.strip()}\" (prepended to user_prompt)")
+        debug_lines.extend([
             f"Template: {template_preset}",
             f"System prompt: {len(effective_system)} chars",
             f"User prompt: {len(user_prompt.strip())} chars",
@@ -915,7 +937,7 @@ class ZImageTextEncoderSimple:
             f"Think tags: {'YES' if '<think>' in formatted_text else 'NO'}",
             "",
             "=== Token Count ===",
-        ]
+        ])
 
         if is_accurate:
             debug_lines.append(f"Tokens: {token_count} / {REFERENCE_MAX_TOKENS} reference limit")
